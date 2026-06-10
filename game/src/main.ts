@@ -53,7 +53,7 @@ import { createRadarSignatureTracker } from './radar/radarSignatureTracker'
 import { createRadarSphereDisplay } from './radar/radarSphereDisplay'
 import { createTouchFlightControls } from './hud/touchFlightControls'
 import { createPlayerCameraRig } from './hud/cameraChaseAndCockpit'
-import { createPlayerShipMesh } from './player/playerShipMesh'
+import { createPlayerShipMesh, updatePlayerEngineExhaust } from './player/playerShipMesh'
 
 // ===== STEP 1: renderer, scene, camera bootstrap =====
 
@@ -671,6 +671,9 @@ let coverGridRecolorCountdownSeconds = 0
 function syncRenderObjectsFromSimulation(frameDeltaSeconds: number): void {
   playerShipMesh.position.copy(playerShipState.positionMeters)
   playerShipMesh.quaternion.copy(playerShipState.orientation)
+
+  // D19: thrust plume diamond — sized by throttle, color cycling red→yellow
+  updatePlayerEngineExhaust(flightControls.readFlightControlInput().throttleFraction, simulationClockSeconds)
 
   if (tractorPullIsActive && activeCoverAsteroid) {
     tractorBeamLine.visible = true

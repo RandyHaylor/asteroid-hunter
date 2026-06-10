@@ -26,5 +26,5 @@ export type TractorBeamStats = {
 export const playerShipBaseTractorBeamStats: TractorBeamStats = {
   maxPullAccelerationMetersPerSecondSquared: 140,
   arrivalDampingPerSecond: 4,
-  tractorGrabMaxRangeMeters: 350,
+  tractorGrabMaxRangeMeters: 525, // D19: extended 50% from the original 350
 }

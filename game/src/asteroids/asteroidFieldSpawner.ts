@@ -15,8 +15,9 @@ import type { AsteroidBody, AsteroidSizeClass } from '../gameSimulation/gameWorl
 
 export const PLAY_AREA_RADIUS_METERS = 800
 
-/** asteroids scatter inside this fraction of the play radius, clear of the soft edge */
-const FIELD_SCATTER_RADIUS_FRACTION = 0.9
+/** asteroids scatter inside this fraction of the play radius, clear of the soft edge.
+ *  D19: tightened from 0.9 to pack the field closer together (~3x denser) */
+const FIELD_SCATTER_RADIUS_FRACTION = 0.62
 /** keep an empty bubble around the origin so the player spawns in open space */
 const PLAYER_SPAWN_CLEAR_BUBBLE_RADIUS_METERS = 80
 /** per-vertex radial jitter fraction for irregular rock silhouettes (A1: procedural low-poly art) */
