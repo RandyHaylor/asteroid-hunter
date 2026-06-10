@@ -25,6 +25,7 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 | D17 | Lock = **lead prediction**: locked shots aim at the intercept point computed from the weapon's projectile speed (generic solver — upgrades changing speed change the lead); player missiles also get **weak homing** toward the lock, turn rate is a missile stat (`homingTurnRateRadiansPerSecond`, base 0.7 rad/s) |
 | D18 | Cover UX: chase camera **zooms out ~2.6×** while tractored; **no auto-facing** — the right joystick rotates the ship at all times; a **strafe joystick appears beside the throttle** while on an asteroid (IJKL on keyboard) and slides the ship around the shell; auto re-solve of the cover point only runs while enemies threaten the asteroid (so rotating never drags the parked ship) |
 | D19 | Tractor grab range extended 50% (350 → **525 m**); asteroid field packed tighter (scatter radius 0.9 → 0.62 of play radius, ~3× denser); **thrust plume**: fixed red diamond out the ship's tail, size scales with throttle, only animation is a red↔yellow sine color fade |
+| D20 | Cover strafe = **latitude/longitude** on the asteroid sphere: pole axis is the ship's current up; stick up/down climbs/descends latitude (clamped ~6° short of the poles, never flips); stick left/right travels around the current latitude line. Replaces the compounding two-axis rotations that caused gimbal drift |
 
 ## Requirements from the design doc
 

@@ -237,17 +237,26 @@ if (import.meta.env.DEV) {
     engageTractorPullTowardAsteroid(nearestLargeAsteroid)
     return { asteroidId: nearestLargeAsteroid.asteroidId, surfaceDistanceMeters: nearestSurfaceDistanceMeters }
   }
-  ;(window as unknown as Record<string, unknown>).debugReadTractorState = () => ({
-    tractorPullIsActive,
-    distanceToCoverAsteroidCenter: activeCoverAsteroid
-      ? playerShipState.positionMeters.distanceTo(activeCoverAsteroid.positionMeters)
-      : null,
-    holdShellRadius: activeCoverAsteroid ? computeCoverHoldShellRadiusMeters(activeCoverAsteroid) : null,
-    distanceToCoverPoint:
-      tractorPullIsActive && activeCoverAsteroid
-        ? playerShipState.positionMeters.distanceTo(activeCoverPointMeters)
+  ;(window as unknown as Record<string, unknown>).debugReadTractorState = () => {
+    let coverLatitudeDegrees: number | null = null
+    if (tractorPullIsActive && activeCoverAsteroid) {
+      const holdDirection = activeCoverPointMeters.clone().sub(activeCoverAsteroid.positionMeters).normalize()
+      const shipUpDirection = new THREE.Vector3(0, 1, 0).applyQuaternion(playerShipState.orientation)
+      coverLatitudeDegrees = 90 - THREE.MathUtils.radToDeg(holdDirection.angleTo(shipUpDirection))
+    }
+    return {
+      tractorPullIsActive,
+      distanceToCoverAsteroidCenter: activeCoverAsteroid
+        ? playerShipState.positionMeters.distanceTo(activeCoverAsteroid.positionMeters)
         : null,
-  })
+      holdShellRadius: activeCoverAsteroid ? computeCoverHoldShellRadiusMeters(activeCoverAsteroid) : null,
+      distanceToCoverPoint:
+        tractorPullIsActive && activeCoverAsteroid
+          ? playerShipState.positionMeters.distanceTo(activeCoverPointMeters)
+          : null,
+      coverLatitudeDegrees,
+    }
+  }
 }
 
 // ===== STEP 5: wave system (D2, D8): staged waves, clear all enemies to advance =====
@@ -511,9 +520,13 @@ const scratchOrbitRotation = new THREE.Quaternion()
 const scratchShipUpDirection = new THREE.Vector3()
 
 const SHIP_LOCAL_UP_AXIS = new THREE.Vector3(0, 1, 0)
-const SHIP_LOCAL_RIGHT_AXIS = new THREE.Vector3(1, 0, 0)
 
-/** D18: the strafe joystick slides the hold point around the asteroid's shell (view-relative axes) */
+/** keep this margin short of the poles so the latitude frame never degenerates or flips (D20) */
+const COVER_POLE_CLAMP_MARGIN_RADIANS = 0.1
+
+// D20: latitude/longitude strafing — the pole axis is the ship's CURRENT up, so the grid is always
+// oriented to the player. Up/down climbs latitude lines (toward/away from the up-pole), left/right
+// travels around the current latitude line. No compounding cross-axis rotations = no gimbal drift.
 function adjustCoverHoldPointFromStrafeInput(
   coverAsteroid: AsteroidBody,
   strafeXInput: number,
@@ -521,21 +534,43 @@ function adjustCoverHoldPointFromStrafeInput(
   deltaSeconds: number,
 ): void {
   scratchCoverHoldDirection.copy(activeCoverPointMeters).sub(coverAsteroid.positionMeters).normalize()
-
-  // the ship's local up/right axes make the strafe directions match what the player sees
   scratchShipUpDirection.copy(SHIP_LOCAL_UP_AXIS).applyQuaternion(playerShipState.orientation)
-  scratchOrbitRotation.setFromAxisAngle(
-    scratchShipUpDirection,
-    strafeXInput * COVER_ORBIT_RATE_RADIANS_PER_SECOND * deltaSeconds,
-  )
-  scratchCoverHoldDirection.applyQuaternion(scratchOrbitRotation)
 
-  scratchOrbitRotationAxis.copy(SHIP_LOCAL_RIGHT_AXIS).applyQuaternion(playerShipState.orientation)
-  scratchOrbitRotation.setFromAxisAngle(
-    scratchOrbitRotationAxis,
-    -strafeYInput * COVER_ORBIT_RATE_RADIANS_PER_SECOND * deltaSeconds,
-  )
-  scratchCoverHoldDirection.applyQuaternion(scratchOrbitRotation)
+  // STEP 1: left/right — travel around the current latitude line (rotate around the pole axis)
+  if (strafeXInput !== 0) {
+    scratchOrbitRotation.setFromAxisAngle(
+      scratchShipUpDirection,
+      strafeXInput * COVER_ORBIT_RATE_RADIANS_PER_SECOND * deltaSeconds,
+    )
+    scratchCoverHoldDirection.applyQuaternion(scratchOrbitRotation)
+  }
+
+  // STEP 2: up/down — change latitude within the meridian plane, clamped short of the poles
+  if (strafeYInput !== 0) {
+    scratchOrbitRotationAxis.crossVectors(scratchCoverHoldDirection, scratchShipUpDirection)
+    if (scratchOrbitRotationAxis.lengthSq() > 1e-8) {
+      scratchOrbitRotationAxis.normalize()
+
+      const angleToUpPoleRadians = scratchCoverHoldDirection.angleTo(scratchShipUpDirection)
+      let latitudeStepRadians = strafeYInput * COVER_ORBIT_RATE_RADIANS_PER_SECOND * deltaSeconds
+      if (latitudeStepRadians > 0) {
+        // climbing toward the up-pole: stop just before it
+        latitudeStepRadians = Math.min(
+          latitudeStepRadians,
+          Math.max(0, angleToUpPoleRadians - COVER_POLE_CLAMP_MARGIN_RADIANS),
+        )
+      } else {
+        // descending toward the down-pole: stop just before it
+        latitudeStepRadians = Math.max(
+          latitudeStepRadians,
+          -Math.max(0, Math.PI - angleToUpPoleRadians - COVER_POLE_CLAMP_MARGIN_RADIANS),
+        )
+      }
+
+      scratchOrbitRotation.setFromAxisAngle(scratchOrbitRotationAxis, latitudeStepRadians)
+      scratchCoverHoldDirection.applyQuaternion(scratchOrbitRotation)
+    }
+  }
 
   activeCoverPointMeters
     .copy(coverAsteroid.positionMeters)
