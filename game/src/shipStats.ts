@@ -5,6 +5,13 @@ export type ShipFlightStats = {
   maxThrustNewtons: number
   maxTurnRateRadiansPerSecond: number
   maxForwardSpeedMetersPerSecond: number
+  /**
+   * D22: weak idle aim-assist. When the player is NOT actively steering, the ship gently
+   * turns toward the currently locked target at up to this rate (much smaller than
+   * maxTurnRateRadiansPerSecond so it only fine-tunes, never wrests control). Upgradeable
+   * later (a "targeting computer" upgrade raises it); 0 disables the assist entirely.
+   */
+  aimAssistMaxTurnRateRadiansPerSecond: number
 }
 
 export const playerShipBaseFlightStats: ShipFlightStats = {
@@ -12,6 +19,7 @@ export const playerShipBaseFlightStats: ShipFlightStats = {
   maxThrustNewtons: 60_000, // 60 m/s^2 peak acceleration
   maxTurnRateRadiansPerSecond: 1.6,
   maxForwardSpeedMetersPerSecond: 80,
+  aimAssistMaxTurnRateRadiansPerSecond: 0.5, // ~1/3 of manual turn rate — a nudge, not autopilot
 }
 
 export type TractorBeamStats = {

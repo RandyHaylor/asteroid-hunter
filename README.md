@@ -22,6 +22,8 @@ Works in desktop and mobile browsers.
 
 Cover grids: **cyan** = full cover available, **yellow** = long-range enemies can still see the cover spot, **red** = short-range enemies can see it. Radar: red dots = visible enemies; fading yellow dots = last-seen positions of enemies that slipped behind asteroids.
 
+Aim assist: when you're **not steering**, the ship gently noses toward the locked target (the enemy in the targeting ring). It's a weak nudge driven by an upgradeable ship stat, not autopilot — any rotation input takes back full control.
+
 ## Develop
 
 ```

@@ -27,6 +27,7 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 | D19 | Tractor grab range extended 50% (350 → **525 m**); asteroid field packed tighter (scatter radius 0.9 → 0.62 of play radius, ~3× denser); **thrust plume**: fixed red diamond out the ship's tail, size scales with throttle, only animation is a red↔yellow sine color fade |
 | D20 | Cover strafe = **latitude/longitude** on the asteroid sphere: pole axis is the ship's current up; stick up/down climbs/descends latitude (clamped ~6° short of the poles, never flips); stick left/right travels around the current latitude line. Replaces the compounding two-axis rotations that caused gimbal drift |
 | D21 | Enemies get a **shield pool** (40) over hull (60), shield-first like the player; once hit, **blue shield + red hull bars** float above the enemy, billboarded to the player camera. Jitter buffer: thrust **deadband** (engines coast under 0.25 m/s velocity error) + light visual smoothing of the ship mesh (~25/s stiffness) |
+| D22 | **Weak idle aim-assist**: when the player is *not actively steering* (rotation input under a small deadband), the ship gently turns toward the currently locked target. Driven by a new player flight stat `aimAssistMaxTurnRateRadiansPerSecond` (base 0.5, ~1/3 of manual turn rate; upgradeable, 0 disables). Implemented as proportional pitch/yaw inputs in the ship's local frame, fed through the existing eased rotation step and clamped to the assist rate. The lock only exists inside the 10° nose cone (D6), so the assist only fine-tunes a near-aligned shot. Applies in **both free flight and cover** |
 
 ## Requirements from the design doc
 
@@ -86,6 +87,7 @@ src/
     asteroidDestructibleBody.ts    — HP, chunk loss, shrink, damage particles (R12)
   weapons/
     noseConeAutoAim.ts             — 10° cone target selection + highlight (D6) [unit-tested]
+    idleAimAssistTowardTarget.ts   — weak turn-toward-lock when not steering (D22) [unit-tested]
     laserFire.ts / missileFire.ts  — short-range bolts / slow AOE projectiles (R9)
   enemies/
     enemyAlienShipBehavior.ts      — patrol / orbit-strafe / cover-hunter states (D8)

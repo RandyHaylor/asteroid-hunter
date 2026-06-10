@@ -37,6 +37,7 @@ import {
   playerBaseMissileStats,
 } from './weapons/weaponStats'
 import { selectAutoAimTargetInNoseCone, updateAutoAimTargetHighlight } from './weapons/noseConeAutoAim'
+import { computeIdleAimAssistRotationInput } from './weapons/idleAimAssistTowardTarget'
 import { computeLeadAimDirection } from './weapons/targetLeadPrediction'
 import { createLaserVolleySystem } from './weapons/laserFire'
 import { createMissileVolleySystem } from './weapons/missileFire'
@@ -620,6 +621,33 @@ function adjustCoverHoldPointFromStrafeInput(
     .addScaledVector(scratchCoverHoldDirection, computeCoverHoldShellRadiusMeters(coverAsteroid))
 }
 
+// D22: below this rotation-input magnitude the player counts as "not actively steering",
+// so the weak idle aim-assist may take over and nudge the nose toward the locked target.
+const ACTIVE_STEERING_INPUT_DEADBAND = 0.05
+
+/**
+ * The pitch/yaw inputs to actually rotate with: the player's own input whenever they are steering,
+ * otherwise the weak aim-assist toward the locked target (D22). Falls back to the raw player input
+ * when there is no live target, so behaviour is unchanged when nothing is locked.
+ */
+function resolveEffectiveRotationInput(
+  playerPitchInput: number,
+  playerYawInput: number,
+): { pitchInput: number; yawInput: number } {
+  const playerIsActivelySteering =
+    Math.abs(playerPitchInput) > ACTIVE_STEERING_INPUT_DEADBAND ||
+    Math.abs(playerYawInput) > ACTIVE_STEERING_INPUT_DEADBAND
+  if (playerIsActivelySteering || currentAutoAimTarget === null || currentAutoAimTarget.isDestroyed) {
+    return { pitchInput: playerPitchInput, yawInput: playerYawInput }
+  }
+  return computeIdleAimAssistRotationInput(
+    playerShipState.orientation,
+    playerShipState.positionMeters,
+    currentAutoAimTarget.positionMeters,
+    playerShipBaseFlightStats,
+  )
+}
+
 function updatePlayerMovement(deltaSeconds: number): void {
   const flightControlInput = flightControls.readFlightControlInput()
 
@@ -631,11 +659,16 @@ function updatePlayerMovement(deltaSeconds: number): void {
       releaseTractorPull()
     } else {
       // D18: the rotation joystick keeps aiming the ship even while held on the shell —
-      // orientation only changes when the player commands it (no auto-facing)
-      stepShipRotationFromJoystick(
-        playerShipState,
+      // orientation only changes when the player commands it (no auto-facing).
+      // D22: when the player isn't steering, the weak aim-assist nudges the nose toward the lock.
+      const coverRotationInput = resolveEffectiveRotationInput(
         flightControlInput.pitchInput,
         flightControlInput.yawInput,
+      )
+      stepShipRotationFromJoystick(
+        playerShipState,
+        coverRotationInput.pitchInput,
+        coverRotationInput.yawInput,
         playerShipBaseFlightStats,
         deltaSeconds,
       )
@@ -693,7 +726,21 @@ function updatePlayerMovement(deltaSeconds: number): void {
     }
   }
 
-  stepShipFlightSimulation(playerShipState, flightControlInput, playerShipBaseFlightStats, deltaSeconds)
+  // D22: apply the weak idle aim-assist to free-flight rotation too (throttle/thrust unchanged)
+  const flightRotationInput = resolveEffectiveRotationInput(
+    flightControlInput.pitchInput,
+    flightControlInput.yawInput,
+  )
+  stepShipFlightSimulation(
+    playerShipState,
+    {
+      pitchInput: flightRotationInput.pitchInput,
+      yawInput: flightRotationInput.yawInput,
+      throttleFraction: flightControlInput.throttleFraction,
+    },
+    playerShipBaseFlightStats,
+    deltaSeconds,
+  )
   applySoftBoundaryPushback(playerShipState.positionMeters, playerShipState.velocityMetersPerSecond, deltaSeconds)
 }
 
