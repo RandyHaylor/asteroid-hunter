@@ -11,6 +11,10 @@ const CHASE_LOOK_AHEAD_DISTANCE_METERS = 30
 /** higher = snappier follow; applied frame-rate independently via exponential damping */
 const CHASE_FOLLOW_STIFFNESS_PER_SECOND = 5
 
+/** D18: while tractored to an asteroid the chase view pulls back so the rock doesn't fill the screen */
+const COVER_CAMERA_ZOOM_OUT_FACTOR = 2.6
+const COVER_ZOOM_RESPONSE_PER_SECOND = 3
+
 const COCKPIT_CAMERA_LOCAL_OFFSET = new Vector3(0, 0.45, -1.2)
 
 const scratchDesiredCameraPosition = new Vector3()
@@ -25,19 +29,29 @@ export type PlayerCameraRig = {
   updateCameraFollowingShip(shipState: ShipRigidBodyState, deltaSeconds: number): void
   toggleCameraViewMode(): PlayerCameraViewMode
   getCameraViewMode(): PlayerCameraViewMode
+  /** D18: smoothly zooms the chase view out while the ship is tractored to cover */
+  setCoverZoomActive(coverZoomActive: boolean): void
 }
 
 export function createPlayerCameraRig(playerViewCamera: PerspectiveCamera): PlayerCameraRig {
   let cameraHasSnappedToInitialPose = false
   let cameraViewMode: PlayerCameraViewMode = 'thirdPersonChase'
+  let coverZoomIsActive = false
+  let currentZoomFactor = 1
 
   function updateChaseCamera(shipState: ShipRigidBodyState, deltaSeconds: number): void {
     // smooth the orientation the camera follows so fast turns feel weighty instead of rigid
     const orientationBlend = 1 - Math.exp(-CHASE_FOLLOW_STIFFNESS_PER_SECOND * deltaSeconds)
     scratchSmoothedOrientation.slerp(shipState.orientation, cameraHasSnappedToInitialPose ? orientationBlend : 1)
 
+    // D18: ease the offset distance toward the cover zoom-out (or back to normal)
+    const targetZoomFactor = coverZoomIsActive ? COVER_CAMERA_ZOOM_OUT_FACTOR : 1
+    const zoomBlend = 1 - Math.exp(-COVER_ZOOM_RESPONSE_PER_SECOND * deltaSeconds)
+    currentZoomFactor += (targetZoomFactor - currentZoomFactor) * zoomBlend
+
     scratchDesiredCameraPosition
       .copy(CHASE_CAMERA_LOCAL_OFFSET)
+      .multiplyScalar(currentZoomFactor)
       .applyQuaternion(scratchSmoothedOrientation)
       .add(shipState.positionMeters)
 
@@ -86,6 +100,9 @@ export function createPlayerCameraRig(playerViewCamera: PerspectiveCamera): Play
     },
     getCameraViewMode(): PlayerCameraViewMode {
       return cameraViewMode
+    },
+    setCoverZoomActive(coverZoomActive: boolean): void {
+      coverZoomIsActive = coverZoomActive
     },
   }
 }

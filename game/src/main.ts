@@ -5,8 +5,15 @@ import {
   createShipRigidBodyStateAtRest,
   getShipForwardDirection,
   stepShipFlightSimulation,
+  stepShipRotationFromJoystick,
 } from './gameSimulation/newtonianShipPhysics'
-import type { AsteroidBody, EnemyShip, EnemyShipBehaviorTier, GameWorld } from './gameSimulation/gameWorldTypes'
+import {
+  weaponEngagementRanges,
+  type AsteroidBody,
+  type EnemyShip,
+  type EnemyShipBehaviorTier,
+  type GameWorld,
+} from './gameSimulation/gameWorldTypes'
 import { applySoftBoundaryPushback } from './gameSimulation/boundedPlayAreaSoftEdge'
 import { spawnAsteroidFieldInBoundedSphere, updateDriftingAsteroids } from './asteroids/asteroidFieldSpawner'
 import {
@@ -177,12 +184,17 @@ function engageTractorPullTowardAsteroid(tappedAsteroid: AsteroidBody): void {
   coverPointResolveCountdownSeconds = 0.5
   // D14: tapping an asteroid cuts the throttle to zero — pushing it back up is the escape
   flightControls.setThrottleFraction(0)
+  // D18: cover mode pulls the camera back and reveals the strafe joystick
+  flightControls.setStrafeJoystickVisible(true)
+  playerCameraRig.setCoverZoomActive(true)
 }
 
 function releaseTractorPull(): void {
   tractorPullIsActive = false
   activeCoverAsteroid = null
   tractorBeamLine.visible = false
+  flightControls.setStrafeJoystickVisible(false)
+  playerCameraRig.setCoverZoomActive(false)
 }
 
 // tap on the world (not on a HUD control) targets a large asteroid for cover (R4, R6),
@@ -496,55 +508,38 @@ function updateEnemyShipsAndFire(deltaSeconds: number): void {
 const scratchCoverHoldDirection = new THREE.Vector3()
 const scratchOrbitRotationAxis = new THREE.Vector3()
 const scratchOrbitRotation = new THREE.Quaternion()
-const scratchFaceAsteroidMatrix = new THREE.Matrix4()
-const scratchFaceAsteroidOrientation = new THREE.Quaternion()
 const scratchShipUpDirection = new THREE.Vector3()
 
 const SHIP_LOCAL_UP_AXIS = new THREE.Vector3(0, 1, 0)
 const SHIP_LOCAL_RIGHT_AXIS = new THREE.Vector3(1, 0, 0)
-/** how quickly the held ship turns to face its cover asteroid (1/seconds) */
-const COVER_FACING_RESPONSE_PER_SECOND = 4
 
-/** D14: joystick slides the hold point around the asteroid's shell instead of rotating the ship */
-function adjustCoverHoldPointFromJoystick(
+/** D18: the strafe joystick slides the hold point around the asteroid's shell (view-relative axes) */
+function adjustCoverHoldPointFromStrafeInput(
   coverAsteroid: AsteroidBody,
-  pitchInput: number,
-  yawInput: number,
+  strafeXInput: number,
+  strafeYInput: number,
   deltaSeconds: number,
 ): void {
   scratchCoverHoldDirection.copy(activeCoverPointMeters).sub(coverAsteroid.positionMeters).normalize()
 
-  // ship faces the asteroid, so its local up/right axes are tangent to the shell — natural orbit axes
+  // the ship's local up/right axes make the strafe directions match what the player sees
   scratchShipUpDirection.copy(SHIP_LOCAL_UP_AXIS).applyQuaternion(playerShipState.orientation)
   scratchOrbitRotation.setFromAxisAngle(
     scratchShipUpDirection,
-    yawInput * COVER_ORBIT_RATE_RADIANS_PER_SECOND * deltaSeconds,
+    strafeXInput * COVER_ORBIT_RATE_RADIANS_PER_SECOND * deltaSeconds,
   )
   scratchCoverHoldDirection.applyQuaternion(scratchOrbitRotation)
 
   scratchOrbitRotationAxis.copy(SHIP_LOCAL_RIGHT_AXIS).applyQuaternion(playerShipState.orientation)
   scratchOrbitRotation.setFromAxisAngle(
     scratchOrbitRotationAxis,
-    -pitchInput * COVER_ORBIT_RATE_RADIANS_PER_SECOND * deltaSeconds,
+    -strafeYInput * COVER_ORBIT_RATE_RADIANS_PER_SECOND * deltaSeconds,
   )
   scratchCoverHoldDirection.applyQuaternion(scratchOrbitRotation)
 
   activeCoverPointMeters
     .copy(coverAsteroid.positionMeters)
     .addScaledVector(scratchCoverHoldDirection, computeCoverHoldShellRadiusMeters(coverAsteroid))
-}
-
-/** while tractored, the ship turns to face its cover asteroid — sliding the shell peeks you past the rim */
-function slerpShipFacingTowardAsteroid(coverAsteroid: AsteroidBody, deltaSeconds: number): void {
-  scratchShipUpDirection.copy(SHIP_LOCAL_UP_AXIS).applyQuaternion(playerShipState.orientation)
-  scratchFaceAsteroidMatrix.lookAt(
-    playerShipState.positionMeters,
-    coverAsteroid.positionMeters,
-    scratchShipUpDirection,
-  )
-  scratchFaceAsteroidOrientation.setFromRotationMatrix(scratchFaceAsteroidMatrix)
-  const facingBlend = 1 - Math.exp(-COVER_FACING_RESPONSE_PER_SECOND * deltaSeconds)
-  playerShipState.orientation.slerp(scratchFaceAsteroidOrientation, facingBlend)
 }
 
 function updatePlayerMovement(deltaSeconds: number): void {
@@ -557,33 +552,55 @@ function updatePlayerMovement(deltaSeconds: number): void {
     } else if (flightControlInput.throttleFraction > COVER_ESCAPE_THROTTLE_THRESHOLD) {
       releaseTractorPull()
     } else {
-      // D14: joystick slides the hold point around the shell; first manual nudge stops the auto re-solve
-      const joystickEngaged =
-        Math.abs(flightControlInput.pitchInput) > 0.1 || Math.abs(flightControlInput.yawInput) > 0.1
-      if (joystickEngaged) {
+      // D18: the rotation joystick keeps aiming the ship even while held on the shell —
+      // orientation only changes when the player commands it (no auto-facing)
+      stepShipRotationFromJoystick(
+        playerShipState,
+        flightControlInput.pitchInput,
+        flightControlInput.yawInput,
+        playerShipBaseFlightStats,
+        deltaSeconds,
+      )
+
+      // D18: the strafe joystick slides the hold point; first manual nudge stops the auto re-solve
+      const strafeControlInput = flightControls.readStrafeControlInput()
+      const strafeEngaged =
+        Math.abs(strafeControlInput.strafeXInput) > 0.1 || Math.abs(strafeControlInput.strafeYInput) > 0.1
+      if (strafeEngaged) {
         coverHoldManuallyAdjusted = true
-        adjustCoverHoldPointFromJoystick(
+        adjustCoverHoldPointFromStrafeInput(
           activeCoverAsteroid,
-          flightControlInput.pitchInput,
-          flightControlInput.yawInput,
+          strafeControlInput.strafeXInput,
+          strafeControlInput.strafeYInput,
           deltaSeconds,
         )
       }
 
       // re-solve the cover point a couple of times a second so it tracks moving enemies (R7),
-      // unless the player has taken manual control of their position on the shell
+      // unless the player has taken manual control of their position on the shell.
+      // D18: only when enemies actually threaten the asteroid — otherwise the facing-based default
+      // would drag the parked ship around whenever the player rotates to look elsewhere
       if (!coverHoldManuallyAdjusted) {
         coverPointResolveCountdownSeconds -= deltaSeconds
         if (coverPointResolveCountdownSeconds <= 0) {
           coverPointResolveCountdownSeconds = 0.5
-          getShipForwardDirection(playerShipState, scratchPlayerForwardDirection)
-          solveCoverPositionBehindAsteroid(
-            activeCoverAsteroid,
-            gameWorld.enemyShips,
-            playerShipState.positionMeters,
-            scratchPlayerForwardDirection,
-            activeCoverPointMeters,
+          const coverAsteroidPosition = activeCoverAsteroid.positionMeters
+          const enemiesThreatenCoverAsteroid = gameWorld.enemyShips.some(
+            (enemyShip) =>
+              !enemyShip.isDestroyed &&
+              enemyShip.positionMeters.distanceTo(coverAsteroidPosition) <=
+                weaponEngagementRanges.missileEffectiveLongRangeMeters,
           )
+          if (enemiesThreatenCoverAsteroid) {
+            getShipForwardDirection(playerShipState, scratchPlayerForwardDirection)
+            solveCoverPositionBehindAsteroid(
+              activeCoverAsteroid,
+              gameWorld.enemyShips,
+              playerShipState.positionMeters,
+              scratchPlayerForwardDirection,
+              activeCoverPointMeters,
+            )
+          }
         }
       }
 
@@ -594,7 +611,6 @@ function updatePlayerMovement(deltaSeconds: number): void {
         playerShipBaseTractorBeamStats,
         deltaSeconds,
       )
-      slerpShipFacingTowardAsteroid(activeCoverAsteroid, deltaSeconds)
       return
     }
   }

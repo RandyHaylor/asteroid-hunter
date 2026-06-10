@@ -54,18 +54,19 @@ export function getShipForwardDirection(shipState: ShipRigidBodyState, outDirect
   return outDirection.copy(SHIP_LOCAL_FORWARD_AXIS).applyQuaternion(shipState.orientation)
 }
 
-export function stepShipFlightSimulation(
+/** D15/D18: joystick pitch/yaw rotate the ship — its own step so cover mode can rotate without thrust */
+export function stepShipRotationFromJoystick(
   shipState: ShipRigidBodyState,
-  controlInput: ShipFlightControlInput,
+  pitchInput: number,
+  yawInput: number,
   flightStats: ShipFlightStats,
   deltaSeconds: number,
 ): void {
-  // STEP 1: joystick pitch/yaw command turn rates around the ship's local axes.
-  // D15: the actual rate eases toward the commanded rate so turns ramp in instead of snapping to max.
+  // D15: the actual rate eases toward the commanded rate so turns ramp in instead of snapping to max
   const turnRateBlend = 1 - Math.exp(-TURN_RATE_RESPONSE_PER_SECOND * deltaSeconds)
-  const commandedPitchRate = controlInput.pitchInput * flightStats.maxTurnRateRadiansPerSecond
+  const commandedPitchRate = pitchInput * flightStats.maxTurnRateRadiansPerSecond
   // positive yawInput = nose right = negative rotation around the local up axis
-  const commandedYawRate = -controlInput.yawInput * flightStats.maxTurnRateRadiansPerSecond
+  const commandedYawRate = -yawInput * flightStats.maxTurnRateRadiansPerSecond
   shipState.currentPitchRateRadiansPerSecond +=
     (commandedPitchRate - shipState.currentPitchRateRadiansPerSecond) * turnRateBlend
   shipState.currentYawRateRadiansPerSecond +=
@@ -76,6 +77,22 @@ export function stepShipFlightSimulation(
   scratchPitchRotation.setFromAxisAngle(SHIP_LOCAL_RIGHT_AXIS, pitchAngleRadians)
   scratchYawRotation.setFromAxisAngle(SHIP_LOCAL_UP_AXIS, yawAngleRadians)
   shipState.orientation.multiply(scratchYawRotation).multiply(scratchPitchRotation).normalize()
+}
+
+export function stepShipFlightSimulation(
+  shipState: ShipRigidBodyState,
+  controlInput: ShipFlightControlInput,
+  flightStats: ShipFlightStats,
+  deltaSeconds: number,
+): void {
+  // STEP 1: rotation from the joystick
+  stepShipRotationFromJoystick(
+    shipState,
+    controlInput.pitchInput,
+    controlInput.yawInput,
+    flightStats,
+    deltaSeconds,
+  )
 
   // STEP 2: throttle target velocity = forward direction * demanded speed (D12)
   getShipForwardDirection(shipState, scratchForwardDirection)

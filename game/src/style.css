@@ -56,6 +56,36 @@ body {
   will-change: transform;
 }
 
+/* D18: strafe joystick — just inside the throttle lever, only visible while tractored to cover */
+.strafeJoystickZone {
+  position: absolute;
+  left: 78px;
+  bottom: 36%;
+  width: 116px;
+  height: 116px;
+  border: 2px solid rgba(120, 255, 200, 0.4);
+  border-radius: 50%;
+  background: rgba(20, 70, 50, 0.25);
+  pointer-events: auto;
+  touch-action: none;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.strafeJoystickZoneVisible {
+  display: flex;
+}
+
+.strafeJoystickKnob {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: rgba(120, 255, 200, 0.55);
+  border: 2px solid rgba(170, 255, 225, 0.8);
+  will-change: transform;
+}
+
 .throttleLeverTrack {
   position: absolute;
   left: 28px;

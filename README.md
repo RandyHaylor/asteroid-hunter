@@ -12,11 +12,11 @@ Works in desktop and mobile browsers.
 
 | Input | Touch | Desktop |
 |---|---|---|
-| Rotate ship | right joystick | WASD / arrow keys |
+| Rotate ship (always, even in cover) | right joystick | WASD / arrow keys |
 | Throttle (sets target speed) | left lever | Shift up / Ctrl down |
 | Fire lasers / missiles | lower-left / lower-right zones | Space / X |
 | Take cover | tap a grid-marked asteroid (within tractor range) | click it |
-| Adjust position in cover | joystick slides you around the asteroid | WASD |
+| Strafe around the asteroid in cover | green joystick beside the throttle | IJKL |
 | Leave cover | move the throttle, or tap another asteroid | Shift |
 | Toggle chase/cockpit camera | VIEW button | C |
 

@@ -1,64 +1,99 @@
 import type { ShipFlightControlInput } from '../gameSimulation/newtonianShipPhysics'
 
 // D5: on-screen rotation joystick (right side) + fixed movable throttle lever (left side, plane/boat style).
-// A3: desktop parity — keyboard WASD/arrows rotate, Shift/Ctrl step the throttle; mouse drags the widgets.
-// The lower third of the screen stays reserved for the fire zones (R11, built in the weapons task).
+// D18: a second strafe joystick sits just inside the throttle and appears only while tractored to an
+// asteroid — it slides the ship around the cover shell while the rotation joystick keeps aiming the ship.
+// A3: desktop parity — WASD/arrows rotate, Shift/Ctrl step the throttle, IJKL strafe in cover.
+// The lower third of the screen stays reserved for the fire zones (R11).
+
+export type StrafeControlInput = {
+  /** -1..1, positive slides the ship toward its right around the cover shell */
+  strafeXInput: number
+  /** -1..1, positive slides the ship upward around the cover shell */
+  strafeYInput: number
+}
 
 export type TouchFlightControls = {
   readFlightControlInput(): ShipFlightControlInput
+  readStrafeControlInput(): StrafeControlInput
+  /** D18: the strafe joystick only shows while the ship is held on a cover shell */
+  setStrafeJoystickVisible(strafeJoystickVisible: boolean): void
   /** D14: tapping an asteroid for cover zeroes the throttle; moving it again escapes cover */
   setThrottleFraction(newThrottleFraction: number): void
 }
 
-export function createTouchFlightControls(hudOverlayRoot: HTMLElement): TouchFlightControls {
-  // ===== STEP 1: rotation joystick widget =====
+const JOYSTICK_MAX_DEFLECTION_PIXELS = 48
 
-  const rotationJoystickZone = document.createElement('div')
-  rotationJoystickZone.className = 'rotationJoystickZone'
-  const rotationJoystickKnob = document.createElement('div')
-  rotationJoystickKnob.className = 'rotationJoystickKnob'
-  rotationJoystickZone.appendChild(rotationJoystickKnob)
-  hudOverlayRoot.appendChild(rotationJoystickZone)
+type JoystickWidget = {
+  zoneElement: HTMLDivElement
+  /** -1..1 each, screen convention: +x = dragged right, +y = dragged DOWN */
+  getDeflectionX(): number
+  getDeflectionY(): number
+  isPointerActive(): boolean
+}
 
-  const JOYSTICK_MAX_DEFLECTION_PIXELS = 48
+function buildJoystickWidget(zoneClassName: string, knobClassName: string): JoystickWidget {
+  const zoneElement = document.createElement('div')
+  zoneElement.className = zoneClassName
+  const knobElement = document.createElement('div')
+  knobElement.className = knobClassName
+  zoneElement.appendChild(knobElement)
 
-  let joystickActivePointerId: number | null = null
-  let joystickPitchInput = 0
-  let joystickYawInput = 0
+  let activePointerId: number | null = null
+  let deflectionX = 0
+  let deflectionY = 0
 
-  function updateJoystickFromPointer(pointerEvent: PointerEvent): void {
-    const zoneBounds = rotationJoystickZone.getBoundingClientRect()
+  function updateDeflectionFromPointer(pointerEvent: PointerEvent): void {
+    const zoneBounds = zoneElement.getBoundingClientRect()
     const zoneCenterX = zoneBounds.left + zoneBounds.width / 2
     const zoneCenterY = zoneBounds.top + zoneBounds.height / 2
-    const rawDeflectionX = pointerEvent.clientX - zoneCenterX
-    const rawDeflectionY = pointerEvent.clientY - zoneCenterY
-    const clampedX = Math.max(-JOYSTICK_MAX_DEFLECTION_PIXELS, Math.min(JOYSTICK_MAX_DEFLECTION_PIXELS, rawDeflectionX))
-    const clampedY = Math.max(-JOYSTICK_MAX_DEFLECTION_PIXELS, Math.min(JOYSTICK_MAX_DEFLECTION_PIXELS, rawDeflectionY))
-
-    rotationJoystickKnob.style.transform = `translate(${clampedX}px, ${clampedY}px)`
-
-    joystickYawInput = clampedX / JOYSTICK_MAX_DEFLECTION_PIXELS
-    // dragging up (negative screen Y) pitches the nose up (arcade convention)
-    joystickPitchInput = -clampedY / JOYSTICK_MAX_DEFLECTION_PIXELS
+    const clampedX = Math.max(
+      -JOYSTICK_MAX_DEFLECTION_PIXELS,
+      Math.min(JOYSTICK_MAX_DEFLECTION_PIXELS, pointerEvent.clientX - zoneCenterX),
+    )
+    const clampedY = Math.max(
+      -JOYSTICK_MAX_DEFLECTION_PIXELS,
+      Math.min(JOYSTICK_MAX_DEFLECTION_PIXELS, pointerEvent.clientY - zoneCenterY),
+    )
+    knobElement.style.transform = `translate(${clampedX}px, ${clampedY}px)`
+    deflectionX = clampedX / JOYSTICK_MAX_DEFLECTION_PIXELS
+    deflectionY = clampedY / JOYSTICK_MAX_DEFLECTION_PIXELS
   }
 
   function releaseJoystick(): void {
-    joystickActivePointerId = null
-    joystickPitchInput = 0
-    joystickYawInput = 0
-    rotationJoystickKnob.style.transform = 'translate(0px, 0px)'
+    activePointerId = null
+    deflectionX = 0
+    deflectionY = 0
+    knobElement.style.transform = 'translate(0px, 0px)'
   }
 
-  rotationJoystickZone.addEventListener('pointerdown', (pointerEvent) => {
-    joystickActivePointerId = pointerEvent.pointerId
-    rotationJoystickZone.setPointerCapture(pointerEvent.pointerId)
-    updateJoystickFromPointer(pointerEvent)
+  zoneElement.addEventListener('pointerdown', (pointerEvent) => {
+    activePointerId = pointerEvent.pointerId
+    zoneElement.setPointerCapture(pointerEvent.pointerId)
+    updateDeflectionFromPointer(pointerEvent)
   })
-  rotationJoystickZone.addEventListener('pointermove', (pointerEvent) => {
-    if (pointerEvent.pointerId === joystickActivePointerId) updateJoystickFromPointer(pointerEvent)
+  zoneElement.addEventListener('pointermove', (pointerEvent) => {
+    if (pointerEvent.pointerId === activePointerId) updateDeflectionFromPointer(pointerEvent)
   })
-  rotationJoystickZone.addEventListener('pointerup', releaseJoystick)
-  rotationJoystickZone.addEventListener('pointercancel', releaseJoystick)
+  zoneElement.addEventListener('pointerup', releaseJoystick)
+  zoneElement.addEventListener('pointercancel', releaseJoystick)
+
+  return {
+    zoneElement,
+    getDeflectionX: () => deflectionX,
+    getDeflectionY: () => deflectionY,
+    isPointerActive: () => activePointerId !== null,
+  }
+}
+
+export function createTouchFlightControls(hudOverlayRoot: HTMLElement): TouchFlightControls {
+  // ===== STEP 1: rotation joystick (right) + cover strafe joystick (left, hidden until tractored) =====
+
+  const rotationJoystick = buildJoystickWidget('rotationJoystickZone', 'rotationJoystickKnob')
+  hudOverlayRoot.appendChild(rotationJoystick.zoneElement)
+
+  const strafeJoystick = buildJoystickWidget('strafeJoystickZone', 'strafeJoystickKnob')
+  hudOverlayRoot.appendChild(strafeJoystick.zoneElement)
 
   // ===== STEP 2: throttle lever widget (stays where the player sets it) =====
 
@@ -138,16 +173,42 @@ export function createTouchFlightControls(hudOverlayRoot: HTMLElement): TouchFli
     return yawInput
   }
 
-  // ===== STEP 4: combined readout (joystick wins while it is being touched) =====
+  function readKeyboardStrafeXInput(): number {
+    let strafeXInput = 0
+    if (keysCurrentlyHeld.has('KeyL')) strafeXInput += 1
+    if (keysCurrentlyHeld.has('KeyJ')) strafeXInput -= 1
+    return strafeXInput
+  }
+
+  function readKeyboardStrafeYInput(): number {
+    let strafeYInput = 0
+    if (keysCurrentlyHeld.has('KeyI')) strafeYInput += 1
+    if (keysCurrentlyHeld.has('KeyK')) strafeYInput -= 1
+    return strafeYInput
+  }
+
+  // ===== STEP 4: combined readouts (a joystick wins while it is being touched) =====
 
   return {
     readFlightControlInput(): ShipFlightControlInput {
-      const joystickIsActive = joystickActivePointerId !== null
+      const rotationJoystickIsActive = rotationJoystick.isPointerActive()
       return {
-        pitchInput: joystickIsActive ? joystickPitchInput : readKeyboardPitchInput(),
-        yawInput: joystickIsActive ? joystickYawInput : readKeyboardYawInput(),
+        // dragging up (negative screen Y) pitches the nose up (arcade convention)
+        pitchInput: rotationJoystickIsActive ? -rotationJoystick.getDeflectionY() : readKeyboardPitchInput(),
+        yawInput: rotationJoystickIsActive ? rotationJoystick.getDeflectionX() : readKeyboardYawInput(),
         throttleFraction,
       }
+    },
+    readStrafeControlInput(): StrafeControlInput {
+      const strafeJoystickIsActive = strafeJoystick.isPointerActive()
+      return {
+        strafeXInput: strafeJoystickIsActive ? strafeJoystick.getDeflectionX() : readKeyboardStrafeXInput(),
+        // dragging up slides the ship up around the shell
+        strafeYInput: strafeJoystickIsActive ? -strafeJoystick.getDeflectionY() : readKeyboardStrafeYInput(),
+      }
+    },
+    setStrafeJoystickVisible(strafeJoystickVisible: boolean): void {
+      strafeJoystick.zoneElement.classList.toggle('strafeJoystickZoneVisible', strafeJoystickVisible)
     },
     setThrottleFraction(newThrottleFraction: number): void {
       throttleFraction = Math.max(0, Math.min(1, newThrottleFraction))
