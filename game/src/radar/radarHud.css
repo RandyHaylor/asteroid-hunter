@@ -1,0 +1,55 @@
+/* Radar HUD chrome (R13/R16) — DOM overlay drawn over the top-right WebGL radar inset.
+   Size and corner offsets are set inline by radarSphereDisplay so the ring always
+   matches the scissor rectangle exactly. */
+
+.radarHudCorner {
+  position: fixed;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.radarOutlineRing {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 2px solid rgba(42, 223, 223, 0.4);
+}
+
+/* R16: blinking red outline while unresolved enemies exist */
+.radarOutlineBlinking {
+  animation: radarOutlinePulse 1.2s ease-in-out infinite;
+}
+
+@keyframes radarOutlinePulse {
+  0%,
+  100% {
+    border-color: rgba(255, 48, 48, 0.95);
+    box-shadow: 0 0 12px rgba(255, 48, 48, 0.7);
+  }
+  50% {
+    border-color: rgba(255, 48, 48, 0.25);
+    box-shadow: 0 0 2px rgba(255, 48, 48, 0.15);
+  }
+}
+
+/* R16: "RECENT ACTIVE ENEMIES: n" label below the inset */
+.radarEnemyCountLabel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  margin-top: 6px;
+  text-align: center;
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  color: rgba(42, 223, 223, 0.55); /* dim cyan when no recent active enemies */
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+}
+
+.radarEnemyCountLabelAlert {
+  color: #ff5050;
+  text-shadow: 0 0 6px rgba(255, 48, 48, 0.5);
+}

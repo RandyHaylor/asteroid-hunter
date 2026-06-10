@@ -1,0 +1,38 @@
+/* R11: lower third of the screen = fire zones — left lasers, right missiles. */
+
+.fireZoneButton {
+  position: absolute;
+  bottom: 2vh;
+  width: 38vw;
+  height: 28vh; /* fills most of the reserved lower third */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 24px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.65);
+  font-family: system-ui, sans-serif;
+  font-size: clamp(14px, 2.4vw, 24px);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.fireZoneButtonLasers {
+  left: 2vw;
+  border-color: rgba(102, 255, 238, 0.45); /* matches the cyan player laser bolts */
+}
+
+.fireZoneButtonMissiles {
+  right: 2vw;
+  border-color: rgba(255, 170, 51, 0.45); /* matches the missile exhaust glow */
+}
+
+.fireZoneButtonHeld {
+  background: rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.95);
+}

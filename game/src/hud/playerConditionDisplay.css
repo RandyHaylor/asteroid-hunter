@@ -1,0 +1,70 @@
+/* D7: top-left player condition readout — slim SHIELD bar above slim HULL bar */
+
+.playerConditionPanel {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.playerConditionBarRow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.playerConditionBarLabel {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: rgba(220, 235, 245, 0.75);
+}
+
+.playerConditionBarTrack {
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(8, 14, 22, 0.55);
+  border: 1px solid rgba(140, 170, 195, 0.25);
+  overflow: hidden;
+}
+
+.playerConditionBarFill {
+  height: 100%;
+  width: 100%;
+  border-radius: 3px;
+  transition: width 0.12s linear;
+}
+
+.playerConditionShieldFill {
+  background: linear-gradient(90deg, #1f9fd8, #5fd8ff);
+  box-shadow: 0 0 6px rgba(95, 216, 255, 0.55);
+}
+
+.playerConditionHullFill {
+  background: linear-gradient(90deg, #d8821f, #ffb55f);
+  box-shadow: 0 0 6px rgba(255, 181, 95, 0.45);
+}
+
+/* shield fully down → the empty track pulses faintly red (D7 warning) */
+.playerConditionShieldDownPulse {
+  animation: playerConditionShieldDownPulse 1.1s ease-in-out infinite;
+}
+
+@keyframes playerConditionShieldDownPulse {
+  0%,
+  100% {
+    background: rgba(8, 14, 22, 0.55);
+    border-color: rgba(140, 170, 195, 0.25);
+  }
+  50% {
+    background: rgba(120, 20, 25, 0.45);
+    border-color: rgba(255, 90, 90, 0.45);
+  }
+}
