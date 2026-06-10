@@ -22,6 +22,7 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 | D14 | Cover hold: the beam pulls the ship onto a **hold shell** around the asteroid (never through it) and holds it there; tapping zeroes the throttle; **joystick slides position around the shell**; escape = move throttle or tap another asteroid; held ship faces its asteroid |
 | D15 | Turn feel: joystick turn rates **ease in** (~0.17 s time constant) instead of snapping to max; chase camera **up follows the ship's banked up axis** so controls never invert upside down |
 | D16 | Tractor grab range: asteroids only tappable within **350 m** (stat-driven; later raised by upgrades, reduced by ship damage); cover grids only show on in-range asteroids |
+| D17 | Lock = **lead prediction**: locked shots aim at the intercept point computed from the weapon's projectile speed (generic solver — upgrades changing speed change the lead); player missiles also get **weak homing** toward the lock, turn rate is a missile stat (`homingTurnRateRadiansPerSecond`, base 0.7 rad/s) |
 
 ## Requirements from the design doc
 

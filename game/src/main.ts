@@ -30,6 +30,7 @@ import {
   playerBaseMissileStats,
 } from './weapons/weaponStats'
 import { selectAutoAimTargetInNoseCone, updateAutoAimTargetHighlight } from './weapons/noseConeAutoAim'
+import { computeLeadAimDirection } from './weapons/targetLeadPrediction'
 import { createLaserVolleySystem } from './weapons/laserFire'
 import { createMissileVolleySystem } from './weapons/missileFire'
 import { createFireZoneButtons } from './hud/fireZoneButtons'
@@ -388,22 +389,25 @@ function updatePlayerWeaponsFire(): void {
     gameWorld.enemyShips,
   )
 
-  // D6: fire along the nose unless the auto-aim cone has a target
-  if (currentAutoAimTarget) {
-    scratchPlayerAimDirection
-      .copy(currentAutoAimTarget.positionMeters)
-      .sub(playerShipState.positionMeters)
-      .normalize()
-  } else {
-    scratchPlayerAimDirection.copy(scratchPlayerForwardDirection)
-  }
-
   const fireIntent = fireZoneButtons.readFireIntent()
   scratchProjectileOrigin
     .copy(playerShipState.positionMeters)
     .addScaledVector(scratchPlayerForwardDirection, 4)
 
   if (fireIntent.wantsLaserFire && simulationClockSeconds >= playerNextLaserFireTimeSeconds) {
+    // D6 + lead: locked shots aim at the predicted intercept for THIS weapon's projectile speed,
+    // so upgrades that change bolt speed automatically change the lead
+    if (currentAutoAimTarget) {
+      computeLeadAimDirection(
+        scratchProjectileOrigin,
+        currentAutoAimTarget.positionMeters,
+        currentAutoAimTarget.velocityMetersPerSecond,
+        playerBaseLaserStats.boltSpeedMetersPerSecond,
+        scratchPlayerAimDirection,
+      )
+    } else {
+      scratchPlayerAimDirection.copy(scratchPlayerForwardDirection)
+    }
     laserVolleySystem.tryFireLaserVolley(
       scratchProjectileOrigin,
       scratchPlayerAimDirection,
@@ -415,12 +419,25 @@ function updatePlayerWeaponsFire(): void {
   }
 
   if (fireIntent.wantsMissileFire && simulationClockSeconds >= playerNextMissileFireTimeSeconds) {
+    // missiles lead with their own (slower) speed and weakly home toward the lock (R18 stats)
+    if (currentAutoAimTarget) {
+      computeLeadAimDirection(
+        scratchProjectileOrigin,
+        currentAutoAimTarget.positionMeters,
+        currentAutoAimTarget.velocityMetersPerSecond,
+        playerBaseMissileStats.missileSpeedMetersPerSecond,
+        scratchPlayerAimDirection,
+      )
+    } else {
+      scratchPlayerAimDirection.copy(scratchPlayerForwardDirection)
+    }
     missileVolleySystem.tryFireMissile(
       scratchProjectileOrigin,
       scratchPlayerAimDirection,
       playerBaseMissileStats,
       true,
       simulationClockSeconds,
+      currentAutoAimTarget,
     )
     playerNextMissileFireTimeSeconds = simulationClockSeconds + playerBaseMissileStats.fireCooldownSeconds
   }

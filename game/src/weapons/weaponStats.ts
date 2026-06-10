@@ -20,6 +20,8 @@ export type MissileWeaponStats = {
   missileSpeedMetersPerSecond: number
   explosionRadiusMeters: number
   explosionDamage: number
+  /** R18: weak homing steer toward the locked target after launch — upgrades raise the turn rate */
+  homingTurnRateRadiansPerSecond: number
 }
 
 export const playerBaseLaserStats: LaserWeaponStats = {
@@ -36,6 +38,7 @@ export const playerBaseMissileStats: MissileWeaponStats = {
   missileSpeedMetersPerSecond: 140,
   explosionRadiusMeters: 18,
   explosionDamage: 45,
+  homingTurnRateRadiansPerSecond: 0.7,
 }
 
 // D11: enemies fire the same weapon classes, tuned slightly weaker than the player's.
@@ -53,4 +56,5 @@ export const enemyBaseMissileStats: MissileWeaponStats = {
   missileSpeedMetersPerSecond: 140,
   explosionRadiusMeters: 18,
   explosionDamage: 25,
+  homingTurnRateRadiansPerSecond: 0.35,
 }

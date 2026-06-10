@@ -13,6 +13,12 @@ export type MissileHitCallbacks = {
   onPlayerHit(damage: number): void
 }
 
+/** a live entity reference the missile steers toward — EnemyShip fits; wrap the player as needed */
+export type HomingTargetReference = {
+  positionMeters: THREE.Vector3
+  isDestroyed?: boolean
+}
+
 export type MissileVolleySystem = {
   tryFireMissile(
     originPositionMeters: THREE.Vector3,
@@ -20,6 +26,7 @@ export type MissileVolleySystem = {
     missileStats: MissileWeaponStats,
     firedByPlayer: boolean,
     nowSeconds: number,
+    homingTarget?: HomingTargetReference | null,
   ): boolean
   updateMissiles(
     deltaSeconds: number,
@@ -38,6 +45,9 @@ type ActiveMissile = {
   explosionDamage: number
   firedByPlayer: boolean
   firedAtSeconds: number
+  /** R18: weak homing toward the lock at launch — turn rate is a weapon stat, captured at fire time */
+  homingTarget: HomingTargetReference | null
+  homingTurnRateRadiansPerSecond: number
 }
 
 type ActiveExplosionFireball = {
@@ -82,6 +92,41 @@ const MISSILE_MESH_LOCAL_FORWARD_AXIS = new THREE.Vector3(0, 0, 1)
 
 // scratch objects reused every fire/update call to avoid per-frame allocations
 const scratchNormalizedAimDirection = new THREE.Vector3()
+const scratchCurrentFlightDirection = new THREE.Vector3()
+const scratchDesiredHomingDirection = new THREE.Vector3()
+const scratchHomingRotationAxis = new THREE.Vector3()
+const scratchHomingRotation = new THREE.Quaternion()
+
+/** rotate the missile's velocity toward its homing target by at most turnRate·dt, keeping speed */
+function steerMissileTowardHomingTarget(missile: ActiveMissile, deltaSeconds: number): void {
+  const homingTarget = missile.homingTarget
+  if (!homingTarget || homingTarget.isDestroyed) return
+
+  const flightSpeed = missile.velocityMetersPerSecond.length()
+  if (flightSpeed < 1e-6) return
+  scratchCurrentFlightDirection.copy(missile.velocityMetersPerSecond).divideScalar(flightSpeed)
+  scratchDesiredHomingDirection.copy(homingTarget.positionMeters).sub(missile.missileMesh.position)
+  if (scratchDesiredHomingDirection.lengthSq() < 1e-6) return
+  scratchDesiredHomingDirection.normalize()
+
+  const angleToTargetRadians = scratchCurrentFlightDirection.angleTo(scratchDesiredHomingDirection)
+  if (angleToTargetRadians < 1e-4) return
+
+  scratchHomingRotationAxis.crossVectors(scratchCurrentFlightDirection, scratchDesiredHomingDirection)
+  if (scratchHomingRotationAxis.lengthSq() < 1e-10) return // dead astern — no defined turn plane
+  scratchHomingRotationAxis.normalize()
+
+  const turnStepRadians = Math.min(
+    angleToTargetRadians,
+    missile.homingTurnRateRadiansPerSecond * deltaSeconds,
+  )
+  scratchHomingRotation.setFromAxisAngle(scratchHomingRotationAxis, turnStepRadians)
+  missile.velocityMetersPerSecond.applyQuaternion(scratchHomingRotation)
+  missile.missileMesh.quaternion.setFromUnitVectors(
+    MISSILE_MESH_LOCAL_FORWARD_AXIS,
+    scratchCurrentFlightDirection.copy(missile.velocityMetersPerSecond).divideScalar(flightSpeed),
+  )
+}
 
 function buildMissileMesh(firedByPlayer: boolean): THREE.Group {
   const missileMesh = new THREE.Group()
@@ -203,7 +248,7 @@ export function createMissileVolleySystem(gameScene: THREE.Scene): MissileVolley
   }
 
   return {
-    tryFireMissile(originPositionMeters, aimDirection, missileStats, firedByPlayer, nowSeconds): boolean {
+    tryFireMissile(originPositionMeters, aimDirection, missileStats, firedByPlayer, nowSeconds, homingTarget = null): boolean {
       scratchNormalizedAimDirection.copy(aimDirection).normalize()
 
       const missileMesh = buildMissileMesh(firedByPlayer)
@@ -221,6 +266,8 @@ export function createMissileVolleySystem(gameScene: THREE.Scene): MissileVolley
         explosionDamage: missileStats.explosionDamage,
         firedByPlayer,
         firedAtSeconds: nowSeconds,
+        homingTarget,
+        homingTurnRateRadiansPerSecond: missileStats.homingTurnRateRadiansPerSecond,
       })
       return true
     },
@@ -229,6 +276,7 @@ export function createMissileVolleySystem(gameScene: THREE.Scene): MissileVolley
       // ===== STEP 1: advance missiles, detonating on first contact (iterate backwards for swap-remove) =====
       for (let missileIndex = activeMissiles.length - 1; missileIndex >= 0; missileIndex--) {
         const missile = activeMissiles[missileIndex]
+        steerMissileTowardHomingTarget(missile, deltaSeconds)
         missile.missileMesh.position.addScaledVector(missile.velocityMetersPerSecond, deltaSeconds)
         missile.ageSeconds += deltaSeconds
 
