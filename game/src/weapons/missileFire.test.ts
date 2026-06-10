@@ -21,6 +21,7 @@ function makeEnemyShipAt(position: THREE.Vector3): EnemyShip {
     positionMeters: position.clone(),
     velocityMetersPerSecond: new THREE.Vector3(),
     orientation: new THREE.Quaternion(),
+    shieldPointsRemaining: 40,
     hitPointsRemaining: 60,
     isDestroyed: false,
     renderObject: new THREE.Object3D(),

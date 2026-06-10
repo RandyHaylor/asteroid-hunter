@@ -14,6 +14,7 @@ function makeTestEnemyShipAt(positionMeters: THREE.Vector3, isDestroyed = false)
     positionMeters,
     velocityMetersPerSecond: new THREE.Vector3(),
     orientation: new THREE.Quaternion(),
+    shieldPointsRemaining: isDestroyed ? 0 : 40,
     hitPointsRemaining: isDestroyed ? 0 : 30,
     isDestroyed,
     renderObject: new THREE.Object3D(),

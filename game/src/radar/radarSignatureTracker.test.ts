@@ -17,6 +17,7 @@ function makeTestEnemyShip(enemyShipId: number, positionMeters: Vector3): EnemyS
     positionMeters: positionMeters.clone(),
     velocityMetersPerSecond: new Vector3(),
     orientation: new Quaternion(),
+    shieldPointsRemaining: 40,
     hitPointsRemaining: 10,
     isDestroyed: false,
     renderObject: new Object3D(),

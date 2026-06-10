@@ -36,6 +36,7 @@ function makeEnemyShipAt(position: Vector3): EnemyShip {
     positionMeters: position.clone(),
     velocityMetersPerSecond: new Vector3(),
     orientation: new Quaternion(),
+    shieldPointsRemaining: 40,
     hitPointsRemaining: 10,
     isDestroyed: false,
     renderObject: new Object3D(),

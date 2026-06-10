@@ -47,6 +47,8 @@ import {
   updateEnemyShipBehavior,
   type EnemyFireIntent,
 } from './enemies/enemyAlienShipBehavior'
+import { applyWeaponDamageToEnemyShip } from './enemies/enemyShipDamage'
+import { createEnemyConditionBarsDisplay } from './enemies/enemyConditionBarsDisplay'
 import { createPlayerShipCondition } from './player/playerShipCondition'
 import { createPlayerConditionDisplay } from './hud/playerConditionDisplay'
 import { createRadarSignatureTracker } from './radar/radarSignatureTracker'
@@ -112,6 +114,7 @@ const radarSignatureTracker = createRadarSignatureTracker()
 const radarSphereDisplay = createRadarSphereDisplay(hudOverlayRoot)
 const laserVolleySystem = createLaserVolleySystem(gameScene)
 const missileVolleySystem = createMissileVolleySystem(gameScene)
+const enemyConditionBarsDisplay = createEnemyConditionBarsDisplay(gameScene)
 
 // camera view toggle button (D9) + KeyC shortcut
 const cameraViewToggleButton = document.createElement('button')
@@ -237,6 +240,46 @@ if (import.meta.env.DEV) {
     engageTractorPullTowardAsteroid(nearestLargeAsteroid)
     return { asteroidId: nearestLargeAsteroid.asteroidId, surfaceDistanceMeters: nearestSurfaceDistanceMeters }
   }
+  ;(window as unknown as Record<string, unknown>).debugDamageNearestEnemy = (damageAmount = 25) => {
+    let nearestEnemy: EnemyShip | null = null
+    let nearestDistanceMeters = Infinity
+    for (const enemyShip of gameWorld.enemyShips) {
+      if (enemyShip.isDestroyed) continue
+      const distanceMeters = playerShipState.positionMeters.distanceTo(enemyShip.positionMeters)
+      if (distanceMeters < nearestDistanceMeters) {
+        nearestDistanceMeters = distanceMeters
+        nearestEnemy = enemyShip
+      }
+    }
+    if (!nearestEnemy) return null
+    weaponHitCallbacks.onEnemyHitByPlayer(nearestEnemy, damageAmount)
+    return {
+      enemyShipId: nearestEnemy.enemyShipId,
+      distanceMeters: nearestDistanceMeters,
+      shieldPointsRemaining: nearestEnemy.shieldPointsRemaining,
+      hitPointsRemaining: nearestEnemy.hitPointsRemaining,
+      activeBarCount: enemyConditionBarsDisplay.getActiveBarCount(),
+    }
+  }
+  ;(window as unknown as Record<string, unknown>).debugPlaceNearestEnemyAheadOfPlayer = (distanceMeters = 60) => {
+    let nearestEnemy: EnemyShip | null = null
+    let nearestDistanceMeters = Infinity
+    for (const enemyShip of gameWorld.enemyShips) {
+      if (enemyShip.isDestroyed) continue
+      const enemyDistanceMeters = playerShipState.positionMeters.distanceTo(enemyShip.positionMeters)
+      if (enemyDistanceMeters < nearestDistanceMeters) {
+        nearestDistanceMeters = enemyDistanceMeters
+        nearestEnemy = enemyShip
+      }
+    }
+    if (!nearestEnemy) return null
+    getShipForwardDirection(playerShipState, scratchPlayerForwardDirection)
+    nearestEnemy.positionMeters
+      .copy(playerShipState.positionMeters)
+      .addScaledVector(scratchPlayerForwardDirection, distanceMeters)
+    nearestEnemy.velocityMetersPerSecond.set(0, 0, 0)
+    return nearestEnemy.enemyShipId
+  }
   ;(window as unknown as Record<string, unknown>).debugReadTractorState = () => {
     let coverLatitudeDegrees: number | null = null
     if (tractorPullIsActive && activeCoverAsteroid) {
@@ -323,6 +366,9 @@ function resetPlayerShipForWaveRestart(): void {
   playerShipState.orientation.identity()
   playerShipState.currentPitchRateRadiansPerSecond = 0
   playerShipState.currentYawRateRadiansPerSecond = 0
+  // snap the smoothed mesh to the respawn pose so it doesn't visibly fly across the field (D21)
+  playerShipMesh.position.copy(playerShipState.positionMeters)
+  playerShipMesh.quaternion.copy(playerShipState.orientation)
   playerShipCondition.restoreForWaveRestart()
   releaseTractorPull()
 }
@@ -378,11 +424,8 @@ let simulationClockSeconds = 0
 const weaponHitCallbacks = {
   onEnemyHitByPlayer(hitEnemy: EnemyShip, damageAmount: number): void {
     if (hitEnemy.isDestroyed) return
-    hitEnemy.hitPointsRemaining -= damageAmount
-    if (hitEnemy.hitPointsRemaining <= 0) {
-      hitEnemy.isDestroyed = true
-      gameScene.remove(hitEnemy.renderObject)
-    }
+    applyWeaponDamageToEnemyShip(hitEnemy, damageAmount) // D21: shield absorbs before hull
+    if (hitEnemy.isDestroyed) gameScene.remove(hitEnemy.renderObject)
   },
   onAsteroidHit(hitAsteroid: AsteroidBody, impactPointMeters: THREE.Vector3, damageAmount: number): void {
     applyWeaponDamageToAsteroid(hitAsteroid, damageAmount, impactPointMeters, gameScene)
@@ -703,12 +746,19 @@ function updateGameSimulation(deltaSeconds: number): void {
 
 let coverGridRecolorCountdownSeconds = 0
 
+/** D21: light visual smoothing buffer — filters single-frame placement thrash without visible lag */
+const PLAYER_MESH_SMOOTHING_STIFFNESS_PER_SECOND = 25
+
 function syncRenderObjectsFromSimulation(frameDeltaSeconds: number): void {
-  playerShipMesh.position.copy(playerShipState.positionMeters)
-  playerShipMesh.quaternion.copy(playerShipState.orientation)
+  const meshSmoothingBlend = 1 - Math.exp(-PLAYER_MESH_SMOOTHING_STIFFNESS_PER_SECOND * frameDeltaSeconds)
+  playerShipMesh.position.lerp(playerShipState.positionMeters, meshSmoothingBlend)
+  playerShipMesh.quaternion.slerp(playerShipState.orientation, meshSmoothingBlend)
 
   // D19: thrust plume diamond — sized by throttle, color cycling red→yellow
   updatePlayerEngineExhaust(flightControls.readFlightControlInput().throttleFraction, simulationClockSeconds)
+
+  // D21: blue shield / red hull bars over damaged enemies, billboarded to the player camera
+  enemyConditionBarsDisplay.updateEnemyConditionBars(gameWorld.enemyShips, playerViewCamera)
 
   if (tractorPullIsActive && activeCoverAsteroid) {
     tractorBeamLine.visible = true

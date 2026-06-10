@@ -40,6 +40,9 @@ const SHIP_LOCAL_FORWARD_AXIS = new Vector3(0, 0, -1)
 /** how aggressively thrust corrects toward the throttle target velocity (1/seconds) */
 const VELOCITY_CORRECTION_GAIN_PER_SECOND = 1.5
 
+/** D21: below this velocity error the engines coast — stops micro-thrust thrashing/jitter */
+const THRUST_VELOCITY_ERROR_DEADBAND_METERS_PER_SECOND = 0.25
+
 /** D15: how quickly the actual turn rate eases toward the commanded rate (1/seconds, time constant ~0.17 s) */
 const TURN_RATE_RESPONSE_PER_SECOND = 6
 
@@ -100,11 +103,14 @@ export function stepShipFlightSimulation(
     controlInput.throttleFraction * flightStats.maxForwardSpeedMetersPerSecond
   scratchThrottleTargetVelocity.copy(scratchForwardDirection).multiplyScalar(throttleTargetSpeedMetersPerSecond)
 
-  // STEP 3: thrust acceleration corrects toward the target velocity, clamped to what the engines produce
-  scratchThrustAcceleration
-    .copy(scratchThrottleTargetVelocity)
-    .sub(shipState.velocityMetersPerSecond)
-    .multiplyScalar(VELOCITY_CORRECTION_GAIN_PER_SECOND)
+  // STEP 3: thrust acceleration corrects toward the target velocity, clamped to what the engines
+  // produce. Inside the deadband the engines coast (D21) — no micro-thrust thrashing at steady state.
+  scratchThrustAcceleration.copy(scratchThrottleTargetVelocity).sub(shipState.velocityMetersPerSecond)
+  if (scratchThrustAcceleration.length() < THRUST_VELOCITY_ERROR_DEADBAND_METERS_PER_SECOND) {
+    shipState.positionMeters.addScaledVector(shipState.velocityMetersPerSecond, deltaSeconds)
+    return
+  }
+  scratchThrustAcceleration.multiplyScalar(VELOCITY_CORRECTION_GAIN_PER_SECOND)
   const maxEngineAccelerationMetersPerSecondSquared = flightStats.maxThrustNewtons / flightStats.shipMassKg
   if (scratchThrustAcceleration.length() > maxEngineAccelerationMetersPerSecondSquared) {
     scratchThrustAcceleration.setLength(maxEngineAccelerationMetersPerSecondSquared)

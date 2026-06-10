@@ -25,6 +25,8 @@ export type EnemyShip = {
   positionMeters: Vector3
   velocityMetersPerSecond: Vector3
   orientation: Quaternion
+  /** D21: enemy shield absorbs damage before hull (hitPointsRemaining) */
+  shieldPointsRemaining: number
   hitPointsRemaining: number
   isDestroyed: boolean
   renderObject: Object3D

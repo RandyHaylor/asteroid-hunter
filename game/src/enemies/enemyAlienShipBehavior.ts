@@ -4,6 +4,7 @@ import type { AsteroidBody, EnemyShip, EnemyShipBehaviorTier } from '../gameSimu
 import { weaponEngagementRanges } from '../gameSimulation/gameWorldTypes'
 import { isLineOfSightBlockedByAsteroids } from '../gameSimulation/lineOfSightProbe'
 import { createEnemyShipMesh } from './enemyShipMesh'
+import { ENEMY_SHIP_MAX_HULL_POINTS, ENEMY_SHIP_MAX_SHIELD_POINTS } from './enemyShipDamage'
 
 // D8: enemy AI tiers — dumbPatrol wanders and snap-fires, orbitStrafe circles the player,
 // coverHunter hides behind large asteroids and peeks out to attack (D11 degrades that cover over time).
@@ -108,7 +109,8 @@ export function createEnemyShip(
     positionMeters: spawnPositionMeters.clone(),
     velocityMetersPerSecond: new Vector3(),
     orientation: new Quaternion(),
-    hitPointsRemaining: 60,
+    shieldPointsRemaining: ENEMY_SHIP_MAX_SHIELD_POINTS,
+    hitPointsRemaining: ENEMY_SHIP_MAX_HULL_POINTS,
     isDestroyed: false,
     renderObject: enemyShipMesh,
   }
