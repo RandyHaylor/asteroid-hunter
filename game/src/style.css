@@ -145,6 +145,22 @@ body {
   cursor: pointer;
 }
 
+/* D23: sound on/off toggle — same chrome as the VIEW button, parked top-right */
+.soundToggleButton {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  padding: 6px 14px;
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: #9fd8ff;
+  background: rgba(20, 40, 70, 0.45);
+  border: 1px solid rgba(110, 180, 255, 0.4);
+  border-radius: 6px;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
 .throttleLeverKnob {
   position: absolute;
   left: -6px;

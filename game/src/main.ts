@@ -38,6 +38,7 @@ import {
 } from './weapons/weaponStats'
 import { selectAutoAimTargetInNoseCone, updateAutoAimTargetHighlight } from './weapons/noseConeAutoAim'
 import { computeIdleAimAssistRotationInput } from './weapons/idleAimAssistTowardTarget'
+import { createGameAudioSystem } from './audio/proceduralGameAudio'
 import { computeLeadAimDirection } from './weapons/targetLeadPrediction'
 import { createLaserVolleySystem } from './weapons/laserFire'
 import { createMissileVolleySystem } from './weapons/missileFire'
@@ -116,6 +117,36 @@ const radarSphereDisplay = createRadarSphereDisplay(hudOverlayRoot)
 const laserVolleySystem = createLaserVolleySystem(gameScene)
 const missileVolleySystem = createMissileVolleySystem(gameScene)
 const enemyConditionBarsDisplay = createEnemyConditionBarsDisplay(gameScene)
+
+// D23: procedural 8-bit techno music + SFX. Autoplay policy requires a user gesture before the
+// AudioContext may produce sound, so we resume + start the loop on the first pointer/key event.
+const gameAudioSystem = createGameAudioSystem()
+
+const soundToggleButton = document.createElement('button')
+soundToggleButton.className = 'soundToggleButton'
+soundToggleButton.textContent = 'SOUND: ON'
+hudOverlayRoot.appendChild(soundToggleButton)
+
+function toggleGameSound(): void {
+  const nowMuted = gameAudioSystem.toggleMuted()
+  soundToggleButton.textContent = nowMuted ? 'SOUND: OFF' : 'SOUND: ON'
+}
+soundToggleButton.addEventListener('click', (clickEvent) => {
+  clickEvent.stopPropagation()
+  toggleGameSound()
+})
+window.addEventListener('keydown', (keyboardEvent) => {
+  if (keyboardEvent.code === 'KeyM') toggleGameSound()
+})
+
+let gameAudioResumedAfterGesture = false
+function resumeGameAudioOnFirstGesture(): void {
+  if (gameAudioResumedAfterGesture) return
+  gameAudioResumedAfterGesture = true
+  gameAudioSystem.resumeAfterFirstUserGesture()
+}
+window.addEventListener('pointerdown', resumeGameAudioOnFirstGesture)
+window.addEventListener('keydown', resumeGameAudioOnFirstGesture)
 
 // camera view toggle button (D9) + KeyC shortcut
 const cameraViewToggleButton = document.createElement('button')
@@ -381,6 +412,7 @@ function updateWavePhase(deltaSeconds: number): void {
     hideWaveBanner()
     spawnEnemiesForWave(currentWaveNumber)
     currentWavePhase = 'waveActive'
+    gameAudioSystem.playWaveStartSound() // D23
     return
   }
 
@@ -390,6 +422,7 @@ function updateWavePhase(deltaSeconds: number): void {
       removeAllEnemiesFromWorld()
       currentWavePhase = 'playerDestroyed'
       wavePhaseCountdownSeconds = 3
+      gameAudioSystem.playPlayerDestroyedSound() // D23
       return
     }
     const livingEnemyCount = gameWorld.enemyShips.filter((enemyShip) => !enemyShip.isDestroyed).length
@@ -398,6 +431,7 @@ function updateWavePhase(deltaSeconds: number): void {
       removeAllEnemiesFromWorld()
       currentWavePhase = 'waveCleared'
       wavePhaseCountdownSeconds = 3
+      gameAudioSystem.playWaveClearedSound() // D23
     }
     return
   }
@@ -426,13 +460,19 @@ const weaponHitCallbacks = {
   onEnemyHitByPlayer(hitEnemy: EnemyShip, damageAmount: number): void {
     if (hitEnemy.isDestroyed) return
     applyWeaponDamageToEnemyShip(hitEnemy, damageAmount) // D21: shield absorbs before hull
-    if (hitEnemy.isDestroyed) gameScene.remove(hitEnemy.renderObject)
+    if (hitEnemy.isDestroyed) {
+      gameScene.remove(hitEnemy.renderObject)
+      gameAudioSystem.playExplosionSound() // D23
+    } else {
+      gameAudioSystem.playEnemyHitSound() // D23
+    }
   },
   onAsteroidHit(hitAsteroid: AsteroidBody, impactPointMeters: THREE.Vector3, damageAmount: number): void {
     applyWeaponDamageToAsteroid(hitAsteroid, damageAmount, impactPointMeters, gameScene)
   },
   onPlayerHit(damageAmount: number): void {
     playerShipCondition.applyIncomingWeaponDamage(damageAmount, simulationClockSeconds)
+    gameAudioSystem.playPlayerHitSound() // D23
   },
 }
 
@@ -481,6 +521,7 @@ function updatePlayerWeaponsFire(): void {
       simulationClockSeconds,
     )
     playerNextLaserFireTimeSeconds = simulationClockSeconds + playerBaseLaserStats.fireCooldownSeconds
+    gameAudioSystem.playLaserZapSound() // D23
   }
 
   if (fireIntent.wantsMissileFire && simulationClockSeconds >= playerNextMissileFireTimeSeconds) {
@@ -505,6 +546,7 @@ function updatePlayerWeaponsFire(): void {
       currentAutoAimTarget,
     )
     playerNextMissileFireTimeSeconds = simulationClockSeconds + playerBaseMissileStats.fireCooldownSeconds
+    gameAudioSystem.playMissileLaunchSound() // D23
   }
 }
 

@@ -27,6 +27,7 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 | D19 | Tractor grab range extended 50% (350 → **525 m**); asteroid field packed tighter (scatter radius 0.9 → 0.62 of play radius, ~3× denser); **thrust plume**: fixed red diamond out the ship's tail, size scales with throttle, only animation is a red↔yellow sine color fade |
 | D20 | Cover strafe = **latitude/longitude** on the asteroid sphere: pole axis is the ship's current up; stick up/down climbs/descends latitude (clamped ~6° short of the poles, never flips); stick left/right travels around the current latitude line. Replaces the compounding two-axis rotations that caused gimbal drift |
 | D21 | Enemies get a **shield pool** (40) over hull (60), shield-first like the player; once hit, **blue shield + red hull bars** float above the enemy, billboarded to the player camera. Jitter buffer: thrust **deadband** (engines coast under 0.25 m/s velocity error) + light visual smoothing of the ship mesh (~25/s stiffness) |
+| D23 | **Procedural 8-bit techno audio** (lifts A2's audio deferral). All sound is synthesized at runtime via the Web Audio API — **no asset files** (A1): a looping ~128 BPM chiptune (square/pulse bass + lead, sine kick, noise hats/snare, four-on-the-floor) and synth SFX (laser, missile, enemy hit, explosion, player hit, wave-start/cleared/destroyed stings). Browser autoplay policy: the AudioContext stays suspended until the **first user gesture**, then resumes + starts the loop. A **SOUND on/off** button (top-right, `M` key) toggles a master-gain mute. Pure note/timing/pattern math is unit-tested |
 | D22 | **Weak idle aim-assist**: when the player is *not actively steering* (rotation input under a small deadband), the ship gently turns toward the currently locked target. Driven by a new player flight stat `aimAssistMaxTurnRateRadiansPerSecond` (base 0.5, ~1/3 of manual turn rate; upgradeable, 0 disables). Implemented as proportional pitch/yaw inputs in the ship's local frame, fed through the existing eased rotation step and clamped to the assist rate. The lock only exists inside the 10° nose cone (D6), so the assist only fine-tunes a near-aligned shot. Applies in **both free flight and cover** |
 
 ## Requirements from the design doc
@@ -63,7 +64,7 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 
 ## Stated assumptions (correct me if wrong)
 - A1: Art = procedural low-poly geometry, flat/simple materials, no external asset files
-- A2: Audio deferred from v1
+- A2: ~~Audio deferred from v1~~ — superseded by D23 (procedural Web Audio music + SFX, no asset files)
 - A3: Desktop input parity for dev/testing: mouse drag = joystick, click = tap, on-screen throttle draggable by mouse, keyboard fallback (WASD rotate, Shift/Ctrl throttle, Space/X fire)
 - A4: No save/persistence in v1 (no upgrades yet)
 - A5: Destructible asteroids implemented as chunk-removal + radius shrink (not true CSG mesh carving) — matches "loses chunks" at prototype cost
@@ -99,6 +100,9 @@ src/
   hud/
     touchFlightControls.ts         — joystick, throttle lever, fire zones (D5, R11)
     cameraChaseAndCockpit.ts       — third-person chase + cockpit toggle (D9)
+  audio/
+    chiptuneMusicTheory.ts         — note→freq, step timing, techno loop pattern (D23) [unit-tested]
+    proceduralGameAudio.ts         — Web Audio engine: music loop scheduler + synth SFX + mute (D23)
   shipStats.ts                     — data-driven stat table (upgrade-ready, R17/R18)
 ```
 

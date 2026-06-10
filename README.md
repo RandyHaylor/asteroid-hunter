@@ -1,6 +1,6 @@
 # Asteroid Hunter
 
-A 3D touch-first space combat prototype: tractor-beam cover mechanics behind destructible asteroids, a spherical 3D radar with last-seen contact tracking, simple Newtonian flight, and staged enemy waves. Built with Three.js + TypeScript + Vite.
+A 3D touch-first space combat prototype: tractor-beam cover mechanics behind destructible asteroids, a spherical 3D radar with last-seen contact tracking, simple Newtonian flight, staged enemy waves, and a procedural 8-bit techno soundtrack + synth SFX (no audio files — all generated at runtime via Web Audio). Built with Three.js + TypeScript + Vite.
 
 ## ▶ Play it now
 
@@ -19,6 +19,7 @@ Works in desktop and mobile browsers.
 | Strafe around the asteroid in cover | green joystick beside the throttle | IJKL |
 | Leave cover | move the throttle, or tap another asteroid | Shift |
 | Toggle chase/cockpit camera | VIEW button | C |
+| Mute / unmute sound | SOUND button (top-right) | M |
 
 Cover grids: **cyan** = full cover available, **yellow** = long-range enemies can still see the cover spot, **red** = short-range enemies can see it. Radar: red dots = visible enemies; fading yellow dots = last-seen positions of enemies that slipped behind asteroids.
 
