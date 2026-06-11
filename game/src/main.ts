@@ -89,10 +89,17 @@ gameScene.background = createProceduralSpaceNebulaTexture()
 const playerViewCamera = new THREE.PerspectiveCamera(70, 1, 0.1, 8000)
 let currentSquareViewportSizePixels = Math.min(window.innerWidth, window.innerHeight)
 
+// D37: in PORTRAIT the square is capped to 60% of the height so the bottom 40% is always a roomy
+// control deck; in LANDSCAPE the square fills the height and the side strips are the control decks.
+const PORTRAIT_MAX_SQUARE_HEIGHT_FRACTION = 0.6
+
 function layoutSquareGameViewport(): void {
   const viewportWidthPixels = window.innerWidth
   const viewportHeightPixels = window.innerHeight
-  const squareSizePixels = Math.min(viewportWidthPixels, viewportHeightPixels)
+  const isPortrait = viewportHeightPixels >= viewportWidthPixels
+  const squareSizePixels = isPortrait
+    ? Math.min(viewportWidthPixels, Math.round(viewportHeightPixels * PORTRAIT_MAX_SQUARE_HEIGHT_FRACTION))
+    : Math.min(viewportWidthPixels, viewportHeightPixels)
   const squareLeftPixels = Math.round((viewportWidthPixels - squareSizePixels) / 2)
 
   for (const squareElement of [gameRenderCanvas, viewHudOverlay]) {
@@ -102,6 +109,8 @@ function layoutSquareGameViewport(): void {
     squareElement.style.width = `${squareSizePixels}px`
     squareElement.style.height = `${squareSizePixels}px`
   }
+  // expose the square's size + bottom edge to CSS so the control decks position against it
+  document.documentElement.style.setProperty('--game-square-size-px', `${squareSizePixels}px`)
 
   currentSquareViewportSizePixels = squareSizePixels
   webglRenderer.setSize(squareSizePixels, squareSizePixels)
@@ -147,9 +156,17 @@ const playerShipMesh = createPlayerShipMesh()
 gameScene.add(playerShipMesh)
 
 const playerShipCondition = createPlayerShipCondition()
-// D35: interactive controls go in the margin overlay; informational HUD goes over the square view
-const flightControls = createTouchFlightControls(controlsOverlay)
-const fireZoneButtons = createFireZoneButtons(controlsOverlay)
+// D35/D37: interactive controls go in two flex clusters inside the margin overlay (left + right);
+// informational HUD goes over the square view. Flex sizing keeps controls from ever overlapping.
+const leftControlCluster = document.createElement('div')
+leftControlCluster.className = 'controlClusterLeft'
+controlsOverlay.appendChild(leftControlCluster)
+const rightControlCluster = document.createElement('div')
+rightControlCluster.className = 'controlClusterRight'
+controlsOverlay.appendChild(rightControlCluster)
+
+const flightControls = createTouchFlightControls(leftControlCluster, rightControlCluster)
+const fireZoneButtons = createFireZoneButtons(leftControlCluster, rightControlCluster)
 const playerCameraRig = createPlayerCameraRig(playerViewCamera)
 const playerConditionDisplay = createPlayerConditionDisplay(viewHudOverlay)
 const radarSignatureTracker = createRadarSignatureTracker()

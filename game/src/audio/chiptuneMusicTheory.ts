@@ -30,6 +30,8 @@ export function loopStepDurationSeconds(
 export type TechnoLoopStep = {
   bassSemitoneOffsetFromA4: number | null
   leadSemitoneOffsetFromA4: number | null
+  /** D38: stab-chord voice (semitone offsets from A4 played together), or null for no stab */
+  chordSemitoneOffsetsFromA4: number[] | null
   kickDrumHit: boolean
   hatDrumHit: boolean
   snareDrumHit: boolean
@@ -69,6 +71,7 @@ export function buildTechnoLoopPattern(): TechnoLoopStep[] {
     loopSteps.push({
       bassSemitoneOffsetFromA4: bassRiffSemitones[stepIndex],
       leadSemitoneOffsetFromA4: leadArpeggioSemitones[stepIndex],
+      chordSemitoneOffsetsFromA4: null,
       kickDrumHit: kickStepIndices.has(stepIndex),
       hatDrumHit: hatStepIndices.has(stepIndex),
       snareDrumHit: snareStepIndices.has(stepIndex),
@@ -76,3 +79,112 @@ export function buildTechnoLoopPattern(): TechnoLoopStep[] {
   }
   return loopSteps
 }
+
+// ===== D38: a library of longer, more complex multi-bar techno tracks =====
+// These are original genre-faithful compositions (acid 16th basslines, four-on-the-floor kicks,
+// offbeat hats, chord stabs, arps, and per-bar variation/fills) — NOT transcriptions of copyrighted
+// records. The engine plays a track for several loops, then rotates to the next for variety.
+
+export type TechnoBar = TechnoLoopStep[] // exactly LOOP_STEP_COUNT steps
+export type TechnoTrack = {
+  name: string
+  beatsPerMinute: number
+  bars: TechnoBar[]
+}
+
+const N = null
+// semitone offsets from A4 used below (negative = below A4)
+const A2 = -24, C3 = -21, E3 = -17, G3 = -14, A3 = -12, D3 = -19, F3 = -16
+const A4n = 0, C5 = 3, D5 = 5, E5 = 7, G5 = 10, A5 = 12, B4 = 2
+// chord stabs (A natural-minor harmony): i, VI, III, VII
+const Am = [A4n, C5, E5], Fmaj = [-4, A4n, C5], Cmaj = [C5, E5, G5], Gmaj = [-2, B4, D5], Dm = [D3 + 12, F3 + 12, A4n]
+
+function buildBar(
+  bassSemitones: (number | null)[],
+  leadSemitones: (number | null)[],
+  chordStabs: (number[] | null)[],
+  kickStepList: number[],
+  hatStepList: number[],
+  snareStepList: number[],
+): TechnoBar {
+  const kicks = new Set(kickStepList)
+  const hats = new Set(hatStepList)
+  const snares = new Set(snareStepList)
+  const bar: TechnoBar = []
+  for (let stepIndex = 0; stepIndex < LOOP_STEP_COUNT; stepIndex++) {
+    bar.push({
+      bassSemitoneOffsetFromA4: bassSemitones[stepIndex] ?? null,
+      leadSemitoneOffsetFromA4: leadSemitones[stepIndex] ?? null,
+      chordSemitoneOffsetsFromA4: chordStabs[stepIndex] ?? null,
+      kickDrumHit: kicks.has(stepIndex),
+      hatDrumHit: hats.has(stepIndex),
+      snareDrumHit: snares.has(stepIndex),
+    })
+  }
+  return bar
+}
+
+const FOUR_ON_THE_FLOOR = [0, 4, 8, 12]
+const OFFBEAT_HATS = [2, 6, 10, 14]
+const ALL_HATS = [2, 3, 6, 7, 10, 11, 14, 15]
+const BACKBEAT = [4, 12]
+
+// --- Track 1: "Acid Drive" — driving 16th acid bassline, sparse arp, stabs on the 4 chords ---
+const acidDriveMainBar = buildBar(
+  [A2, A2, A3, A2, E3, A2, A3, G3, A2, A2, C3, A2, E3, A2, G3, A2],
+  [A5, N, E5, N, N, C5, N, E5, N, A5, N, G5, N, E5, N, N],
+  [Am, N, N, N, Fmaj, N, N, N, Cmaj, N, N, N, Gmaj, N, N, N],
+  FOUR_ON_THE_FLOOR, OFFBEAT_HATS, BACKBEAT,
+)
+const acidDriveFillBar = buildBar(
+  [A2, A2, A3, G3, E3, G3, A3, A2, A2, C3, E3, G3, A3, C3, E3, A3],
+  [A5, A5, E5, C5, A5, G5, E5, C5, A5, A5, E5, C5, E5, G5, A5, A5],
+  [Am, N, N, N, N, N, N, N, Gmaj, N, N, N, Gmaj, N, Gmaj, N],
+  [0, 4, 8, 12, 14], ALL_HATS, [4, 12, 15],
+)
+const acidDriveTrack: TechnoTrack = {
+  name: 'Acid Drive',
+  beatsPerMinute: 130,
+  bars: [acidDriveMainBar, acidDriveMainBar, acidDriveMainBar, acidDriveFillBar],
+}
+
+// --- Track 2: "Rave Stabs" — rolling bass + classic offbeat rave chord stabs + hoover lead ---
+const raveMainBar = buildBar(
+  [A2, N, A2, A2, N, A2, A2, N, A2, N, A2, A2, N, A2, A2, N],
+  [N, E5, N, A5, N, E5, N, C5, N, E5, N, A5, N, G5, N, E5],
+  [N, N, Am, N, N, N, Cmaj, N, N, N, Fmaj, N, N, N, Gmaj, N],
+  FOUR_ON_THE_FLOOR, ALL_HATS, BACKBEAT,
+)
+const raveLiftBar = buildBar(
+  [A2, N, A2, A2, N, A2, A2, N, C3, N, C3, C3, N, E3, E3, N],
+  [A5, B4 + 12, C5 + 12, N, E5 + 5, N, C5 + 12, N, A5, N, G5, N, E5, N, C5, N],
+  [Am, N, Am, N, Cmaj, N, Cmaj, N, Fmaj, N, Fmaj, N, Gmaj, N, Gmaj, N],
+  [0, 4, 8, 10, 12], ALL_HATS, [4, 12],
+)
+const raveStabsTrack: TechnoTrack = {
+  name: 'Rave Stabs',
+  beatsPerMinute: 138,
+  bars: [raveMainBar, raveMainBar, raveLiftBar, raveMainBar],
+}
+
+// --- Track 3: "Deep Dark" — sparse dub-techno: heavy kick, long chord, minimal bass/lead ---
+const deepDarkMainBar = buildBar(
+  [A2, N, N, N, N, N, A2, N, A2, N, N, N, N, N, N, N],
+  [N, N, N, N, A4n, N, N, N, N, N, N, N, E5, N, N, N],
+  [Am, N, N, N, N, N, N, N, Dm, N, N, N, N, N, N, N],
+  FOUR_ON_THE_FLOOR, OFFBEAT_HATS, [12],
+)
+const deepDarkBreakBar = buildBar(
+  [A2, N, N, N, F3, N, N, N, G3, N, N, N, E3, N, N, N],
+  [N, N, A4n, N, N, N, C5, N, N, N, E5, N, N, N, D5, N],
+  [Fmaj, N, N, N, N, N, N, N, Gmaj, N, N, N, N, N, N, N],
+  [0, 4, 8, 12], OFFBEAT_HATS, [4, 12],
+)
+const deepDarkTrack: TechnoTrack = {
+  name: 'Deep Dark',
+  beatsPerMinute: 124,
+  bars: [deepDarkMainBar, deepDarkMainBar, deepDarkMainBar, deepDarkBreakBar],
+}
+
+/** D38: the rotation of complex multi-bar techno tracks the music engine cycles through. */
+export const TECHNO_TRACKS: readonly TechnoTrack[] = [acidDriveTrack, raveStabsTrack, deepDarkTrack]

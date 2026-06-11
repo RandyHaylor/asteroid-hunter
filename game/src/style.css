@@ -5,8 +5,7 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #000; /* D35: letterbox margins around the square game view */
-  /* prevent browser gestures from stealing touch input from the game */
+  background: #000; /* letterbox margins around the square game view */
   touch-action: none;
   overscroll-behavior: none;
   user-select: none;
@@ -14,14 +13,7 @@ body {
   font-family: 'Segoe UI', system-ui, sans-serif;
 }
 
-:root {
-  --hud-bottom-inset: calc(env(safe-area-inset-bottom, 0px) + 20px);
-  --hud-left-inset: calc(env(safe-area-inset-left, 0px) + 18px);
-  --hud-right-inset: calc(env(safe-area-inset-right, 0px) + 18px);
-  --hud-top-inset: calc(env(safe-area-inset-top, 0px) + 8px);
-}
-
-/* ===== D35: square game view + control margins ===== */
+/* ===== D35: square game view + D37 control-cluster margins ===== */
 /* canvas and the over-view HUD are sized/positioned to the centered square by main.ts */
 #gameRenderCanvas {
   position: fixed;
@@ -35,19 +27,67 @@ body {
   overflow: hidden; /* keep edge markers / lens flare clipped to the square */
 }
 
-/* full-window layer that holds the interactive controls placed into the margins */
 #controlsOverlay {
   position: fixed;
   inset: 0;
   pointer-events: none; /* individual controls re-enable pointer events */
 }
 
-/* ===== control WIDGET appearance (D5/D18). Positioning is orientation-specific, below. ===== */
+/* ===== D37: two flex clusters that hold the controls and RESIZE them so nothing can overlap.
+   Flexbox guarantees items in a cluster never overlap each other; the clusters sit on opposite
+   sides so they never overlap each other; clamp()/vmin item sizes shrink first on small screens. */
+.controlClusterLeft,
+.controlClusterRight {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 2.2vmin, 20px);
+  padding: clamp(8px, 2vmin, 16px);
+  box-sizing: border-box;
+  pointer-events: none; /* controls themselves re-enable pointer events */
+  overflow: hidden;
+}
+
+/* PORTRAIT: bottom deck under the square, split into a left half and a right half */
+@media (orientation: portrait) {
+  .controlClusterLeft {
+    left: 0;
+    width: 50vw;
+    top: var(--game-square-size-px, 60vh);
+    bottom: 0;
+  }
+  .controlClusterRight {
+    right: 0;
+    width: 50vw;
+    top: var(--game-square-size-px, 60vh);
+    bottom: 0;
+  }
+}
+
+/* LANDSCAPE: the two side margins beside the centered square */
+@media (orientation: landscape) {
+  .controlClusterLeft {
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: calc((100vw - var(--game-square-size-px, 100vh)) / 2);
+  }
+  .controlClusterRight {
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: calc((100vw - var(--game-square-size-px, 100vh)) / 2);
+  }
+}
+
+/* ===== control widgets — clamp()/vmin sizing so they shrink to fit; flex never overlaps them ===== */
 
 .rotationJoystickZone {
-  position: absolute;
-  width: 104px;
-  height: 104px;
+  position: relative;
+  width: clamp(60px, 26vmin, 110px);
+  aspect-ratio: 1;
   border: 2px solid rgba(110, 180, 255, 0.35);
   border-radius: 50%;
   background: rgba(20, 40, 70, 0.25);
@@ -56,22 +96,23 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex: 0 1 auto;
 }
 
 .rotationJoystickKnob {
-  width: 46px;
-  height: 46px;
+  width: 44%;
+  height: 44%;
   border-radius: 50%;
   background: rgba(110, 180, 255, 0.55);
   border: 2px solid rgba(160, 215, 255, 0.8);
   will-change: transform;
 }
 
-/* D18: strafe joystick — beside the throttle, only visible while tractored to cover */
+/* D18: strafe joystick — only visible while tractored to cover */
 .strafeJoystickZone {
-  position: absolute;
-  width: 92px;
-  height: 92px;
+  position: relative;
+  width: clamp(52px, 22vmin, 92px);
+  aspect-ratio: 1;
   border: 2px solid rgba(120, 255, 200, 0.4);
   border-radius: 50%;
   background: rgba(20, 70, 50, 0.25);
@@ -80,6 +121,7 @@ body {
   display: none;
   align-items: center;
   justify-content: center;
+  flex: 0 1 auto;
 }
 
 .strafeJoystickZoneVisible {
@@ -87,8 +129,8 @@ body {
 }
 
 .strafeJoystickKnob {
-  width: 40px;
-  height: 40px;
+  width: 44%;
+  height: 44%;
   border-radius: 50%;
   background: rgba(120, 255, 200, 0.55);
   border: 2px solid rgba(170, 255, 225, 0.8);
@@ -96,14 +138,15 @@ body {
 }
 
 .throttleLeverTrack {
-  position: absolute;
-  width: 30px;
-  height: 150px;
+  position: relative;
+  width: clamp(24px, 7vmin, 34px);
+  height: clamp(92px, 30vmin, 160px);
   border: 2px solid rgba(110, 180, 255, 0.35);
-  border-radius: 15px;
+  border-radius: 17px;
   background: rgba(20, 40, 70, 0.25);
   pointer-events: auto;
   touch-action: none;
+  flex: 0 1 auto;
 }
 
 .throttleLeverFill {
@@ -117,68 +160,50 @@ body {
 
 .throttleLeverKnob {
   position: absolute;
-  left: -6px;
-  bottom: -14px;
-  width: 42px;
-  height: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: -12px;
+  width: 150%;
+  max-width: 44px;
+  height: 24px;
   border-radius: 8px;
   background: rgba(110, 180, 255, 0.7);
   border: 2px solid rgba(160, 215, 255, 0.9);
 }
 
-/* ===== D35 control PLACEMENT — portrait: all in the bottom margin under the square ===== */
-@media (orientation: portrait) {
-  .throttleLeverTrack {
-    left: var(--hud-left-inset);
-    bottom: var(--hud-bottom-inset);
-  }
-  .strafeJoystickZone {
-    left: calc(env(safe-area-inset-left, 0px) + 62px);
-    bottom: var(--hud-bottom-inset);
-  }
-  .rotationJoystickZone {
-    right: var(--hud-right-inset);
-    bottom: var(--hud-bottom-inset);
-  }
-  /* fire buttons centered as a pair, raised above the corner controls (can't overlap them) */
-  .fireZoneButtonLasers {
-    left: 50%;
-    transform: translateX(calc(-100% - 10px));
-    bottom: calc(var(--hud-bottom-inset) + 168px);
-  }
-  .fireZoneButtonMissiles {
-    left: 50%;
-    transform: translateX(10px);
-    bottom: calc(var(--hud-bottom-inset) + 168px);
-  }
+.fireZoneButton {
+  position: relative;
+  width: clamp(72px, 30vmin, 112px);
+  height: clamp(44px, 9vmin, 62px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+  font-family: system-ui, sans-serif;
+  font-size: clamp(11px, 2.6vmin, 14px);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  flex: 0 0 auto;
 }
 
-/* ===== D35 control PLACEMENT — landscape: split into the left and right side margins ===== */
-@media (orientation: landscape) {
-  .throttleLeverTrack {
-    left: calc(env(safe-area-inset-left, 0px) + 16px);
-    top: 50%;
-    transform: translateY(-50%);
-  }
-  .strafeJoystickZone {
-    left: calc(env(safe-area-inset-left, 0px) + 58px);
-    top: 50%;
-    transform: translateY(-50%);
-  }
-  .rotationJoystickZone {
-    right: calc(env(safe-area-inset-right, 0px) + 16px);
-    top: 50%;
-    transform: translateY(-50%);
-  }
-  /* lasers in the LEFT margin, missiles in the RIGHT margin, below the throttle/joystick centers */
-  .fireZoneButtonLasers {
-    left: calc(env(safe-area-inset-left, 0px) + 16px);
-    top: calc(50% + 96px);
-  }
-  .fireZoneButtonMissiles {
-    right: calc(env(safe-area-inset-right, 0px) + 16px);
-    top: calc(50% + 96px);
-  }
+.fireZoneButtonLasers {
+  border-color: rgba(102, 255, 238, 0.45);
+}
+
+.fireZoneButtonMissiles {
+  border-color: rgba(255, 170, 51, 0.45);
+}
+
+.fireZoneButtonHeld {
+  background: rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.95);
 }
 
 /* ===== wave banner (D2) ===== */

@@ -86,16 +86,22 @@ function buildJoystickWidget(zoneClassName: string, knobClassName: string): Joys
   }
 }
 
-export function createTouchFlightControls(hudOverlayRoot: HTMLElement): TouchFlightControls {
-  // ===== STEP 1: rotation joystick (right) + cover strafe joystick (left, hidden until tractored) =====
+// D37: throttle + cover-strafe joystick live in the LEFT control cluster; the rotation joystick
+// lives in the RIGHT control cluster. The clusters are flex columns (style.css) that resize their
+// items so controls never overlap the screen or each other.
+export function createTouchFlightControls(
+  leftControlCluster: HTMLElement,
+  rightControlCluster: HTMLElement,
+): TouchFlightControls {
+  // ===== STEP 1: rotation joystick (right cluster) + cover strafe joystick (left, hidden until tractored) =====
 
   const rotationJoystick = buildJoystickWidget('rotationJoystickZone', 'rotationJoystickKnob')
-  hudOverlayRoot.appendChild(rotationJoystick.zoneElement)
+  rightControlCluster.appendChild(rotationJoystick.zoneElement)
 
   const strafeJoystick = buildJoystickWidget('strafeJoystickZone', 'strafeJoystickKnob')
-  hudOverlayRoot.appendChild(strafeJoystick.zoneElement)
+  leftControlCluster.appendChild(strafeJoystick.zoneElement)
 
-  // ===== STEP 2: throttle lever widget (stays where the player sets it) =====
+  // ===== STEP 2: throttle lever widget (left cluster) =====
 
   const throttleLeverTrack = document.createElement('div')
   throttleLeverTrack.className = 'throttleLeverTrack'
@@ -105,7 +111,7 @@ export function createTouchFlightControls(hudOverlayRoot: HTMLElement): TouchFli
   throttleLeverKnob.className = 'throttleLeverKnob'
   throttleLeverTrack.appendChild(throttleLeverFill)
   throttleLeverTrack.appendChild(throttleLeverKnob)
-  hudOverlayRoot.appendChild(throttleLeverTrack)
+  leftControlCluster.appendChild(throttleLeverTrack)
 
   let throttleFraction = 0
   let throttleActivePointerId: number | null = null

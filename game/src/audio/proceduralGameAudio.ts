@@ -1,8 +1,9 @@
 import {
   LOOP_STEP_COUNT,
-  buildTechnoLoopPattern,
+  TECHNO_TRACKS,
   loopStepDurationSeconds,
   semitoneOffsetFromA4ToFrequencyHz,
+  type TechnoLoopStep,
 } from './chiptuneMusicTheory'
 
 // D23: procedural 8-bit techno music + synthesized sound effects via the Web Audio API.
@@ -155,41 +156,71 @@ export function createGameAudioSystem(): GameAudioSystem {
     playNoiseBurst(musicBusGainNode, startTimeSeconds, 0.12, 0.4, 'bandpass', 1800)
   }
 
-  // ===== music loop scheduler =====
+  // ===== D38: multi-bar, multi-track music scheduler =====
+  // Plays a track for several full loops, then rotates to the next track for variety. Each step can
+  // carry bass + lead + a chord stab; the step duration follows the current track's tempo.
 
-  const technoLoopPattern = buildTechnoLoopPattern()
-  const stepDurationSeconds = loopStepDurationSeconds()
+  const TRACK_LOOPS_BEFORE_ROTATING = 4
+  let currentTrackIndex = 0
+  let currentBarIndex = 0
+  let currentStepIndex = 0
+  let currentTrackLoopsPlayed = 0
+  let currentStepDurationSeconds = loopStepDurationSeconds(TECHNO_TRACKS[0].beatsPerMinute)
   let nextStepStartTimeSeconds = 0
-  let currentLoopStepIndex = 0
   let musicSchedulerTimerId: ReturnType<typeof setInterval> | null = null
 
-  function scheduleLoopStepAtTime(stepIndex: number, startTimeSeconds: number): void {
-    const loopStep = technoLoopPattern[stepIndex]
+  function scheduleLoopStepAtTime(loopStep: TechnoLoopStep, startTimeSeconds: number): void {
     if (loopStep.kickDrumHit) playKickDrumAtTime(startTimeSeconds)
     if (loopStep.hatDrumHit) playHatDrumAtTime(startTimeSeconds)
     if (loopStep.snareDrumHit) playSnareDrumAtTime(startTimeSeconds)
     if (loopStep.bassSemitoneOffsetFromA4 !== null) {
       const bassFrequencyHz = semitoneOffsetFromA4ToFrequencyHz(loopStep.bassSemitoneOffsetFromA4)
-      playOscillatorTone(musicBusGainNode, 'square', bassFrequencyHz, bassFrequencyHz, startTimeSeconds, stepDurationSeconds * 0.9, 0.5)
+      playOscillatorTone(musicBusGainNode, 'square', bassFrequencyHz, bassFrequencyHz, startTimeSeconds, currentStepDurationSeconds * 0.9, 0.5)
     }
     if (loopStep.leadSemitoneOffsetFromA4 !== null) {
       const leadFrequencyHz = semitoneOffsetFromA4ToFrequencyHz(loopStep.leadSemitoneOffsetFromA4)
-      playOscillatorTone(musicBusGainNode, 'square', leadFrequencyHz, leadFrequencyHz, startTimeSeconds, stepDurationSeconds * 0.6, 0.18)
+      playOscillatorTone(musicBusGainNode, 'square', leadFrequencyHz, leadFrequencyHz, startTimeSeconds, currentStepDurationSeconds * 0.6, 0.16)
     }
+    if (loopStep.chordSemitoneOffsetsFromA4) {
+      // a short multi-note stab (each note quiet so the summed chord stays balanced)
+      for (const chordSemitone of loopStep.chordSemitoneOffsetsFromA4) {
+        const chordFrequencyHz = semitoneOffsetFromA4ToFrequencyHz(chordSemitone)
+        playOscillatorTone(musicBusGainNode, 'square', chordFrequencyHz, chordFrequencyHz, startTimeSeconds, currentStepDurationSeconds * 1.4, 0.1)
+      }
+    }
+  }
+
+  function advanceToNextStep(): void {
+    currentStepIndex++
+    if (currentStepIndex < LOOP_STEP_COUNT) return
+    currentStepIndex = 0
+    currentBarIndex++
+    if (currentBarIndex < TECHNO_TRACKS[currentTrackIndex].bars.length) return
+    currentBarIndex = 0
+    currentTrackLoopsPlayed++
+    if (currentTrackLoopsPlayed < TRACK_LOOPS_BEFORE_ROTATING) return
+    currentTrackLoopsPlayed = 0
+    currentTrackIndex = (currentTrackIndex + 1) % TECHNO_TRACKS.length
+    currentStepDurationSeconds = loopStepDurationSeconds(TECHNO_TRACKS[currentTrackIndex].beatsPerMinute)
   }
 
   function scheduleDueLoopSteps(): void {
     while (nextStepStartTimeSeconds < audioContext.currentTime + SCHEDULE_AHEAD_SECONDS) {
-      scheduleLoopStepAtTime(currentLoopStepIndex, nextStepStartTimeSeconds)
-      nextStepStartTimeSeconds += stepDurationSeconds
-      currentLoopStepIndex = (currentLoopStepIndex + 1) % LOOP_STEP_COUNT
+      const loopStep = TECHNO_TRACKS[currentTrackIndex].bars[currentBarIndex][currentStepIndex]
+      scheduleLoopStepAtTime(loopStep, nextStepStartTimeSeconds)
+      nextStepStartTimeSeconds += currentStepDurationSeconds
+      advanceToNextStep()
     }
   }
 
   function startMusicLoopIfStopped(): void {
     if (musicSchedulerTimerId !== null) return
+    currentTrackIndex = 0
+    currentBarIndex = 0
+    currentStepIndex = 0
+    currentTrackLoopsPlayed = 0
+    currentStepDurationSeconds = loopStepDurationSeconds(TECHNO_TRACKS[0].beatsPerMinute)
     nextStepStartTimeSeconds = audioContext.currentTime + 0.06
-    currentLoopStepIndex = 0
     musicSchedulerTimerId = setInterval(scheduleDueLoopSteps, SCHEDULER_TICK_MILLISECONDS)
   }
 

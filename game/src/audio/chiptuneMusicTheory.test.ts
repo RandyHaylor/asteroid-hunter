@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   LOOP_STEP_COUNT,
   TECHNO_TEMPO_BEATS_PER_MINUTE,
+  TECHNO_TRACKS,
   buildTechnoLoopPattern,
   loopStepDurationSeconds,
   semitoneOffsetFromA4ToFrequencyHz,
@@ -52,5 +53,31 @@ describe('buildTechnoLoopPattern', () => {
 
   it('starts the bass on the root A2 (offset -24) at step 0', () => {
     expect(pattern[0].bassSemitoneOffsetFromA4).toBe(-24)
+  })
+})
+
+describe('TECHNO_TRACKS (D38 multi-bar library)', () => {
+  it('provides several named tracks, each with a positive tempo and multiple bars', () => {
+    expect(TECHNO_TRACKS.length).toBeGreaterThanOrEqual(3)
+    for (const track of TECHNO_TRACKS) {
+      expect(track.name.length).toBeGreaterThan(0)
+      expect(track.beatsPerMinute).toBeGreaterThan(0)
+      expect(track.bars.length).toBeGreaterThanOrEqual(2)
+    }
+  })
+
+  it('every bar in every track has exactly one sixteenth-step grid', () => {
+    for (const track of TECHNO_TRACKS) {
+      for (const bar of track.bars) {
+        expect(bar).toHaveLength(LOOP_STEP_COUNT)
+      }
+    }
+  })
+
+  it('uses the chord-stab voice in at least one track', () => {
+    const anyChordStab = TECHNO_TRACKS.some((track) =>
+      track.bars.some((bar) => bar.some((step) => step.chordSemitoneOffsetsFromA4 !== null)),
+    )
+    expect(anyChordStab).toBe(true)
   })
 })

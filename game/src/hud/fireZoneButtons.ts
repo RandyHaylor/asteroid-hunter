@@ -14,20 +14,23 @@ export type FireZoneButtons = {
   readFireIntent(): FireIntent
 }
 
-export function createFireZoneButtons(hudOverlayRoot: HTMLElement): FireZoneButtons {
+// D37: LASERS button lives in the LEFT control cluster, MISSILES in the RIGHT cluster (R11). The
+// clusters (style.css flex columns) keep every control non-overlapping and shrink them to fit.
+export function createFireZoneButtons(
+  leftControlCluster: HTMLElement,
+  rightControlCluster: HTMLElement,
+): FireZoneButtons {
   // ===== STEP 1: build the two translucent fire zone buttons (R11) =====
 
-  // D35: fire buttons are positioned individually by orientation CSS — together in the bottom
-  // margin (portrait) or split into the two side margins (landscape).
   const laserFireZoneButton = document.createElement('div')
   laserFireZoneButton.className = 'fireZoneButton fireZoneButtonLasers'
   laserFireZoneButton.textContent = 'LASERS'
-  hudOverlayRoot.appendChild(laserFireZoneButton)
+  leftControlCluster.appendChild(laserFireZoneButton)
 
   const missileFireZoneButton = document.createElement('div')
   missileFireZoneButton.className = 'fireZoneButton fireZoneButtonMissiles'
   missileFireZoneButton.textContent = 'MISSILES'
-  hudOverlayRoot.appendChild(missileFireZoneButton)
+  rightControlCluster.appendChild(missileFireZoneButton)
 
   // ===== STEP 2: pointer hold tracking per zone (same capture pattern as touchFlightControls) =====
 

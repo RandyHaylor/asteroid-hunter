@@ -1,36 +1,3 @@
-/* R11: left = lasers, right = missiles. D35: positioning lives in style.css (orientation-aware
-   margin layout); this file only styles the button look. >= 44pt tall touch target. */
-
-.fireZoneButton {
-  position: absolute;
-  width: 96px;
-  height: 62px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.25);
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.7);
-  font-family: system-ui, sans-serif;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  pointer-events: auto;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-.fireZoneButtonLasers {
-  border-color: rgba(102, 255, 238, 0.45); /* matches the cyan player laser bolts */
-}
-
-.fireZoneButtonMissiles {
-  border-color: rgba(255, 170, 51, 0.45); /* matches the missile exhaust glow */
-}
-
-.fireZoneButtonHeld {
-  background: rgba(255, 255, 255, 0.18);
-  color: rgba(255, 255, 255, 0.95);
-}
+/* D37: fire-button styling + layout now live in style.css (.fireZoneButton inside the flex control
+   clusters). This file is intentionally empty so it can't override the cluster layout — kept only
+   because fireZoneButtons.ts imports it. */
