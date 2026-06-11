@@ -38,7 +38,7 @@ export function updatePlayerEngineExhaust(thrustFraction: number, nowSeconds: nu
 // a swept leading edge from the inner-front of the fuselage out to the wide trailing edge at the
 // back, so the planform flares outward as it goes aft. Non-indexed → crisp flat-shaded facets.
 function buildSweptDeltaWingGeometry(): THREE.BufferGeometry {
-  const innerFrontZ = -0.6 // near the nose
+  const innerFrontZ = -2.7 // leading-edge root well forward toward the nose → sharper rearward sweep
   const trailingEdgeZ = 2.8 // at the tail
   const rootHalfWidth = 0.45 // sits just outside the fuselage
   const tipHalfWidth = 3.6 // broad trailing-edge span
@@ -86,10 +86,6 @@ export function createPlayerShipMesh(): THREE.Group {
   // nose widening to a broad trailing edge at the back) instead of the old square box wing
   const sweptDeltaWings = new THREE.Mesh(buildSweptDeltaWingGeometry(), accentMaterial)
   playerShipGroup.add(sweptDeltaWings)
-
-  const tailFin = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.4, 1.2), accentMaterial)
-  tailFin.position.set(0, 0.7, 1.3)
-  playerShipGroup.add(tailFin)
 
   const engineExhaustGlow = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6), engineGlowMaterial)
   engineExhaustGlow.position.set(0, 0, 2.1)

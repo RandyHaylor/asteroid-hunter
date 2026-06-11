@@ -95,7 +95,7 @@ gameScene.add(nearbySunLight)
 // D30: a faint hemisphere fill (sky tint above, dark below) lifts the formerly black shadow side
 // so ships/asteroids read against the brighter nebula. Deliberately weak so the sun stays dominant
 // (a softening of D13's strict single-light rule, at the user's request to lighten the scene).
-const softSkyFillLight = new THREE.HemisphereLight(0x6a86c0, 0x16203a, 0.55)
+const softSkyFillLight = new THREE.HemisphereLight(0x6a86c0, 0x16203a, 0.275)
 gameScene.add(softSkyFillLight)
 
 // the visible sun disk — emissive, so it needs no other light
