@@ -1,24 +1,8 @@
-/* R11 + D34: left = lasers, right = missiles. The two buttons live in one flex-centered GROUP that
-   spans the full width and sits in a row RAISED just above the corner controls (throttle + the two
-   joysticks, which are ~104–150px tall at the bottom). Because the group is a row above them and
-   the buttons are centered with a fixed gap, they can't overlap the corner controls or each other
-   at any screen width/orientation. >= 44pt tall touch target. */
-
-.fireZoneGroup {
-  position: absolute;
-  left: 0;
-  right: 0;
-  /* raised just clear of the joystick row (~104 tall + 20 inset); the throttle is far-left so the
-     centered buttons never meet it horizontally, no need to clear its taller 150px height */
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 140px);
-  display: flex;
-  flex-direction: row;
-  justify-content: center;
-  gap: 20px;
-  pointer-events: none; /* the group itself doesn't catch taps; the buttons do */
-}
+/* R11: left = lasers, right = missiles. D35: positioning lives in style.css (orientation-aware
+   margin layout); this file only styles the button look. >= 44pt tall touch target. */
 
 .fireZoneButton {
+  position: absolute;
   width: 96px;
   height: 62px;
   display: flex;

@@ -72,23 +72,45 @@ import { createPlayerShipMesh, updatePlayerEngineExhaust } from './player/player
 // ===== STEP 1: renderer, scene, camera bootstrap =====
 
 const gameRenderCanvas = document.getElementById('gameRenderCanvas') as HTMLCanvasElement
-const hudOverlayRoot = document.getElementById('hudOverlayRoot') as HTMLElement
+// D35: over-the-view HUD (sized to the square) vs controls (placed in the letterbox margins)
+const viewHudOverlay = document.getElementById('viewHudOverlay') as HTMLElement
+const controlsOverlay = document.getElementById('controlsOverlay') as HTMLElement
 
 const webglRenderer = new THREE.WebGLRenderer({ canvas: gameRenderCanvas, antialias: true })
 webglRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-webglRenderer.setSize(window.innerWidth, window.innerHeight)
 
 const gameScene = new THREE.Scene()
 // D30: an exaggerated colored nebula skybox (procedural, no asset files) replaces the near-black void
 gameScene.background = createProceduralSpaceNebulaTexture()
 
-const playerViewCamera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 8000)
+// D35: the game view is a SQUARE pinned to the top of the window and horizontally centered. The
+// remaining space is the control margin: the bottom strip in portrait, the two side strips in
+// landscape. currentSquareViewportSizePixels feeds screen-space HUD projection (edge markers/flare).
+const playerViewCamera = new THREE.PerspectiveCamera(70, 1, 0.1, 8000)
+let currentSquareViewportSizePixels = Math.min(window.innerWidth, window.innerHeight)
 
-window.addEventListener('resize', () => {
-  playerViewCamera.aspect = window.innerWidth / window.innerHeight
+function layoutSquareGameViewport(): void {
+  const viewportWidthPixels = window.innerWidth
+  const viewportHeightPixels = window.innerHeight
+  const squareSizePixels = Math.min(viewportWidthPixels, viewportHeightPixels)
+  const squareLeftPixels = Math.round((viewportWidthPixels - squareSizePixels) / 2)
+
+  for (const squareElement of [gameRenderCanvas, viewHudOverlay]) {
+    squareElement.style.position = 'fixed'
+    squareElement.style.top = '0px'
+    squareElement.style.left = `${squareLeftPixels}px`
+    squareElement.style.width = `${squareSizePixels}px`
+    squareElement.style.height = `${squareSizePixels}px`
+  }
+
+  currentSquareViewportSizePixels = squareSizePixels
+  webglRenderer.setSize(squareSizePixels, squareSizePixels)
+  playerViewCamera.aspect = 1
   playerViewCamera.updateProjectionMatrix()
-  webglRenderer.setSize(window.innerWidth, window.innerHeight)
-})
+}
+
+layoutSquareGameViewport()
+window.addEventListener('resize', layoutSquareGameViewport)
 
 // ===== STEP 2: single light source — a nearby sun with hard directional light (R1, user direction) =====
 
@@ -125,19 +147,20 @@ const playerShipMesh = createPlayerShipMesh()
 gameScene.add(playerShipMesh)
 
 const playerShipCondition = createPlayerShipCondition()
-const flightControls = createTouchFlightControls(hudOverlayRoot)
-const fireZoneButtons = createFireZoneButtons(hudOverlayRoot)
+// D35: interactive controls go in the margin overlay; informational HUD goes over the square view
+const flightControls = createTouchFlightControls(controlsOverlay)
+const fireZoneButtons = createFireZoneButtons(controlsOverlay)
 const playerCameraRig = createPlayerCameraRig(playerViewCamera)
-const playerConditionDisplay = createPlayerConditionDisplay(hudOverlayRoot)
+const playerConditionDisplay = createPlayerConditionDisplay(viewHudOverlay)
 const radarSignatureTracker = createRadarSignatureTracker()
-const radarSphereDisplay = createRadarSphereDisplay(hudOverlayRoot)
+const radarSphereDisplay = createRadarSphereDisplay(viewHudOverlay)
 const laserVolleySystem = createLaserVolleySystem(gameScene)
 const missileVolleySystem = createMissileVolleySystem(gameScene)
 const enemyConditionBarsDisplay = createEnemyConditionBarsDisplay(gameScene)
-const offscreenEnemyIndicators = createOffscreenEnemyIndicators(hudOverlayRoot) // D28
+const offscreenEnemyIndicators = createOffscreenEnemyIndicators(viewHudOverlay) // D28
 const targetingConeRing = createTargetingConeRing(gameScene) // D29
-const sunLensFlare = createSunLensFlare(hudOverlayRoot) // D31
-const powerUpSelectionOverlay = createPowerUpSelectionOverlay(hudOverlayRoot) // D33
+const sunLensFlare = createSunLensFlare(viewHudOverlay) // D31
+const powerUpSelectionOverlay = createPowerUpSelectionOverlay(controlsOverlay) // D33 (blocks full window)
 
 // D23: procedural 8-bit techno music + SFX. Autoplay policy requires a user gesture before the
 // AudioContext may produce sound, so we resume + start the loop on the first pointer/key event.
@@ -146,7 +169,7 @@ const gameAudioSystem = createGameAudioSystem()
 const soundToggleButton = document.createElement('button')
 soundToggleButton.className = 'soundToggleButton'
 soundToggleButton.textContent = 'SOUND: ON'
-hudOverlayRoot.appendChild(soundToggleButton)
+viewHudOverlay.appendChild(soundToggleButton)
 
 function toggleGameSound(): void {
   const nowMuted = gameAudioSystem.toggleMuted()
@@ -173,7 +196,7 @@ window.addEventListener('keydown', resumeGameAudioOnFirstGesture)
 const cameraViewToggleButton = document.createElement('button')
 cameraViewToggleButton.className = 'cameraViewToggleButton'
 cameraViewToggleButton.textContent = 'VIEW: CHASE'
-hudOverlayRoot.appendChild(cameraViewToggleButton)
+viewHudOverlay.appendChild(cameraViewToggleButton)
 
 function toggleCameraView(): void {
   const newViewMode = playerCameraRig.toggleCameraViewMode()
@@ -188,7 +211,7 @@ window.addEventListener('keydown', (keyboardEvent) => {
 // wave announcement banner (D2)
 const waveAnnouncementBanner = document.createElement('div')
 waveAnnouncementBanner.className = 'waveAnnouncementBanner'
-hudOverlayRoot.appendChild(waveAnnouncementBanner)
+viewHudOverlay.appendChild(waveAnnouncementBanner)
 
 function showWaveBanner(bannerText: string): void {
   waveAnnouncementBanner.textContent = bannerText
@@ -984,8 +1007,9 @@ function runFrameLoop(currentFrameTimestampMs: number): void {
     radarSignatureTracker.getContactReadings(),
     playerViewCamera,
     playerShipState.positionMeters,
+    currentSquareViewportSizePixels,
   )
-  sunLensFlare.updateSunLensFlare(visibleSunDisk.position, playerViewCamera)
+  sunLensFlare.updateSunLensFlare(visibleSunDisk.position, playerViewCamera, currentSquareViewportSizePixels)
 
   webglRenderer.render(gameScene, playerViewCamera)
   radarSphereDisplay.renderRadarInset(webglRenderer)

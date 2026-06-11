@@ -5,7 +5,7 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #000;
+  background: #000; /* D35: letterbox margins around the square game view */
   /* prevent browser gestures from stealing touch input from the game */
   touch-action: none;
   overscroll-behavior: none;
@@ -14,26 +14,6 @@ body {
   font-family: 'Segoe UI', system-ui, sans-serif;
 }
 
-#gameRenderCanvas {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-#hudOverlayRoot {
-  position: fixed;
-  inset: 0;
-  pointer-events: none; /* individual HUD controls re-enable pointer events */
-  color: #9fd8ff;
-}
-
-/* ===== flight controls (D5) — D32 compact iPhone layout =====
-   Controls are pinned to the bottom edge inside the safe area. Throttle far-left, rotation
-   joystick far-right (thumbs at the corners), strafe joystick tucks beside the throttle when
-   tractored. Touch targets stay >= Apple's 44pt minimum even though the chrome is smaller. */
-
 :root {
   --hud-bottom-inset: calc(env(safe-area-inset-bottom, 0px) + 20px);
   --hud-left-inset: calc(env(safe-area-inset-left, 0px) + 18px);
@@ -41,10 +21,31 @@ body {
   --hud-top-inset: calc(env(safe-area-inset-top, 0px) + 8px);
 }
 
+/* ===== D35: square game view + control margins ===== */
+/* canvas and the over-view HUD are sized/positioned to the centered square by main.ts */
+#gameRenderCanvas {
+  position: fixed;
+  display: block;
+}
+
+#viewHudOverlay {
+  position: fixed; /* left/top/width/height set in JS to match the square */
+  pointer-events: none; /* informational HUD; buttons over the view re-enable pointer events */
+  color: #9fd8ff;
+  overflow: hidden; /* keep edge markers / lens flare clipped to the square */
+}
+
+/* full-window layer that holds the interactive controls placed into the margins */
+#controlsOverlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none; /* individual controls re-enable pointer events */
+}
+
+/* ===== control WIDGET appearance (D5/D18). Positioning is orientation-specific, below. ===== */
+
 .rotationJoystickZone {
   position: absolute;
-  right: var(--hud-right-inset);
-  bottom: var(--hud-bottom-inset);
   width: 104px;
   height: 104px;
   border: 2px solid rgba(110, 180, 255, 0.35);
@@ -66,11 +67,9 @@ body {
   will-change: transform;
 }
 
-/* D18: strafe joystick — just inside the throttle lever, only visible while tractored to cover */
+/* D18: strafe joystick — beside the throttle, only visible while tractored to cover */
 .strafeJoystickZone {
   position: absolute;
-  left: calc(env(safe-area-inset-left, 0px) + 62px);
-  bottom: var(--hud-bottom-inset);
   width: 92px;
   height: 92px;
   border: 2px solid rgba(120, 255, 200, 0.4);
@@ -98,8 +97,6 @@ body {
 
 .throttleLeverTrack {
   position: absolute;
-  left: var(--hud-left-inset);
-  bottom: var(--hud-bottom-inset);
   width: 30px;
   height: 150px;
   border: 2px solid rgba(110, 180, 255, 0.35);
@@ -118,14 +115,79 @@ body {
   background: rgba(110, 180, 255, 0.3);
 }
 
-/* ===== wave banner (D2) and camera view toggle (D9) ===== */
+.throttleLeverKnob {
+  position: absolute;
+  left: -6px;
+  bottom: -14px;
+  width: 42px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(110, 180, 255, 0.7);
+  border: 2px solid rgba(160, 215, 255, 0.9);
+}
 
+/* ===== D35 control PLACEMENT — portrait: all in the bottom margin under the square ===== */
+@media (orientation: portrait) {
+  .throttleLeverTrack {
+    left: var(--hud-left-inset);
+    bottom: var(--hud-bottom-inset);
+  }
+  .strafeJoystickZone {
+    left: calc(env(safe-area-inset-left, 0px) + 62px);
+    bottom: var(--hud-bottom-inset);
+  }
+  .rotationJoystickZone {
+    right: var(--hud-right-inset);
+    bottom: var(--hud-bottom-inset);
+  }
+  /* fire buttons centered as a pair, raised above the corner controls (can't overlap them) */
+  .fireZoneButtonLasers {
+    left: 50%;
+    transform: translateX(calc(-100% - 10px));
+    bottom: calc(var(--hud-bottom-inset) + 168px);
+  }
+  .fireZoneButtonMissiles {
+    left: 50%;
+    transform: translateX(10px);
+    bottom: calc(var(--hud-bottom-inset) + 168px);
+  }
+}
+
+/* ===== D35 control PLACEMENT — landscape: split into the left and right side margins ===== */
+@media (orientation: landscape) {
+  .throttleLeverTrack {
+    left: calc(env(safe-area-inset-left, 0px) + 16px);
+    top: 50%;
+    transform: translateY(-50%);
+  }
+  .strafeJoystickZone {
+    left: calc(env(safe-area-inset-left, 0px) + 58px);
+    top: 50%;
+    transform: translateY(-50%);
+  }
+  .rotationJoystickZone {
+    right: calc(env(safe-area-inset-right, 0px) + 16px);
+    top: 50%;
+    transform: translateY(-50%);
+  }
+  /* lasers in the LEFT margin, missiles in the RIGHT margin, below the throttle/joystick centers */
+  .fireZoneButtonLasers {
+    left: calc(env(safe-area-inset-left, 0px) + 16px);
+    top: calc(50% + 96px);
+  }
+  .fireZoneButtonMissiles {
+    right: calc(env(safe-area-inset-right, 0px) + 16px);
+    top: calc(50% + 96px);
+  }
+}
+
+/* ===== wave banner (D2) ===== */
 .waveAnnouncementBanner {
   position: absolute;
   top: 22%;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 34px;
+  font-size: 30px;
   font-weight: 600;
   letter-spacing: 4px;
   color: #cfeaff;
@@ -139,8 +201,7 @@ body {
   opacity: 1;
 }
 
-/* D32: VIEW (center) and SOUND (right) sit just BELOW the top condition strip so they don't
-   overlap the shield/hull bars; compact chrome, min 44px tall touch target. */
+/* D32: VIEW (center) and SOUND (right) over the view, just below the top condition strip */
 .cameraViewToggleButton,
 .soundToggleButton {
   position: absolute;
@@ -163,16 +224,5 @@ body {
 }
 
 .soundToggleButton {
-  right: var(--hud-right-inset);
-}
-
-.throttleLeverKnob {
-  position: absolute;
-  left: -6px;
-  bottom: -14px;
-  width: 42px;
-  height: 28px;
-  border-radius: 8px;
-  background: rgba(110, 180, 255, 0.7);
-  border: 2px solid rgba(160, 215, 255, 0.9);
+  right: 12px;
 }

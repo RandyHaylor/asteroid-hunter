@@ -1,9 +1,16 @@
 import {
+  BufferAttribute,
+  BufferGeometry,
+  CircleGeometry,
   Color,
+  DoubleSide,
+  Line,
+  LineBasicMaterial,
   Mesh,
   MeshBasicMaterial,
   PerspectiveCamera,
   Quaternion,
+  RingGeometry,
   Scene,
   SphereGeometry,
   Vector2,
@@ -18,9 +25,10 @@ import './radarHud.css'
 // via scissor+viewport into a private scene — no second renderer.
 // R14/R16: fading last-seen dots, blinking red outline + "RECENT ACTIVE ENEMIES: n" label.
 
-const RADAR_INSET_PREFERRED_SIZE_PIXELS = 220
+// D36: smaller radar inset
+const RADAR_INSET_PREFERRED_SIZE_PIXELS = 140
 /** on narrow screens the inset shrinks to a fraction of the viewport width */
-const RADAR_INSET_MAX_VIEWPORT_WIDTH_FRACTION = 0.3
+const RADAR_INSET_MAX_VIEWPORT_WIDTH_FRACTION = 0.26
 const RADAR_INSET_CORNER_MARGIN_PIXELS = 14
 
 const VISIBLE_ENEMY_DOT_COLOR = 0xff3333
@@ -68,9 +76,25 @@ export function createRadarSphereDisplay(hudOverlayRoot: HTMLElement): RadarSphe
 
   const wireframeSphere = new Mesh(
     new SphereGeometry(1, 16, 12),
-    new MeshBasicMaterial({ color: 0x2adfdf, wireframe: true, transparent: true, opacity: 0.22 }),
+    new MeshBasicMaterial({ color: 0x2adfdf, wireframe: true, transparent: true, opacity: 0.18 }),
   )
   radarScene.add(wireframeSphere)
+
+  // D36: a horizontal reference disc through the sphere's center (the ship's local horizontal
+  // plane). Contact dots drop a vertical "stem" line to this disc so above/below reads at a glance.
+  const equatorDiscFill = new Mesh(
+    new CircleGeometry(1, 48),
+    new MeshBasicMaterial({ color: 0x2adfdf, transparent: true, opacity: 0.08, side: DoubleSide, depthWrite: false }),
+  )
+  equatorDiscFill.rotation.x = -Math.PI / 2 // lay flat in the XZ (horizontal) plane
+  radarScene.add(equatorDiscFill)
+
+  const equatorDiscRing = new Mesh(
+    new RingGeometry(0.98, 1.0, 48),
+    new MeshBasicMaterial({ color: 0x2adfdf, transparent: true, opacity: 0.5, side: DoubleSide }),
+  )
+  equatorDiscRing.rotation.x = -Math.PI / 2
+  radarScene.add(equatorDiscRing)
 
   const playerCenterMarker = new Mesh(
     new SphereGeometry(0.05, 8, 6),
@@ -102,6 +126,21 @@ export function createRadarSphereDisplay(hudOverlayRoot: HTMLElement): RadarSphe
       radarScene.add(dotMesh)
     }
     return dotMesh
+  }
+
+  // D36: one stem line per contact dot, drawn from the dot straight down/up to the equator disc
+  const contactStemLinePool: Line<BufferGeometry, LineBasicMaterial>[] = []
+
+  function acquireContactStemLine(poolIndex: number): Line<BufferGeometry, LineBasicMaterial> {
+    let stemLine = contactStemLinePool[poolIndex]
+    if (!stemLine) {
+      const stemGeometry = new BufferGeometry()
+      stemGeometry.setAttribute('position', new BufferAttribute(new Float32Array(6), 3))
+      stemLine = new Line(stemGeometry, new LineBasicMaterial({ transparent: true, depthTest: false }))
+      contactStemLinePool[poolIndex] = stemLine
+      radarScene.add(stemLine)
+    }
+    return stemLine
   }
 
   function updateRadarDisplay(
@@ -137,11 +176,24 @@ export function createRadarSphereDisplay(hudOverlayRoot: HTMLElement): RadarSphe
         )
         dotMesh.material.opacity = 1
       }
+
+      // D36: drop a vertical stem from the dot to its projection on the equator disc (x, 0, z)
+      const stemLine = acquireContactStemLine(readingIndex)
+      stemLine.visible = true
+      const stemPositions = stemLine.geometry.attributes.position as BufferAttribute
+      stemPositions.setXYZ(0, dotMesh.position.x, dotMesh.position.y, dotMesh.position.z)
+      stemPositions.setXYZ(1, dotMesh.position.x, 0, dotMesh.position.z)
+      stemPositions.needsUpdate = true
+      stemLine.material.color.copy(dotMesh.material.color)
+      stemLine.material.opacity = dotMesh.material.opacity * 0.55
     }
 
-    // STEP 3: hide leftover pooled dots beyond the live reading count
+    // STEP 3: hide leftover pooled dots + stems beyond the live reading count
     for (let poolIndex = contactReadings.length; poolIndex < contactDotMeshPool.length; poolIndex++) {
       contactDotMeshPool[poolIndex].visible = false
+    }
+    for (let poolIndex = contactReadings.length; poolIndex < contactStemLinePool.length; poolIndex++) {
+      contactStemLinePool[poolIndex].visible = false
     }
 
     // STEP 4: gentle pulse on the player marker so the radar reads as live

@@ -19,6 +19,8 @@ export type OffscreenEnemyIndicators = {
     contactReadings: readonly RadarContactReading[],
     playerViewCamera: THREE.Camera,
     playerPositionMeters: THREE.Vector3,
+    /** D35: the square view's pixel size — markers clamp to the square's rim, not the window */
+    squareViewportSizePixels: number,
   ): void
 }
 
@@ -48,9 +50,14 @@ export function createOffscreenEnemyIndicators(hudOverlayRoot: HTMLElement): Off
   }
 
   return {
-    updateOffscreenEnemyIndicators(contactReadings, playerViewCamera, playerPositionMeters): void {
-      const viewportWidthPixels = window.innerWidth
-      const viewportHeightPixels = window.innerHeight
+    updateOffscreenEnemyIndicators(
+      contactReadings,
+      playerViewCamera,
+      playerPositionMeters,
+      squareViewportSizePixels,
+    ): void {
+      const viewportWidthPixels = squareViewportSizePixels
+      const viewportHeightPixels = squareViewportSizePixels
       const contactIdsShownThisFrame = new Set<number>()
 
       for (const contactReading of contactReadings) {

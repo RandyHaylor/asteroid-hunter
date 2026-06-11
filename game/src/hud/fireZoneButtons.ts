@@ -17,21 +17,17 @@ export type FireZoneButtons = {
 export function createFireZoneButtons(hudOverlayRoot: HTMLElement): FireZoneButtons {
   // ===== STEP 1: build the two translucent fire zone buttons (R11) =====
 
-  // D34: both fire buttons live in one flex-centered group raised above the corner controls, so
-  // they can never overlap the throttle/joysticks (they sit in a row above them) or each other.
-  const fireZoneGroup = document.createElement('div')
-  fireZoneGroup.className = 'fireZoneGroup'
-  hudOverlayRoot.appendChild(fireZoneGroup)
-
+  // D35: fire buttons are positioned individually by orientation CSS — together in the bottom
+  // margin (portrait) or split into the two side margins (landscape).
   const laserFireZoneButton = document.createElement('div')
   laserFireZoneButton.className = 'fireZoneButton fireZoneButtonLasers'
   laserFireZoneButton.textContent = 'LASERS'
-  fireZoneGroup.appendChild(laserFireZoneButton)
+  hudOverlayRoot.appendChild(laserFireZoneButton)
 
   const missileFireZoneButton = document.createElement('div')
   missileFireZoneButton.className = 'fireZoneButton fireZoneButtonMissiles'
   missileFireZoneButton.textContent = 'MISSILES'
-  fireZoneGroup.appendChild(missileFireZoneButton)
+  hudOverlayRoot.appendChild(missileFireZoneButton)
 
   // ===== STEP 2: pointer hold tracking per zone (same capture pattern as touchFlightControls) =====
 

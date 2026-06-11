@@ -25,6 +25,8 @@ Cover grids: **cyan** = full cover available, **yellow** = long-range enemies ca
 
 On-screen aids: a **green ring** shows the auto-aim cone at the closest enemy's range — line an enemy up inside it to lock. Enemies you can't see show as **edge-of-screen markers** (red = live, yellow = last-known before they hid; bigger = closer). Every enemy carries a floating shield/health bar to help you spot them. The HUD is laid out for phones (safe-area aware, compact controls).
 
+The game renders into a **square view** with the controls in the margin around it — under the view in portrait, on either side in landscape. The corner **radar** is a spherical 3D scope with a horizontal reference disc; enemy dots drop a stem line to the disc so you can read their height.
+
 Between waves you **choose one of two random power-ups** (speed, tractor range, laser/missile damage, missile speed/fire-rate/tracking, auto-aim cone) — upgrades stack across the run.
 
 Aim assist: when you're **not steering**, the ship gently noses toward the locked target (the enemy in the targeting ring). It's a weak nudge driven by an upgradeable ship stat, not autopilot — any rotation input takes back full control.

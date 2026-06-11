@@ -42,6 +42,9 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 
 | D34 | **Zoom-out + non-overlapping HUD**: chase camera pulled ~1.6× farther back (offset z 11.5→18, y 5.5→8.5 keeping the tilt) so the ship/asteroids read smaller and less crowded (world scale/physics unchanged). Fire buttons moved into one flex-centered `.fireZoneGroup` raised into a row **above** the corner controls (throttle/joysticks), so they structurally cannot overlap the corners or each other at any width/orientation |
 
+| D35 | **Square game view + margin controls**: the 3D view renders into a centered SQUARE (camera aspect 1), pinned to the top of the window. The leftover space is the control margin — the **bottom strip in portrait** (buttons under the view) and the **two side strips in landscape** (buttons split left/right), placed via `orientation` media queries. DOM split: `#viewHudOverlay` (sized to the square; holds condition strip, radar, edge markers, lens flare, banner, VIEW/SOUND) vs `#controlsOverlay` (full-window; throttle/joysticks/fire + the power-up modal). Edge markers & lens flare project against the square's pixel size, not the window |
+| D36 | **Radar readability**: radar inset made smaller (preferred 220→140 px, max 0.30→0.26 of view width); added a **horizontal reference disc** through the sphere center (the ship's local horizontal plane), and each contact dot drops a **vertical stem line** to its projection on the disc so above/below depth reads at a glance |
+
 ## Requirements from the design doc
 
 ### Rendering & physics
