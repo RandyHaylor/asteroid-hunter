@@ -3,11 +3,12 @@ import type { EnemyShip } from '../gameSimulation/gameWorldTypes'
 import {
   ENEMY_SHIP_MAX_HULL_POINTS,
   ENEMY_SHIP_MAX_SHIELD_POINTS,
-  enemyShipHasTakenAnyDamage,
 } from './enemyShipDamage'
 
-// D21: once an enemy takes a hit, a blue shield bar and red hull bar float above it.
-// The bars billboard to the player's camera every frame, so "above" is always screen-up.
+// D21/D24: a blue shield bar and red hull bar float above every live enemy (D24 dropped the
+// original "only after it takes a hit" gate, so the bars double as always-on spot markers that
+// make distant enemies easier to find). The bars billboard to the player's camera every frame,
+// so "above" is always screen-up.
 
 const BAR_WIDTH_METERS = 7
 const BAR_HEIGHT_METERS = 0.55
@@ -85,7 +86,7 @@ export function createEnemyConditionBarsDisplay(gameScene: THREE.Scene): EnemyCo
       scratchCameraUpDirection.set(0, 1, 0).applyQuaternion(playerViewCamera.quaternion)
 
       for (const enemyShip of enemyShips) {
-        if (enemyShip.isDestroyed || !enemyShipHasTakenAnyDamage(enemyShip)) continue
+        if (enemyShip.isDestroyed) continue // D24: bars show for every live enemy, damaged or not
 
         let conditionBars = barGroupsByEnemyShipId.get(enemyShip.enemyShipId)
         if (!conditionBars) {

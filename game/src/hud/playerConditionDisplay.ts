@@ -1,8 +1,9 @@
 import './playerConditionDisplay.css'
 
-// D7: top-left HUD readout of the player ship condition — a cyan-blue SHIELD bar above
-// an amber-orange HULL bar. Purely presentational: the game loop feeds it the 0..1
-// fractions from playerShipCondition each frame; no game state lives here.
+// D7/D27: HUD readout of the player ship condition. D27 tucks the bars against the very top of
+// the screen as one wide strip — cyan SHIELD on the LEFT half (drains leftward), amber HULL on the
+// RIGHT half (drains rightward). Purely presentational: the game loop feeds it the 0..1 fractions
+// from playerShipCondition each frame; no game state lives here.
 
 export type PlayerConditionDisplay = {
   updatePlayerConditionDisplay(shieldFraction: number, hullFraction: number): void
@@ -19,12 +20,12 @@ export function createPlayerConditionDisplay(hudOverlayRoot: HTMLElement): Playe
   playerConditionPanel.className = 'playerConditionPanel'
   hudOverlayRoot.appendChild(playerConditionPanel)
 
-  function buildConditionBar(labelText: string, fillClassName: string): {
+  function buildConditionBar(labelText: string, sideClassName: string, fillClassName: string): {
     barTrack: HTMLDivElement
     barFill: HTMLDivElement
   } {
     const barRow = document.createElement('div')
-    barRow.className = 'playerConditionBarRow'
+    barRow.className = `playerConditionBarRow ${sideClassName}`
 
     const barLabel = document.createElement('div')
     barLabel.className = 'playerConditionBarLabel'
@@ -42,8 +43,8 @@ export function createPlayerConditionDisplay(hudOverlayRoot: HTMLElement): Playe
     return { barTrack, barFill }
   }
 
-  const shieldBar = buildConditionBar('SHIELD', 'playerConditionShieldFill')
-  const hullBar = buildConditionBar('HULL', 'playerConditionHullFill')
+  const shieldBar = buildConditionBar('SHIELD', 'playerConditionSideLeft', 'playerConditionShieldFill')
+  const hullBar = buildConditionBar('HULL', 'playerConditionSideRight', 'playerConditionHullFill')
 
   // ===== STEP 2: per-frame update — set fill widths, pulse the shield track red when down =====
 

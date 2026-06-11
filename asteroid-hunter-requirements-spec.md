@@ -29,6 +29,15 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 | D21 | Enemies get a **shield pool** (40) over hull (60), shield-first like the player; once hit, **blue shield + red hull bars** float above the enemy, billboarded to the player camera. Jitter buffer: thrust **deadband** (engines coast under 0.25 m/s velocity error) + light visual smoothing of the ship mesh (~25/s stiffness) |
 | D23 | **Procedural 8-bit techno audio** (lifts A2's audio deferral). All sound is synthesized at runtime via the Web Audio API — **no asset files** (A1): a looping ~128 BPM chiptune (square/pulse bass + lead, sine kick, noise hats/snare, four-on-the-floor) and synth SFX (laser, missile, enemy hit, explosion, player hit, wave-start/cleared/destroyed stings). Browser autoplay policy: the AudioContext stays suspended until the **first user gesture**, then resumes + starts the loop. A **SOUND on/off** button (top-right, `M` key) toggles a master-gain mute. Pure note/timing/pattern math is unit-tested |
 | D22 | **Weak idle aim-assist**: when the player is *not actively steering* (rotation input under a small deadband), the ship gently turns toward the currently locked target. Driven by a new player flight stat `aimAssistMaxTurnRateRadiansPerSecond` (base 0.5, ~1/3 of manual turn rate; upgradeable, 0 disables). Implemented as proportional pitch/yaw inputs in the ship's local frame, fed through the existing eased rotation step and clamped to the assist rate. The lock only exists inside the 10° nose cone (D6), so the assist only fine-tunes a near-aligned shot. Applies in **both free flight and cover** |
+| D24 | Enemy shield/hull bars now show over **every live enemy**, not just damaged ones (drops D21's "after first hit" gate) — they double as always-on spot markers that make distant enemies easier to find |
+| D25 | Ship silhouette readability: **longer slimmer nose cone** (height 4.2 → 7.0) so facing is obvious, and **swept delta wings that flare outward toward the tail** (flat per-side triangles) replacing the old square box wing |
+| D26 | Third-person chase camera raised to a **slight top-down angle** (local offset y 3.5 → 7.5) so you see the ship's planform instead of sitting on its tail |
+| D27 | Player condition bars **tucked against the very top** as one wide strip — cyan SHIELD on the left (drains left), amber HULL on the right (drains right) — inside the iPhone safe area |
+| D28 | **Off-screen enemy edge markers**: enemies not currently on screen get a marker pinned to the screen rim in their bearing. Driven by radar readings — RED for a live (visible) contact, YELLOW for a last-seen (obscured) contact; marker **size scales with proximity** (closer = bigger) |
+| D29 | **Green targeting-cone ring**: the circle where the 10° auto-aim cone (D6) intersects the plane through the **closest enemy** (a flat annulus centered on the nose axis at that enemy's depth, radius = depth·tan(coneHalfAngle)). Lining an enemy up inside the ring = inside the lock cone. Hidden when no enemy is ahead |
+| D30 | **Procedural colored-nebula skybox** (no asset files, A1): a seeded canvas equirectangular texture of exaggerated colored clouds + stars set as `scene.background`, lifting the formerly near-black void. Plus a **weak hemisphere fill light** to lift the dark/shadow side (a deliberate softening of D13's strict single-light rule, at the user's request to lighten the scene) |
+| D31 | **Faux sun lens flare**: a hazy yellow ring on the sun's projected screen position plus a fainter ghost ring mirrored across screen center, so it slides like a real lens flare. DOM overlay, hidden when the sun is behind the camera or off screen |
+| D32 | **Compact iPhone-oriented HUD layout**: replaced the huge lower-third fire zones with two small fixed buttons low-center (lasers left / missiles right), shrank the joysticks/throttle, pinned everything inside `env(safe-area-inset-*)` (added `viewport-fit=cover`), keeping touch targets ≥ Apple's 44pt minimum |
 
 ## Requirements from the design doc
 
@@ -103,6 +112,13 @@ src/
   audio/
     chiptuneMusicTheory.ts         — note→freq, step timing, techno loop pattern (D23) [unit-tested]
     proceduralGameAudio.ts         — Web Audio engine: music loop scheduler + synth SFX + mute (D23)
+  scene/
+    proceduralSpaceSkybox.ts       — seeded canvas nebula equirectangular background (D30)
+  (additional hud/) 
+    offscreenEnemyIndicators.ts    — edge-of-screen markers for off-screen enemies (D28)
+    sunLensFlare.ts                — faux lens flare overlay when the sun is in view (D31)
+  (additional weapons/)
+    targetingConeRing.ts           — green aim-cone cross-section ring at closest enemy depth (D29)
   shipStats.ts                     — data-driven stat table (upgrade-ready, R17/R18)
 ```
 

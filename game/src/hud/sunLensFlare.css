@@ -1,0 +1,32 @@
+/* D31: faux lens flare — hazy yellow rings positioned in JS. Pointer-transparent overlay. */
+
+.sunLensFlareCore {
+  position: absolute;
+  display: none;
+  width: 220px;
+  height: 220px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(
+    circle,
+    rgba(255, 244, 200, 0.55) 0%,
+    rgba(255, 226, 120, 0.28) 28%,
+    rgba(255, 210, 90, 0.12) 46%,
+    rgba(255, 210, 90, 0) 70%
+  );
+  mix-blend-mode: screen;
+}
+
+.sunLensFlareGhost {
+  position: absolute;
+  display: none;
+  width: 120px;
+  height: 120px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  border: 2px solid rgba(255, 226, 140, 0.35);
+  background: radial-gradient(circle, rgba(255, 230, 150, 0.18) 0%, rgba(255, 230, 150, 0) 65%);
+  mix-blend-mode: screen;
+}

@@ -1,21 +1,23 @@
-/* R11: lower third of the screen = fire zones — left lasers, right missiles. */
+/* R11 + D32: left = lasers, right = missiles. Replaced the old huge lower-third zones with two
+   compact, purposeful buttons sitting low-center (between the throttle on the far left and the
+   rotation joystick on the far right), inside the iPhone safe area. >= 44pt tall touch target. */
 
 .fireZoneButton {
   position: absolute;
-  bottom: 2vh;
-  width: 38vw;
-  height: 28vh; /* fills most of the reserved lower third */
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 26px);
+  width: 96px;
+  height: 62px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 24px;
+  border-radius: 16px;
   border: 2px solid rgba(255, 255, 255, 0.25);
   background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.65);
+  color: rgba(255, 255, 255, 0.7);
   font-family: system-ui, sans-serif;
-  font-size: clamp(14px, 2.4vw, 24px);
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.12em;
   pointer-events: auto;
   touch-action: none;
   user-select: none;
@@ -23,12 +25,14 @@
 }
 
 .fireZoneButtonLasers {
-  left: 2vw;
+  left: 50%;
+  transform: translateX(-112%);
   border-color: rgba(102, 255, 238, 0.45); /* matches the cyan player laser bolts */
 }
 
 .fireZoneButtonMissiles {
-  right: 2vw;
+  left: 50%;
+  transform: translateX(12%);
   border-color: rgba(255, 170, 51, 0.45); /* matches the missile exhaust glow */
 }
 

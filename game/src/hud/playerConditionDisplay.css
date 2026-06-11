@@ -1,13 +1,16 @@
-/* D7: top-left player condition readout — slim SHIELD bar above slim HULL bar */
+/* D27: player condition strip tucked against the very top of the screen — SHIELD fills the left
+   half (drains leftward), HULL fills the right half (drains rightward). Respects the iPhone safe
+   area so the notch / dynamic island doesn't sit on top of the bars. */
 
 .playerConditionPanel {
   position: absolute;
-  top: 12px;
-  left: 12px;
-  width: 220px;
+  top: calc(env(safe-area-inset-top, 0px) + 6px);
+  left: calc(env(safe-area-inset-left, 0px) + 10px);
+  right: calc(env(safe-area-inset-right, 0px) + 10px);
   display: flex;
-  flex-direction: column;
-  gap: 5px;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 12px;
   pointer-events: none;
   user-select: none;
 }
@@ -16,6 +19,12 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.playerConditionSideRight {
+  align-items: flex-end;
 }
 
 .playerConditionBarLabel {
@@ -27,8 +36,9 @@
 }
 
 .playerConditionBarTrack {
+  position: relative;
   width: 100%;
-  height: 8px;
+  height: 9px;
   border-radius: 4px;
   background: rgba(8, 14, 22, 0.55);
   border: 1px solid rgba(140, 170, 195, 0.25);
@@ -36,10 +46,20 @@
 }
 
 .playerConditionBarFill {
+  position: absolute;
+  top: 0;
   height: 100%;
   width: 100%;
   border-radius: 3px;
   transition: width 0.12s linear;
+}
+
+/* SHIELD drains toward the left edge; HULL drains toward the right edge (mirror-symmetric) */
+.playerConditionSideLeft .playerConditionBarFill {
+  left: 0;
+}
+.playerConditionSideRight .playerConditionBarFill {
+  right: 0;
 }
 
 .playerConditionShieldFill {
@@ -48,7 +68,7 @@
 }
 
 .playerConditionHullFill {
-  background: linear-gradient(90deg, #d8821f, #ffb55f);
+  background: linear-gradient(90deg, #ffb55f, #d8821f);
   box-shadow: 0 0 6px rgba(255, 181, 95, 0.45);
 }
 

@@ -29,14 +29,24 @@ body {
   color: #9fd8ff;
 }
 
-/* ===== flight controls (D5): rotation joystick right, throttle lever left ===== */
+/* ===== flight controls (D5) — D32 compact iPhone layout =====
+   Controls are pinned to the bottom edge inside the safe area. Throttle far-left, rotation
+   joystick far-right (thumbs at the corners), strafe joystick tucks beside the throttle when
+   tractored. Touch targets stay >= Apple's 44pt minimum even though the chrome is smaller. */
+
+:root {
+  --hud-bottom-inset: calc(env(safe-area-inset-bottom, 0px) + 20px);
+  --hud-left-inset: calc(env(safe-area-inset-left, 0px) + 18px);
+  --hud-right-inset: calc(env(safe-area-inset-right, 0px) + 18px);
+  --hud-top-inset: calc(env(safe-area-inset-top, 0px) + 8px);
+}
 
 .rotationJoystickZone {
   position: absolute;
-  right: 28px;
-  bottom: 36%;
-  width: 130px;
-  height: 130px;
+  right: var(--hud-right-inset);
+  bottom: var(--hud-bottom-inset);
+  width: 104px;
+  height: 104px;
   border: 2px solid rgba(110, 180, 255, 0.35);
   border-radius: 50%;
   background: rgba(20, 40, 70, 0.25);
@@ -48,8 +58,8 @@ body {
 }
 
 .rotationJoystickKnob {
-  width: 52px;
-  height: 52px;
+  width: 46px;
+  height: 46px;
   border-radius: 50%;
   background: rgba(110, 180, 255, 0.55);
   border: 2px solid rgba(160, 215, 255, 0.8);
@@ -59,10 +69,10 @@ body {
 /* D18: strafe joystick — just inside the throttle lever, only visible while tractored to cover */
 .strafeJoystickZone {
   position: absolute;
-  left: 78px;
-  bottom: 36%;
-  width: 116px;
-  height: 116px;
+  left: calc(env(safe-area-inset-left, 0px) + 62px);
+  bottom: var(--hud-bottom-inset);
+  width: 92px;
+  height: 92px;
   border: 2px solid rgba(120, 255, 200, 0.4);
   border-radius: 50%;
   background: rgba(20, 70, 50, 0.25);
@@ -78,8 +88,8 @@ body {
 }
 
 .strafeJoystickKnob {
-  width: 46px;
-  height: 46px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: rgba(120, 255, 200, 0.55);
   border: 2px solid rgba(170, 255, 225, 0.8);
@@ -88,12 +98,12 @@ body {
 
 .throttleLeverTrack {
   position: absolute;
-  left: 28px;
-  bottom: 36%;
-  width: 34px;
-  height: 190px;
+  left: var(--hud-left-inset);
+  bottom: var(--hud-bottom-inset);
+  width: 30px;
+  height: 150px;
   border: 2px solid rgba(110, 180, 255, 0.35);
-  border-radius: 17px;
+  border-radius: 15px;
   background: rgba(20, 40, 70, 0.25);
   pointer-events: auto;
   touch-action: none;
@@ -129,13 +139,15 @@ body {
   opacity: 1;
 }
 
-.cameraViewToggleButton {
+/* D32: VIEW (center) and SOUND (right) sit just BELOW the top condition strip so they don't
+   overlap the shield/hull bars; compact chrome, min 44px tall touch target. */
+.cameraViewToggleButton,
+.soundToggleButton {
   position: absolute;
-  top: 14px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 6px 14px;
-  font-size: 12px;
+  top: calc(env(safe-area-inset-top, 0px) + 34px);
+  min-height: 30px;
+  padding: 7px 12px;
+  font-size: 11px;
   letter-spacing: 2px;
   color: #9fd8ff;
   background: rgba(20, 40, 70, 0.45);
@@ -145,20 +157,13 @@ body {
   cursor: pointer;
 }
 
-/* D23: sound on/off toggle — same chrome as the VIEW button, parked top-right */
+.cameraViewToggleButton {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
 .soundToggleButton {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  padding: 6px 14px;
-  font-size: 12px;
-  letter-spacing: 2px;
-  color: #9fd8ff;
-  background: rgba(20, 40, 70, 0.45);
-  border: 1px solid rgba(110, 180, 255, 0.4);
-  border-radius: 6px;
-  pointer-events: auto;
-  cursor: pointer;
+  right: var(--hud-right-inset);
 }
 
 .throttleLeverKnob {

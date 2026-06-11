@@ -6,7 +6,9 @@ import { getShipForwardDirection } from '../gameSimulation/newtonianShipPhysics'
 
 export type PlayerCameraViewMode = 'thirdPersonChase' | 'cockpit'
 
-const CHASE_CAMERA_LOCAL_OFFSET = new Vector3(0, 3.5, 11)
+// D26: raised well above the ship so the chase view looks down at a slight top-down angle
+// (you see the ship's top/planform rather than sitting directly on its tail)
+const CHASE_CAMERA_LOCAL_OFFSET = new Vector3(0, 7.5, 11.5)
 const CHASE_LOOK_AHEAD_DISTANCE_METERS = 30
 /** higher = snappier follow; applied frame-rate independently via exponential damping */
 const CHASE_FOLLOW_STIFFNESS_PER_SECOND = 5

@@ -39,6 +39,10 @@ import {
 import { selectAutoAimTargetInNoseCone, updateAutoAimTargetHighlight } from './weapons/noseConeAutoAim'
 import { computeIdleAimAssistRotationInput } from './weapons/idleAimAssistTowardTarget'
 import { createGameAudioSystem } from './audio/proceduralGameAudio'
+import { createOffscreenEnemyIndicators } from './hud/offscreenEnemyIndicators'
+import { createTargetingConeRing } from './weapons/targetingConeRing'
+import { createSunLensFlare } from './hud/sunLensFlare'
+import { createProceduralSpaceNebulaTexture } from './scene/proceduralSpaceSkybox'
 import { computeLeadAimDirection } from './weapons/targetLeadPrediction'
 import { createLaserVolleySystem } from './weapons/laserFire'
 import { createMissileVolleySystem } from './weapons/missileFire'
@@ -69,7 +73,8 @@ webglRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 webglRenderer.setSize(window.innerWidth, window.innerHeight)
 
 const gameScene = new THREE.Scene()
-gameScene.background = new THREE.Color(0x05060f)
+// D30: an exaggerated colored nebula skybox (procedural, no asset files) replaces the near-black void
+gameScene.background = createProceduralSpaceNebulaTexture()
 
 const playerViewCamera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 8000)
 
@@ -86,6 +91,12 @@ const SUN_DIRECTION_FROM_ORIGIN = new THREE.Vector3(0.55, 0.35, 0.4).normalize()
 const nearbySunLight = new THREE.DirectionalLight(0xfff2dd, 3.2)
 nearbySunLight.position.copy(SUN_DIRECTION_FROM_ORIGIN).multiplyScalar(1000)
 gameScene.add(nearbySunLight)
+
+// D30: a faint hemisphere fill (sky tint above, dark below) lifts the formerly black shadow side
+// so ships/asteroids read against the brighter nebula. Deliberately weak so the sun stays dominant
+// (a softening of D13's strict single-light rule, at the user's request to lighten the scene).
+const softSkyFillLight = new THREE.HemisphereLight(0x6a86c0, 0x16203a, 0.55)
+gameScene.add(softSkyFillLight)
 
 // the visible sun disk — emissive, so it needs no other light
 const visibleSunDisk = new THREE.Mesh(
@@ -117,6 +128,9 @@ const radarSphereDisplay = createRadarSphereDisplay(hudOverlayRoot)
 const laserVolleySystem = createLaserVolleySystem(gameScene)
 const missileVolleySystem = createMissileVolleySystem(gameScene)
 const enemyConditionBarsDisplay = createEnemyConditionBarsDisplay(gameScene)
+const offscreenEnemyIndicators = createOffscreenEnemyIndicators(hudOverlayRoot) // D28
+const targetingConeRing = createTargetingConeRing(gameScene) // D29
+const sunLensFlare = createSunLensFlare(hudOverlayRoot) // D31
 
 // D23: procedural 8-bit techno music + SFX. Autoplay policy requires a user gesture before the
 // AudioContext may produce sound, so we resume + start the loop on the first pointer/key event.
@@ -885,6 +899,24 @@ function syncRenderObjectsFromSimulation(frameDeltaSeconds: number): void {
   }
 
   updateAutoAimTargetHighlight(currentAutoAimTarget, gameScene, playerViewCamera)
+
+  // D29: green targeting ring sized to the aim cone at the closest live enemy's depth
+  getShipForwardDirection(playerShipState, scratchPlayerForwardDirection)
+  let nearestLiveEnemy: EnemyShip | null = null
+  let nearestEnemyDistanceSquared = Infinity
+  for (const enemyShip of gameWorld.enemyShips) {
+    if (enemyShip.isDestroyed) continue
+    const distanceSquared = enemyShip.positionMeters.distanceToSquared(playerShipState.positionMeters)
+    if (distanceSquared < nearestEnemyDistanceSquared) {
+      nearestEnemyDistanceSquared = distanceSquared
+      nearestLiveEnemy = enemyShip
+    }
+  }
+  targetingConeRing.updateTargetingConeRing(
+    nearestLiveEnemy,
+    playerShipState.positionMeters,
+    scratchPlayerForwardDirection,
+  )
   playerConditionDisplay.updatePlayerConditionDisplay(
     playerShipCondition.getShieldPointsFraction(),
     playerShipCondition.getHullPointsFraction(),
@@ -912,6 +944,17 @@ function runFrameLoop(currentFrameTimestampMs: number): void {
 
   syncRenderObjectsFromSimulation(frameDeltaSeconds)
   playerCameraRig.updateCameraFollowingShip(playerShipState, frameDeltaSeconds)
+
+  // screen-space HUD must run AFTER the camera moves this frame, with fresh matrices, so projection
+  // to screen has no one-frame lag (D28 off-screen enemy markers, D31 sun lens flare)
+  playerViewCamera.updateMatrixWorld()
+  offscreenEnemyIndicators.updateOffscreenEnemyIndicators(
+    radarSignatureTracker.getContactReadings(),
+    playerViewCamera,
+    playerShipState.positionMeters,
+  )
+  sunLensFlare.updateSunLensFlare(visibleSunDisk.position, playerViewCamera)
+
   webglRenderer.render(gameScene, playerViewCamera)
   radarSphereDisplay.renderRadarInset(webglRenderer)
 }
