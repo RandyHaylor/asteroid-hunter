@@ -43,6 +43,12 @@ import { createOffscreenEnemyIndicators } from './hud/offscreenEnemyIndicators'
 import { createTargetingConeRing } from './weapons/targetingConeRing'
 import { createSunLensFlare } from './hud/sunLensFlare'
 import { createProceduralSpaceNebulaTexture } from './scene/proceduralSpaceSkybox'
+import { createPowerUpSelectionOverlay } from './hud/powerUpSelectionOverlay'
+import {
+  ALL_POWER_UP_DEFINITIONS,
+  selectTwoDistinctPowerUps,
+  type PowerUpDefinition,
+} from './upgrades/powerUpDefinitions'
 import { computeLeadAimDirection } from './weapons/targetLeadPrediction'
 import { createLaserVolleySystem } from './weapons/laserFire'
 import { createMissileVolleySystem } from './weapons/missileFire'
@@ -131,6 +137,7 @@ const enemyConditionBarsDisplay = createEnemyConditionBarsDisplay(gameScene)
 const offscreenEnemyIndicators = createOffscreenEnemyIndicators(hudOverlayRoot) // D28
 const targetingConeRing = createTargetingConeRing(gameScene) // D29
 const sunLensFlare = createSunLensFlare(hudOverlayRoot) // D31
+const powerUpSelectionOverlay = createPowerUpSelectionOverlay(hudOverlayRoot) // D33
 
 // D23: procedural 8-bit techno music + SFX. Autoplay policy requires a user gesture before the
 // AudioContext may produce sound, so we resume + start the loop on the first pointer/key event.
@@ -346,11 +353,18 @@ if (import.meta.env.DEV) {
       coverLatitudeDegrees,
     }
   }
+  // D33: force the between-wave power-up picker open (clears enemies, parks the machine)
+  ;(window as unknown as Record<string, unknown>).debugForcePowerUpSelection = () => {
+    removeAllEnemiesFromWorld()
+    presentBetweenWavePowerUpChoice()
+    currentWavePhase = 'powerUpSelection'
+    return true
+  }
 }
 
 // ===== STEP 5: wave system (D2, D8): staged waves, clear all enemies to advance =====
 
-type WavePhase = 'waveIntro' | 'waveActive' | 'waveCleared' | 'playerDestroyed'
+type WavePhase = 'waveIntro' | 'waveActive' | 'waveCleared' | 'powerUpSelection' | 'playerDestroyed'
 
 let currentWaveNumber = 1
 let currentWavePhase: WavePhase = 'waveIntro'
@@ -419,6 +433,23 @@ function resetPlayerShipForWaveRestart(): void {
   releaseTractorPull()
 }
 
+// D33: offer two random distinct power-ups; the picker waits for the player's tap
+function presentBetweenWavePowerUpChoice(): void {
+  hideWaveBanner()
+  const offeredPowerUps = selectTwoDistinctPowerUps(ALL_POWER_UP_DEFINITIONS, Math.random)
+  powerUpSelectionOverlay.showPowerUpChoices(offeredPowerUps, onBetweenWavePowerUpChosen)
+}
+
+// D33: apply the chosen upgrade to the live stats, then roll into the next wave's intro
+function onBetweenWavePowerUpChosen(chosenPowerUp: PowerUpDefinition): void {
+  chosenPowerUp.applyToPlayerStats()
+  powerUpSelectionOverlay.hide()
+  currentWaveNumber += 1
+  showWaveBanner(`WAVE ${currentWaveNumber}`)
+  currentWavePhase = 'waveIntro'
+  wavePhaseCountdownSeconds = 2.5
+}
+
 function updateWavePhase(deltaSeconds: number): void {
   wavePhaseCountdownSeconds -= deltaSeconds
 
@@ -451,12 +482,13 @@ function updateWavePhase(deltaSeconds: number): void {
   }
 
   if (currentWavePhase === 'waveCleared' && wavePhaseCountdownSeconds <= 0) {
-    currentWaveNumber += 1
-    showWaveBanner(`WAVE ${currentWaveNumber}`)
-    currentWavePhase = 'waveIntro'
-    wavePhaseCountdownSeconds = 2.5
+    // D33: offer a power-up choice before the next wave; the machine waits in 'powerUpSelection'
+    // (no countdown) until the player picks, which advances to the next wave intro.
+    presentBetweenWavePowerUpChoice()
+    currentWavePhase = 'powerUpSelection'
     return
   }
+  // 'powerUpSelection' has no timed transition — onBetweenWavePowerUpChosen() drives it forward
 
   if (currentWavePhase === 'playerDestroyed' && wavePhaseCountdownSeconds <= 0) {
     resetPlayerShipForWaveRestart()

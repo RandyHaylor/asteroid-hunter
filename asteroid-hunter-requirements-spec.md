@@ -38,6 +38,7 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 | D30 | **Procedural colored-nebula skybox** (no asset files, A1): a seeded canvas equirectangular texture of exaggerated colored clouds + stars set as `scene.background`, lifting the formerly near-black void. Plus a **weak hemisphere fill light** to lift the dark/shadow side (a deliberate softening of D13's strict single-light rule, at the user's request to lighten the scene) |
 | D31 | **Faux sun lens flare**: a hazy yellow ring on the sun's projected screen position plus a fainter ghost ring mirrored across screen center, so it slides like a real lens flare. DOM overlay, hidden when the sun is behind the camera or off screen |
 | D32 | **Compact iPhone-oriented HUD layout**: replaced the huge lower-third fire zones with two small fixed buttons low-center (lasers left / missiles right), shrank the joysticks/throttle, pinned everything inside `env(safe-area-inset-*)` (added `viewport-fit=cover`), keeping touch targets ≥ Apple's 44pt minimum |
+| D33 | **Between-wave power-ups** (implements R17/R18). After each wave clears, the wave machine enters a `powerUpSelection` phase showing **two distinct power-ups randomized** from a pool of eight — speed boost, tractor range, laser damage, missile damage, missile speed, auto-aim power (lock cone), missile fire rate, missile tracking turn — each with a unique inline-SVG icon. Picking one mutates the relevant **live data-driven stat singleton** (effect is immediate and stacks across waves) and advances to the next wave. No persistence (A4). The two-of-eight selector is pure/unit-tested |
 
 ## Requirements from the design doc
 
@@ -119,6 +120,10 @@ src/
     sunLensFlare.ts                — faux lens flare overlay when the sun is in view (D31)
   (additional weapons/)
     targetingConeRing.ts           — green aim-cone cross-section ring at closest enemy depth (D29)
+  upgrades/
+    powerUpDefinitions.ts          — 8 power-ups (icon + stat mutation) + 2-of-8 selector (D33) [unit-tested]
+  (additional hud/, cont.)
+    powerUpSelectionOverlay.ts     — between-wave upgrade picker overlay (D33)
   shipStats.ts                     — data-driven stat table (upgrade-ready, R17/R18)
 ```
 
