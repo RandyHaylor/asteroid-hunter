@@ -6,9 +6,9 @@ import { getShipForwardDirection } from '../gameSimulation/newtonianShipPhysics'
 
 export type PlayerCameraViewMode = 'thirdPersonChase' | 'cockpit'
 
-// D26: raised above the ship for a mild top-down angle (halved from the initial 7.5 to 5.5 so the
-// view sits between dead-astern and the steeper top-down)
-const CHASE_CAMERA_LOCAL_OFFSET = new Vector3(0, 5.5, 11.5)
+// D26/D34: raised above the ship for a mild top-down angle, and pulled ~1.6× farther back (D34) so
+// the ship and asteroids read smaller / less crowded on screen (the y:z ratio keeps the same tilt).
+const CHASE_CAMERA_LOCAL_OFFSET = new Vector3(0, 8.5, 18)
 const CHASE_LOOK_AHEAD_DISTANCE_METERS = 30
 /** higher = snappier follow; applied frame-rate independently via exponential damping */
 const CHASE_FOLLOW_STIFFNESS_PER_SECOND = 5

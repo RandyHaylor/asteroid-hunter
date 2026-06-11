@@ -1,10 +1,24 @@
-/* R11 + D32: left = lasers, right = missiles. Replaced the old huge lower-third zones with two
-   compact, purposeful buttons sitting low-center (between the throttle on the far left and the
-   rotation joystick on the far right), inside the iPhone safe area. >= 44pt tall touch target. */
+/* R11 + D34: left = lasers, right = missiles. The two buttons live in one flex-centered GROUP that
+   spans the full width and sits in a row RAISED just above the corner controls (throttle + the two
+   joysticks, which are ~104–150px tall at the bottom). Because the group is a row above them and
+   the buttons are centered with a fixed gap, they can't overlap the corner controls or each other
+   at any screen width/orientation. >= 44pt tall touch target. */
+
+.fireZoneGroup {
+  position: absolute;
+  left: 0;
+  right: 0;
+  /* raised just clear of the joystick row (~104 tall + 20 inset); the throttle is far-left so the
+     centered buttons never meet it horizontally, no need to clear its taller 150px height */
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 140px);
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  gap: 20px;
+  pointer-events: none; /* the group itself doesn't catch taps; the buttons do */
+}
 
 .fireZoneButton {
-  position: absolute;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 26px);
   width: 96px;
   height: 62px;
   display: flex;
@@ -25,14 +39,10 @@
 }
 
 .fireZoneButtonLasers {
-  left: 50%;
-  transform: translateX(-112%);
   border-color: rgba(102, 255, 238, 0.45); /* matches the cyan player laser bolts */
 }
 
 .fireZoneButtonMissiles {
-  left: 50%;
-  transform: translateX(12%);
   border-color: rgba(255, 170, 51, 0.45); /* matches the missile exhaust glow */
 }
 

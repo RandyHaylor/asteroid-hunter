@@ -40,6 +40,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 | D32 | **Compact iPhone-oriented HUD layout**: replaced the huge lower-third fire zones with two small fixed buttons low-center (lasers left / missiles right), shrank the joysticks/throttle, pinned everything inside `env(safe-area-inset-*)` (added `viewport-fit=cover`), keeping touch targets ≥ Apple's 44pt minimum |
 | D33 | **Between-wave power-ups** (implements R17/R18). After each wave clears, the wave machine enters a `powerUpSelection` phase showing **two distinct power-ups randomized** from a pool of eight — speed boost, tractor range, laser damage, missile damage, missile speed, auto-aim power (lock cone), missile fire rate, missile tracking turn — each with a unique inline-SVG icon. Picking one mutates the relevant **live data-driven stat singleton** (effect is immediate and stacks across waves) and advances to the next wave. No persistence (A4). The two-of-eight selector is pure/unit-tested |
 
+| D34 | **Zoom-out + non-overlapping HUD**: chase camera pulled ~1.6× farther back (offset z 11.5→18, y 5.5→8.5 keeping the tilt) so the ship/asteroids read smaller and less crowded (world scale/physics unchanged). Fire buttons moved into one flex-centered `.fireZoneGroup` raised into a row **above** the corner controls (throttle/joysticks), so they structurally cannot overlap the corners or each other at any width/orientation |
+
 ## Requirements from the design doc
 
 ### Rendering & physics
