@@ -79,6 +79,13 @@ export function createGameAudioSystem(): GameAudioSystem {
   soundEffectsBusGainNode.gain.value = SOUND_EFFECTS_BUS_GAIN
   soundEffectsBusGainNode.connect(masterGainNode)
 
+  // D39: the background-music PLAYLIST (normalized .ogg files, already attenuated to 0.3 by ffmpeg)
+  // plays through its own gain straight to the destination, so the file's baked 0.3 IS the level
+  // (it doesn't get the extra master attenuation that the synth SFX get). Muted alongside master.
+  const musicFileOutputGainNode = audioContext.createGain()
+  musicFileOutputGainNode.gain.value = 1
+  musicFileOutputGainNode.connect(audioContext.destination)
+
   // ===== one shared white-noise buffer, reused for every drum hit / noisy SFX =====
   const noiseBufferLengthSamples = Math.floor(audioContext.sampleRate * 1.0)
   const whiteNoiseBuffer = audioContext.createBuffer(1, noiseBufferLengthSamples, audioContext.sampleRate)
@@ -213,7 +220,8 @@ export function createGameAudioSystem(): GameAudioSystem {
     }
   }
 
-  function startMusicLoopIfStopped(): void {
+  // procedural synth music — now only the FALLBACK if the .ogg playlist files can't be loaded (D39)
+  function startProceduralMusicLoopIfStopped(): void {
     if (musicSchedulerTimerId !== null) return
     currentTrackIndex = 0
     currentBarIndex = 0
@@ -224,6 +232,63 @@ export function createGameAudioSystem(): GameAudioSystem {
     musicSchedulerTimerId = setInterval(scheduleDueLoopSteps, SCHEDULER_TICK_MILLISECONDS)
   }
 
+  // ===== D39: looping background-music playlist from normalized .ogg files =====
+  // Plays the three tracks in order, looping forever. Each track's buffer is fetched + decoded on
+  // demand (with the next one prefetched). If NONE of the files load (e.g. not deployed yet), it
+  // gracefully falls back to the procedural synth loop above so there's always music.
+  const MUSIC_PLAYLIST_FILE_NAMES = ['surviving.ogg', 'aggressive.ogg', 'nightmare-on-vinyl.ogg']
+  const decodedMusicTrackBuffers: (AudioBuffer | null)[] = []
+  let activeMusicSourceNode: AudioBufferSourceNode | null = null
+  let backgroundMusicStarted = false
+  let consecutiveMusicLoadFailures = 0
+
+  async function loadMusicTrackBuffer(trackIndex: number): Promise<AudioBuffer | null> {
+    const alreadyDecoded = decodedMusicTrackBuffers[trackIndex]
+    if (alreadyDecoded) return alreadyDecoded
+    try {
+      const baseUrl = import.meta.env.BASE_URL ?? '/'
+      const response = await fetch(`${baseUrl}music/${MUSIC_PLAYLIST_FILE_NAMES[trackIndex]}`)
+      if (!response.ok) return null
+      const encodedBytes = await response.arrayBuffer()
+      const decodedBuffer = await audioContext.decodeAudioData(encodedBytes)
+      decodedMusicTrackBuffers[trackIndex] = decodedBuffer
+      return decodedBuffer
+    } catch {
+      return null
+    }
+  }
+
+  async function playMusicPlaylistTrack(trackIndex: number): Promise<void> {
+    const trackBuffer = await loadMusicTrackBuffer(trackIndex)
+    if (!trackBuffer) {
+      consecutiveMusicLoadFailures++
+      if (consecutiveMusicLoadFailures >= MUSIC_PLAYLIST_FILE_NAMES.length) {
+        startProceduralMusicLoopIfStopped() // no playable files — fall back to the synth loop
+        return
+      }
+      void playMusicPlaylistTrack((trackIndex + 1) % MUSIC_PLAYLIST_FILE_NAMES.length)
+      return
+    }
+    consecutiveMusicLoadFailures = 0
+    const musicSourceNode = audioContext.createBufferSource()
+    musicSourceNode.buffer = trackBuffer
+    musicSourceNode.connect(musicFileOutputGainNode)
+    musicSourceNode.onended = (): void => {
+      if (musicSourceNode !== activeMusicSourceNode) return // superseded (shouldn't happen, but safe)
+      void playMusicPlaylistTrack((trackIndex + 1) % MUSIC_PLAYLIST_FILE_NAMES.length)
+    }
+    activeMusicSourceNode = musicSourceNode
+    musicSourceNode.start()
+    void loadMusicTrackBuffer((trackIndex + 1) % MUSIC_PLAYLIST_FILE_NAMES.length) // prefetch next
+  }
+
+  function startBackgroundMusicIfStopped(): void {
+    if (backgroundMusicStarted) return
+    backgroundMusicStarted = true
+    consecutiveMusicLoadFailures = 0
+    void playMusicPlaylistTrack(0)
+  }
+
   // ===== public state + SFX =====
 
   let muted = false
@@ -231,11 +296,12 @@ export function createGameAudioSystem(): GameAudioSystem {
   return {
     resumeAfterFirstUserGesture(): void {
       if (audioContext.state === 'suspended') void audioContext.resume()
-      startMusicLoopIfStopped()
+      startBackgroundMusicIfStopped() // D39: .ogg playlist (falls back to the synth loop if absent)
     },
     toggleMuted(): boolean {
       muted = !muted
       masterGainNode.gain.value = muted ? 0 : MASTER_OUTPUT_GAIN
+      musicFileOutputGainNode.gain.value = muted ? 0 : 1 // D39: mute the file playlist too
       return muted
     },
     isMuted(): boolean {

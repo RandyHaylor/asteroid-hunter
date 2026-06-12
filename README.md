@@ -25,6 +25,8 @@ Cover grids: **cyan** = full cover available, **yellow** = long-range enemies ca
 
 On-screen aids: a **green ring** shows the auto-aim cone at the closest enemy's range — line an enemy up inside it to lock. Enemies you can't see show as **edge-of-screen markers** (red = live, yellow = last-known before they hid; bigger = closer). Every enemy carries a floating shield/health bar to help you spot them. The HUD is laid out for phones (safe-area aware, compact controls).
 
+Background music is a looping playlist of three royalty-free Pixabay techno tracks (normalized and level-balanced); synthesized 8-bit SFX play over it. Mute with the SOUND button or `M`. Music: "Surviving" & "Nightmare on Vinyl" by LandOfTheRisen, "Aggressive" by FreeMusicPro — via Pixabay (Pixabay Content License).
+
 The game renders into a **square view** with the controls in the margin around it — under the view in portrait, on either side in landscape. The corner **radar** is a spherical 3D scope with a horizontal reference disc; enemy dots drop a stem line to the disc so you can read their height.
 
 Between waves you **choose one of two random power-ups** (speed, tractor range, laser/missile damage, missile speed/fire-rate/tracking, auto-aim cone) — upgrades stack across the run.

@@ -48,6 +48,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 | D37 | **Portrait deck + non-overlapping controls**: in portrait the square is capped to 60% of screen height (top), leaving a roomy bottom control deck. Controls live in two flex **clusters** — LEFT (throttle, strafe, lasers) and RIGHT (rotation joystick, missiles) — that occupy the bottom-half columns in portrait and the side margins in landscape. Flexbox + opposite-side clusters mean controls can never overlap each other or the screen; `clamp()`/`vmin` item sizing makes them **shrink first** on small screens |
 | D38 | **Richer techno music**: replaced the single one-bar loop with a library of longer multi-bar tracks (`TECHNO_TRACKS`) — *Acid Drive*, *Rave Stabs*, *Deep Dark* — with per-bar variation/fills, distinct tempos, a new **chord-stab voice**, acid 16th basslines and arps. The engine plays each track for several loops then rotates. These are original genre-faithful 8-bit compositions, not transcriptions of copyrighted records (can't legally bundle / reliably source those). Pure track data is unit-tested |
 
+| D39 | **Real licensed background music**: three royalty-free Pixabay techno tracks (*Surviving*, *Aggressive*, *Nightmare on Vinyl*) downloaded, **ffmpeg-normalized (loudnorm) and attenuated to volume 0.3**, output as OGG into `game/public/music/`. Played as a **looping Web Audio playlist** through a dedicated gain node (so the SOUND/M toggle mutes it); the D38 procedural synth music remains only as a **fallback** if the files fail to load. Pixabay Content License (royalty-free, no attribution required) — this supersedes A1's no-asset-files rule for music |
+
 ## Requirements from the design doc
 
 ### Rendering & physics

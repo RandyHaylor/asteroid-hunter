@@ -2,3 +2,5 @@ node_modules/
 dist/
 browser-screenshots/
 *.local
+# D39: raw downloaded music sources (processed .ogg outputs live in game/public/music/)
+incoming-music/
