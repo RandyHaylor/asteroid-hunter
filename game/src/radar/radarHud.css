@@ -2,17 +2,21 @@
    (it replaced the rotation joystick). It owns its own square <canvas>; this file styles the
    surrounding zone (round scope frame, blinking alert border) and the contacts label. */
 
+/* D41: the radar region is a JS-positioned square (landscape right-half / portrait under the view).
+   The zone fills that region as a round scope. */
+.radarRegion {
+  pointer-events: none; /* the canvas inside re-enables pointer events for dragging */
+}
+
 .radarControlZone {
   position: relative;
-  /* big: fill the cluster width up to a generous cap, stay square */
-  width: clamp(120px, 38vmin, 300px);
-  aspect-ratio: 1;
+  width: 100%;
+  height: 100%;
   border-radius: 50%;
   box-sizing: border-box;
   border: 2px solid rgba(42, 223, 223, 0.45);
   box-shadow: 0 0 14px rgba(42, 223, 223, 0.25);
   overflow: hidden;
-  flex: 0 1 auto;
   pointer-events: none; /* the canvas inside re-enables pointer events for dragging */
 }
 

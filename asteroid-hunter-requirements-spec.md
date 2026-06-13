@@ -52,6 +52,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 
 | D40 | **Radar IS the steering control**: the 3D spherical radar is now a large element in the right control cluster (replacing the rotation joystick) and renders to its **own canvas/renderer** (no longer a scissor inset on the main canvas). **Dragging the radar steers the ship** — drag offset from the grab point maps to pitch/yaw rate (same convention the joystick used: drag right = yaw right, drag up = pitch up), merged over the keyboard fallback and fed through the existing eased-rotation + idle-aim-assist path. The radar still rotates with the ship and shows the disc + contact stems |
 
+| D41 | **Side-by-side view layout** (one JS layout fn = single source of geometry, applied as inline styles). LANDSCAPE: a wide **right-aligned block** of two equal squares — **ship view (left) + radar (right)** — with all action buttons in a **left strip** (throttle/strafe/lasers upper, missiles lower). PORTRAIT: ship square on top, **radar square centered directly under it**, buttons in a bottom row. The radar became its own JS-positioned square region (out of the control cluster); ship camera stays square. Replaces D35's centered-square + margin model |
+
 ## Requirements from the design doc
 
 ### Rendering & physics

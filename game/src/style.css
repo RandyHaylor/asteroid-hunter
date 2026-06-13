@@ -33,12 +33,13 @@ body {
   pointer-events: none; /* individual controls re-enable pointer events */
 }
 
-/* ===== D37: two flex clusters that hold the controls and RESIZE them so nothing can overlap.
-   Flexbox guarantees items in a cluster never overlap each other; the clusters sit on opposite
-   sides so they never overlap each other; clamp()/vmin item sizes shrink first on small screens. */
+/* ===== D37/D41: two flex clusters that hold the controls and RESIZE them so nothing overlaps.
+   Their POSITION/SIZE is set by main.ts's layoutGameRegions() (inline styles) per orientation; this
+   rule only defines how items stack inside. Flexbox guarantees items never overlap; clamp()/vmin
+   item sizes shrink first on small clusters. */
 .controlClusterLeft,
 .controlClusterRight {
-  position: absolute;
+  position: fixed; /* exact box set inline by layoutGameRegions() */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -48,38 +49,6 @@ body {
   box-sizing: border-box;
   pointer-events: none; /* controls themselves re-enable pointer events */
   overflow: hidden;
-}
-
-/* PORTRAIT: bottom deck under the square, split into a left half and a right half */
-@media (orientation: portrait) {
-  .controlClusterLeft {
-    left: 0;
-    width: 50vw;
-    top: var(--game-square-size-px, 60vh);
-    bottom: 0;
-  }
-  .controlClusterRight {
-    right: 0;
-    width: 50vw;
-    top: var(--game-square-size-px, 60vh);
-    bottom: 0;
-  }
-}
-
-/* LANDSCAPE: the two side margins beside the centered square */
-@media (orientation: landscape) {
-  .controlClusterLeft {
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: calc((100vw - var(--game-square-size-px, 100vh)) / 2);
-  }
-  .controlClusterRight {
-    right: 0;
-    top: 0;
-    bottom: 0;
-    width: calc((100vw - var(--game-square-size-px, 100vh)) / 2);
-  }
 }
 
 /* ===== control widgets — clamp()/vmin sizing so they shrink to fit; flex never overlaps them ===== */

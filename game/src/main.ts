@@ -89,37 +89,92 @@ gameScene.background = createProceduralSpaceNebulaTexture()
 const playerViewCamera = new THREE.PerspectiveCamera(70, 1, 0.1, 8000)
 let currentSquareViewportSizePixels = Math.min(window.innerWidth, window.innerHeight)
 
-// D37: in PORTRAIT the square is capped to 60% of the height so the bottom 40% is always a roomy
-// control deck; in LANDSCAPE the square fills the height and the side strips are the control decks.
-const PORTRAIT_MAX_SQUARE_HEIGHT_FRACTION = 0.6
+// D41 layout (single source of truth for all on-screen region geometry; applied as inline styles):
+//  - LANDSCAPE: a wide right-aligned block = ship-view square (left) + radar square (right); all the
+//    action buttons live in the left strip (split: throttle/strafe/lasers on top, missiles below).
+//  - PORTRAIT: ship square on top, radar square centered directly under it, buttons in a bottom row.
+// The ship camera is always square (aspect 1). currentSquareViewportSizePixels = the ship square's
+// size, used by the screen-space HUD projection (edge markers + lens flare).
+const LANDSCAPE_LEFT_STRIP_MIN_PIXELS = 140
+const PORTRAIT_SHIP_SQUARE_HEIGHT_FRACTION = 0.46
+const PORTRAIT_RADAR_SQUARE_HEIGHT_FRACTION = 0.3
+const REGION_GAP_PIXELS = 8
 
-function layoutSquareGameViewport(): void {
+function applyFixedBoxStyle(
+  element: HTMLElement,
+  leftPixels: number,
+  topPixels: number,
+  widthPixels: number,
+  heightPixels: number,
+): void {
+  element.style.position = 'fixed'
+  element.style.left = `${leftPixels}px`
+  element.style.top = `${topPixels}px`
+  element.style.width = `${widthPixels}px`
+  element.style.height = `${heightPixels}px`
+  element.style.right = 'auto'
+  element.style.bottom = 'auto'
+}
+
+function layoutGameRegions(): void {
   const viewportWidthPixels = window.innerWidth
   const viewportHeightPixels = window.innerHeight
   const isPortrait = viewportHeightPixels >= viewportWidthPixels
-  const squareSizePixels = isPortrait
-    ? Math.min(viewportWidthPixels, Math.round(viewportHeightPixels * PORTRAIT_MAX_SQUARE_HEIGHT_FRACTION))
-    : Math.min(viewportWidthPixels, viewportHeightPixels)
-  const squareLeftPixels = Math.round((viewportWidthPixels - squareSizePixels) / 2)
+  let shipSquareSizePixels: number
 
-  for (const squareElement of [gameRenderCanvas, viewHudOverlay]) {
-    squareElement.style.position = 'fixed'
-    squareElement.style.top = '0px'
-    squareElement.style.left = `${squareLeftPixels}px`
-    squareElement.style.width = `${squareSizePixels}px`
-    squareElement.style.height = `${squareSizePixels}px`
+  if (!isPortrait) {
+    // ship square + radar square, equal size, right-aligned; left strip holds the buttons
+    shipSquareSizePixels = Math.min(
+      viewportHeightPixels,
+      Math.floor((viewportWidthPixels - LANDSCAPE_LEFT_STRIP_MIN_PIXELS) / 2),
+    )
+    const leftStripWidthPixels = viewportWidthPixels - 2 * shipSquareSizePixels
+    const blockTopPixels = Math.floor((viewportHeightPixels - shipSquareSizePixels) / 2)
+    for (const squareElement of [gameRenderCanvas, viewHudOverlay]) {
+      applyFixedBoxStyle(squareElement, leftStripWidthPixels, blockTopPixels, shipSquareSizePixels, shipSquareSizePixels)
+    }
+    applyFixedBoxStyle(
+      radarRegion,
+      leftStripWidthPixels + shipSquareSizePixels,
+      blockTopPixels,
+      shipSquareSizePixels,
+      shipSquareSizePixels,
+    )
+    const stripSplitPixels = Math.floor(viewportHeightPixels * 0.6)
+    applyFixedBoxStyle(leftControlCluster, 0, 0, leftStripWidthPixels, stripSplitPixels)
+    applyFixedBoxStyle(rightControlCluster, 0, stripSplitPixels, leftStripWidthPixels, viewportHeightPixels - stripSplitPixels)
+  } else {
+    // ship square on top, radar square centered under it, buttons in a bottom row (left | right)
+    shipSquareSizePixels = Math.min(viewportWidthPixels, Math.floor(viewportHeightPixels * PORTRAIT_SHIP_SQUARE_HEIGHT_FRACTION))
+    const shipLeftPixels = Math.floor((viewportWidthPixels - shipSquareSizePixels) / 2)
+    for (const squareElement of [gameRenderCanvas, viewHudOverlay]) {
+      applyFixedBoxStyle(squareElement, shipLeftPixels, 0, shipSquareSizePixels, shipSquareSizePixels)
+    }
+    const radarSquareSizePixels = Math.min(
+      Math.floor(viewportWidthPixels * 0.62),
+      Math.floor(viewportHeightPixels * PORTRAIT_RADAR_SQUARE_HEIGHT_FRACTION),
+    )
+    const radarTopPixels = shipSquareSizePixels + REGION_GAP_PIXELS
+    applyFixedBoxStyle(
+      radarRegion,
+      Math.floor((viewportWidthPixels - radarSquareSizePixels) / 2),
+      radarTopPixels,
+      radarSquareSizePixels,
+      radarSquareSizePixels,
+    )
+    const buttonsTopPixels = radarTopPixels + radarSquareSizePixels + REGION_GAP_PIXELS
+    const buttonsHeightPixels = Math.max(0, viewportHeightPixels - buttonsTopPixels)
+    const halfWidthPixels = Math.floor(viewportWidthPixels / 2)
+    applyFixedBoxStyle(leftControlCluster, 0, buttonsTopPixels, halfWidthPixels, buttonsHeightPixels)
+    applyFixedBoxStyle(rightControlCluster, halfWidthPixels, buttonsTopPixels, viewportWidthPixels - halfWidthPixels, buttonsHeightPixels)
   }
-  // expose the square's size + bottom edge to CSS so the control decks position against it
-  document.documentElement.style.setProperty('--game-square-size-px', `${squareSizePixels}px`)
 
-  currentSquareViewportSizePixels = squareSizePixels
-  webglRenderer.setSize(squareSizePixels, squareSizePixels)
+  currentSquareViewportSizePixels = shipSquareSizePixels
+  webglRenderer.setSize(shipSquareSizePixels, shipSquareSizePixels)
   playerViewCamera.aspect = 1
   playerViewCamera.updateProjectionMatrix()
 }
-
-layoutSquareGameViewport()
-window.addEventListener('resize', layoutSquareGameViewport)
+// NOTE: layoutGameRegions() is first called AFTER the control clusters + radar region are created.
 
 // ===== STEP 2: single light source — a nearby sun with hard directional light (R1, user direction) =====
 
@@ -170,9 +225,16 @@ const fireZoneButtons = createFireZoneButtons(leftControlCluster, rightControlCl
 const playerCameraRig = createPlayerCameraRig(playerViewCamera)
 const playerConditionDisplay = createPlayerConditionDisplay(viewHudOverlay)
 const radarSignatureTracker = createRadarSignatureTracker()
-// D40: the big radar lives in the RIGHT control cluster (where the rotation joystick was) and is
-// dragged to steer the ship
-const radarSphereDisplay = createRadarSphereDisplay(rightControlCluster)
+// D40/D41: the big radar is its own JS-positioned square region (landscape: right half of the wide
+// view; portrait: under the ship view). Dragging it steers the ship.
+const radarRegion = document.createElement('div')
+radarRegion.className = 'radarRegion'
+controlsOverlay.appendChild(radarRegion)
+const radarSphereDisplay = createRadarSphereDisplay(radarRegion)
+
+// now that the clusters + radar region exist, lay everything out and keep it in sync on resize
+layoutGameRegions()
+window.addEventListener('resize', layoutGameRegions)
 const laserVolleySystem = createLaserVolleySystem(gameScene)
 const missileVolleySystem = createMissileVolleySystem(gameScene)
 const enemyConditionBarsDisplay = createEnemyConditionBarsDisplay(gameScene)
