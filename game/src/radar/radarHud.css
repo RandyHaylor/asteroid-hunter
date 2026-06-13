@@ -1,22 +1,36 @@
-/* Radar HUD chrome (R13/R16) — DOM overlay drawn over the top-right WebGL radar inset.
-   Size and corner offsets are set inline by radarSphereDisplay so the ring always
-   matches the scissor rectangle exactly. */
+/* D40: the radar is now a LARGE draggable steering control living in the right control cluster
+   (it replaced the rotation joystick). It owns its own square <canvas>; this file styles the
+   surrounding zone (round scope frame, blinking alert border) and the contacts label. */
 
-.radarHudCorner {
-  position: fixed;
-  pointer-events: none;
-  z-index: 20;
-}
-
-.radarOutlineRing {
-  position: absolute;
-  inset: 0;
-  box-sizing: border-box;
+.radarControlZone {
+  position: relative;
+  /* big: fill the cluster width up to a generous cap, stay square */
+  width: clamp(120px, 38vmin, 300px);
+  aspect-ratio: 1;
   border-radius: 50%;
-  border: 2px solid rgba(42, 223, 223, 0.4);
+  box-sizing: border-box;
+  border: 2px solid rgba(42, 223, 223, 0.45);
+  box-shadow: 0 0 14px rgba(42, 223, 223, 0.25);
+  overflow: hidden;
+  flex: 0 1 auto;
+  pointer-events: none; /* the canvas inside re-enables pointer events for dragging */
 }
 
-/* R16: blinking red outline while unresolved enemies exist */
+.radarControlCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  pointer-events: auto; /* D40: drag here to steer the ship */
+  touch-action: none;
+  cursor: grab;
+}
+
+.radarControlCanvas:active {
+  cursor: grabbing;
+}
+
+/* R16: blinking red frame while unresolved enemies exist */
 .radarOutlineBlinking {
   animation: radarOutlinePulse 1.2s ease-in-out infinite;
 }
@@ -25,28 +39,28 @@
   0%,
   100% {
     border-color: rgba(255, 48, 48, 0.95);
-    box-shadow: 0 0 12px rgba(255, 48, 48, 0.7);
+    box-shadow: 0 0 14px rgba(255, 48, 48, 0.7);
   }
   50% {
     border-color: rgba(255, 48, 48, 0.25);
-    box-shadow: 0 0 2px rgba(255, 48, 48, 0.15);
+    box-shadow: 0 0 3px rgba(255, 48, 48, 0.15);
   }
 }
 
-/* R16: "RECENT ACTIVE ENEMIES: n" label below the inset */
+/* R16: "CONTACTS: n" label below the scope */
 .radarEnemyCountLabel {
   position: absolute;
-  top: 100%;
+  bottom: 6px;
   left: 0;
   width: 100%;
-  margin-top: 6px;
   text-align: center;
   font-family: 'Courier New', monospace;
-  font-size: 11px;
+  font-size: clamp(9px, 2vmin, 12px);
   letter-spacing: 0.08em;
   white-space: nowrap;
-  color: rgba(42, 223, 223, 0.55); /* dim cyan when no recent active enemies */
-  text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+  color: rgba(42, 223, 223, 0.7);
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
 }
 
 .radarEnemyCountLabelAlert {

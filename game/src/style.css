@@ -84,29 +84,8 @@ body {
 
 /* ===== control widgets — clamp()/vmin sizing so they shrink to fit; flex never overlaps them ===== */
 
-.rotationJoystickZone {
-  position: relative;
-  width: clamp(60px, 26vmin, 110px);
-  aspect-ratio: 1;
-  border: 2px solid rgba(110, 180, 255, 0.35);
-  border-radius: 50%;
-  background: rgba(20, 40, 70, 0.25);
-  pointer-events: auto;
-  touch-action: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 1 auto;
-}
-
-.rotationJoystickKnob {
-  width: 44%;
-  height: 44%;
-  border-radius: 50%;
-  background: rgba(110, 180, 255, 0.55);
-  border: 2px solid rgba(160, 215, 255, 0.8);
-  will-change: transform;
-}
+/* D40: the rotation joystick was removed — steering is now dragging the radar sphere
+   (see .radarControlZone / .radarControlCanvas in radarHud.css), which sits in the right cluster. */
 
 /* D18: strafe joystick — only visible while tractored to cover */
 .strafeJoystickZone {

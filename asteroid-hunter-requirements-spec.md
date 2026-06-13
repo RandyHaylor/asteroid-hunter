@@ -50,6 +50,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 
 | D39 | **Real licensed background music**: three royalty-free Pixabay techno tracks (*Surviving*, *Aggressive*, *Nightmare on Vinyl*) downloaded, **ffmpeg-normalized (loudnorm) and attenuated to volume 0.3**, output as OGG into `game/public/music/`. Played as a **looping Web Audio playlist** through a dedicated gain node (so the SOUND/M toggle mutes it); the D38 procedural synth music remains only as a **fallback** if the files fail to load. Pixabay Content License (royalty-free, no attribution required) — this supersedes A1's no-asset-files rule for music |
 
+| D40 | **Radar IS the steering control**: the 3D spherical radar is now a large element in the right control cluster (replacing the rotation joystick) and renders to its **own canvas/renderer** (no longer a scissor inset on the main canvas). **Dragging the radar steers the ship** — drag offset from the grab point maps to pitch/yaw rate (same convention the joystick used: drag right = yaw right, drag up = pitch up), merged over the keyboard fallback and fed through the existing eased-rotation + idle-aim-assist path. The radar still rotates with the ship and shows the disc + contact stems |
+
 ## Requirements from the design doc
 
 ### Rendering & physics

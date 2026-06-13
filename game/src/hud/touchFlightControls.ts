@@ -86,17 +86,11 @@ function buildJoystickWidget(zoneClassName: string, knobClassName: string): Joys
   }
 }
 
-// D37: throttle + cover-strafe joystick live in the LEFT control cluster; the rotation joystick
-// lives in the RIGHT control cluster. The clusters are flex columns (style.css) that resize their
-// items so controls never overlap the screen or each other.
-export function createTouchFlightControls(
-  leftControlCluster: HTMLElement,
-  rightControlCluster: HTMLElement,
-): TouchFlightControls {
-  // ===== STEP 1: rotation joystick (right cluster) + cover strafe joystick (left, hidden until tractored) =====
-
-  const rotationJoystick = buildJoystickWidget('rotationJoystickZone', 'rotationJoystickKnob')
-  rightControlCluster.appendChild(rotationJoystick.zoneElement)
+// D37/D40: throttle + cover-strafe joystick live in the LEFT control cluster. The rotation joystick
+// is GONE — steering now comes from dragging the radar sphere (radarSphereDisplay) — but keyboard
+// pitch/yaw (WASD/arrows, A3) still works here for desktop.
+export function createTouchFlightControls(leftControlCluster: HTMLElement): TouchFlightControls {
+  // ===== STEP 1: cover strafe joystick (left cluster, hidden until tractored) =====
 
   const strafeJoystick = buildJoystickWidget('strafeJoystickZone', 'strafeJoystickKnob')
   leftControlCluster.appendChild(strafeJoystick.zoneElement)
@@ -193,15 +187,15 @@ export function createTouchFlightControls(
     return strafeYInput
   }
 
-  // ===== STEP 4: combined readouts (a joystick wins while it is being touched) =====
+  // ===== STEP 4: combined readouts =====
 
   return {
+    // D40: touch steering now comes from the radar drag (merged in main.ts); here pitch/yaw are the
+    // keyboard fallback only (A3). Throttle + strafe are unchanged.
     readFlightControlInput(): ShipFlightControlInput {
-      const rotationJoystickIsActive = rotationJoystick.isPointerActive()
       return {
-        // dragging up (negative screen Y) pitches the nose up (arcade convention)
-        pitchInput: rotationJoystickIsActive ? -rotationJoystick.getDeflectionY() : readKeyboardPitchInput(),
-        yawInput: rotationJoystickIsActive ? rotationJoystick.getDeflectionX() : readKeyboardYawInput(),
+        pitchInput: readKeyboardPitchInput(),
+        yawInput: readKeyboardYawInput(),
         throttleFraction,
       }
     },

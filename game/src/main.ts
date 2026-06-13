@@ -165,12 +165,14 @@ const rightControlCluster = document.createElement('div')
 rightControlCluster.className = 'controlClusterRight'
 controlsOverlay.appendChild(rightControlCluster)
 
-const flightControls = createTouchFlightControls(leftControlCluster, rightControlCluster)
+const flightControls = createTouchFlightControls(leftControlCluster)
 const fireZoneButtons = createFireZoneButtons(leftControlCluster, rightControlCluster)
 const playerCameraRig = createPlayerCameraRig(playerViewCamera)
 const playerConditionDisplay = createPlayerConditionDisplay(viewHudOverlay)
 const radarSignatureTracker = createRadarSignatureTracker()
-const radarSphereDisplay = createRadarSphereDisplay(viewHudOverlay)
+// D40: the big radar lives in the RIGHT control cluster (where the rotation joystick was) and is
+// dragged to steer the ship
+const radarSphereDisplay = createRadarSphereDisplay(rightControlCluster)
 const laserVolleySystem = createLaserVolleySystem(gameScene)
 const missileVolleySystem = createMissileVolleySystem(gameScene)
 const enemyConditionBarsDisplay = createEnemyConditionBarsDisplay(gameScene)
@@ -779,6 +781,16 @@ function resolveEffectiveRotationInput(
 function updatePlayerMovement(deltaSeconds: number): void {
   const flightControlInput = flightControls.readFlightControlInput()
 
+  // D40: steering pitch/yaw come from dragging the radar sphere; fall back to keyboard when not
+  // dragging. These feed the same eased-rotation + idle-aim-assist path the joystick used to.
+  const radarSteeringInput = radarSphereDisplay.readRadarRotationInput()
+  const playerCommandedPitchInput = radarSteeringInput.isDragging
+    ? radarSteeringInput.pitchInput
+    : flightControlInput.pitchInput
+  const playerCommandedYawInput = radarSteeringInput.isDragging
+    ? radarSteeringInput.yawInput
+    : flightControlInput.yawInput
+
   if (tractorPullIsActive && activeCoverAsteroid) {
     // D14 escape routes: move the throttle (it was zeroed on tap) or tap another asteroid
     if (activeCoverAsteroid.isDestroyed) {
@@ -790,8 +802,8 @@ function updatePlayerMovement(deltaSeconds: number): void {
       // orientation only changes when the player commands it (no auto-facing).
       // D22: when the player isn't steering, the weak aim-assist nudges the nose toward the lock.
       const coverRotationInput = resolveEffectiveRotationInput(
-        flightControlInput.pitchInput,
-        flightControlInput.yawInput,
+        playerCommandedPitchInput,
+        playerCommandedYawInput,
       )
       stepShipRotationFromJoystick(
         playerShipState,
@@ -856,8 +868,8 @@ function updatePlayerMovement(deltaSeconds: number): void {
 
   // D22: apply the weak idle aim-assist to free-flight rotation too (throttle/thrust unchanged)
   const flightRotationInput = resolveEffectiveRotationInput(
-    flightControlInput.pitchInput,
-    flightControlInput.yawInput,
+    playerCommandedPitchInput,
+    playerCommandedYawInput,
   )
   stepShipFlightSimulation(
     playerShipState,
@@ -1029,7 +1041,7 @@ function runFrameLoop(currentFrameTimestampMs: number): void {
   sunLensFlare.updateSunLensFlare(visibleSunDisk.position, playerViewCamera, currentSquareViewportSizePixels)
 
   webglRenderer.render(gameScene, playerViewCamera)
-  radarSphereDisplay.renderRadarInset(webglRenderer)
+  radarSphereDisplay.renderRadar() // D40: radar draws to its own canvas in the control cluster
 }
 
 showWaveBanner(`WAVE ${currentWaveNumber}`)

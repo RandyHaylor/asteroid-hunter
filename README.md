@@ -12,7 +12,7 @@ Works in desktop and mobile browsers.
 
 | Input | Touch | Desktop |
 |---|---|---|
-| Rotate ship (always, even in cover) | right joystick | WASD / arrow keys |
+| Rotate ship (always, even in cover) | **drag the radar sphere** (lower-right) | WASD / arrow keys |
 | Throttle (sets target speed) | left lever | Shift up / Ctrl down |
 | Fire lasers / missiles | lower-left / lower-right zones | Space / X |
 | Take cover | tap a grid-marked asteroid (within tractor range) | click it |

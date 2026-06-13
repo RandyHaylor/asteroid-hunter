@@ -2,7 +2,6 @@ import {
   BufferAttribute,
   BufferGeometry,
   CircleGeometry,
-  Color,
   DoubleSide,
   Line,
   LineBasicMaterial,
@@ -13,29 +12,33 @@ import {
   RingGeometry,
   Scene,
   SphereGeometry,
-  Vector2,
-  Vector4,
-  type WebGLRenderer,
+  WebGLRenderer,
 } from 'three'
 import type { ShipRigidBodyState } from '../gameSimulation/newtonianShipPhysics'
 import { RADAR_DETECTION_RANGE_METERS, type RadarContactReading } from './radarSignatureTracker'
 import './radarHud.css'
 
-// R13: inset 3D spherical radar in the top-right corner, rendered with the MAIN WebGLRenderer
-// via scissor+viewport into a private scene — no second renderer.
+// R13: 3D spherical radar. D40: it is now a LARGE control that lives in the right control cluster
+// (replacing the rotation joystick) and renders to its OWN canvas/renderer. Dragging on it steers
+// the ship — drag offset from the grab point maps to pitch/yaw rate, exactly like the old joystick.
 // R14/R16: fading last-seen dots, blinking red outline + "RECENT ACTIVE ENEMIES: n" label.
-
-// D36: smaller radar inset
-const RADAR_INSET_PREFERRED_SIZE_PIXELS = 140
-/** on narrow screens the inset shrinks to a fraction of the viewport width */
-const RADAR_INSET_MAX_VIEWPORT_WIDTH_FRACTION = 0.26
-const RADAR_INSET_CORNER_MARGIN_PIXELS = 14
 
 const VISIBLE_ENEMY_DOT_COLOR = 0xff3333
 const LAST_SEEN_FADING_DOT_COLOR = 0xffcc33
 const VISIBLE_FRIENDLY_DOT_COLOR = 0x44ff88 // D4: contract supports friendlies, none spawn in v1
-const RADAR_INSET_CLEAR_COLOR = 0x06122e // dark translucent navy inside the inset
-const RADAR_INSET_CLEAR_ALPHA = 0.6
+const RADAR_SCOPE_BACKGROUND_COLOR = 0x06122e // dark navy inside the scope
+
+// D40: drag offset (px) at which the steering input saturates to full deflection (±1)
+const RADAR_DRAG_FULL_DEFLECTION_PIXELS = 70
+
+export type RadarRotationDragInput = {
+  /** -1..1, positive pitches the nose up (drag up) */
+  pitchInput: number
+  /** -1..1, positive yaws the nose right (drag right) */
+  yawInput: number
+  /** true while the player is actively dragging the radar to steer */
+  isDragging: boolean
+}
 
 export type RadarSphereDisplay = {
   updateRadarDisplay(
@@ -45,30 +48,73 @@ export type RadarSphereDisplay = {
     unresolvedEnemiesPresent: boolean,
     nowSeconds: number,
   ): void
-  renderRadarInset(webglRenderer: WebGLRenderer): void
+  /** render the radar to its own canvas (auto-sizes to the element) */
+  renderRadar(): void
+  /** D40: steering input from dragging the radar sphere */
+  readRadarRotationInput(): RadarRotationDragInput
 }
 
-// scratch objects reused every frame — no per-frame allocations in the display path
+// scratch reused every frame — no per-frame allocations in the display path
 const scratchInversePlayerOrientation = new Quaternion()
-const scratchRendererSize = new Vector2()
-const scratchSavedViewport = new Vector4()
-const scratchSavedScissor = new Vector4()
-const scratchSavedClearColor = new Color()
 
-export function createRadarSphereDisplay(hudOverlayRoot: HTMLElement): RadarSphereDisplay {
-  // STEP 1: DOM overlay — circular outline ring + enemy count label, pointer-events none (R16)
-  const radarCornerElement = document.createElement('div')
-  radarCornerElement.className = 'radarHudCorner'
-  const radarOutlineRingElement = document.createElement('div')
-  radarOutlineRingElement.className = 'radarOutlineRing'
+export function createRadarSphereDisplay(controlClusterElement: HTMLElement): RadarSphereDisplay {
+  // ===== STEP 1: DOM — a big square scope (own canvas) + enemy-count label, in the control cluster =====
+  const radarControlZone = document.createElement('div')
+  radarControlZone.className = 'radarControlZone'
+
+  const radarCanvas = document.createElement('canvas')
+  radarCanvas.className = 'radarControlCanvas'
+  radarControlZone.appendChild(radarCanvas)
+
   const enemyCountLabelElement = document.createElement('div')
   enemyCountLabelElement.className = 'radarEnemyCountLabel'
-  enemyCountLabelElement.textContent = 'RECENT ACTIVE ENEMIES: 0'
-  radarCornerElement.appendChild(radarOutlineRingElement)
-  radarCornerElement.appendChild(enemyCountLabelElement)
-  hudOverlayRoot.appendChild(radarCornerElement)
+  enemyCountLabelElement.textContent = 'CONTACTS: 0'
+  radarControlZone.appendChild(enemyCountLabelElement)
 
-  // STEP 2: private radar scene — wireframe sphere, player center marker, forward tick (R13)
+  controlClusterElement.appendChild(radarControlZone)
+
+  // ===== STEP 2: drag-to-steer — grab-offset maps to pitch/yaw rate (replaces the joystick) =====
+  let steeringPointerId: number | null = null
+  let dragStartClientX = 0
+  let dragStartClientY = 0
+  let currentPitchInput = 0
+  let currentYawInput = 0
+
+  function updateSteeringFromPointer(pointerEvent: PointerEvent): void {
+    const clampPixels = (value: number): number =>
+      Math.max(-RADAR_DRAG_FULL_DEFLECTION_PIXELS, Math.min(RADAR_DRAG_FULL_DEFLECTION_PIXELS, value))
+    const offsetXPixels = clampPixels(pointerEvent.clientX - dragStartClientX)
+    const offsetYPixels = clampPixels(pointerEvent.clientY - dragStartClientY)
+    // drag right = yaw right (+); drag up (negative screen Y) = pitch up (+) — matches the old stick
+    currentYawInput = offsetXPixels / RADAR_DRAG_FULL_DEFLECTION_PIXELS
+    currentPitchInput = -offsetYPixels / RADAR_DRAG_FULL_DEFLECTION_PIXELS
+  }
+
+  function releaseSteering(): void {
+    steeringPointerId = null
+    currentPitchInput = 0
+    currentYawInput = 0
+  }
+
+  radarCanvas.addEventListener('pointerdown', (pointerEvent) => {
+    steeringPointerId = pointerEvent.pointerId
+    radarCanvas.setPointerCapture(pointerEvent.pointerId)
+    dragStartClientX = pointerEvent.clientX
+    dragStartClientY = pointerEvent.clientY
+    currentPitchInput = 0
+    currentYawInput = 0
+  })
+  radarCanvas.addEventListener('pointermove', (pointerEvent) => {
+    if (pointerEvent.pointerId === steeringPointerId) updateSteeringFromPointer(pointerEvent)
+  })
+  radarCanvas.addEventListener('pointerup', releaseSteering)
+  radarCanvas.addEventListener('pointercancel', releaseSteering)
+
+  // ===== STEP 3: own renderer + private radar scene (wireframe sphere, disc, marker, tick) =====
+  const radarRenderer = new WebGLRenderer({ canvas: radarCanvas, antialias: true })
+  radarRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+  radarRenderer.setClearColor(RADAR_SCOPE_BACKGROUND_COLOR, 1)
+
   const radarScene = new Scene()
   const radarCamera = new PerspectiveCamera(50, 1, 0.1, 10)
   radarCamera.position.set(0, 0.9, 2.1)
@@ -80,13 +126,12 @@ export function createRadarSphereDisplay(hudOverlayRoot: HTMLElement): RadarSphe
   )
   radarScene.add(wireframeSphere)
 
-  // D36: a horizontal reference disc through the sphere's center (the ship's local horizontal
-  // plane). Contact dots drop a vertical "stem" line to this disc so above/below reads at a glance.
+  // D36: a horizontal reference disc through the sphere's center (ship's local horizontal plane)
   const equatorDiscFill = new Mesh(
     new CircleGeometry(1, 48),
     new MeshBasicMaterial({ color: 0x2adfdf, transparent: true, opacity: 0.08, side: DoubleSide, depthWrite: false }),
   )
-  equatorDiscFill.rotation.x = -Math.PI / 2 // lay flat in the XZ (horizontal) plane
+  equatorDiscFill.rotation.x = -Math.PI / 2
   radarScene.add(equatorDiscFill)
 
   const equatorDiscRing = new Mesh(
@@ -96,10 +141,7 @@ export function createRadarSphereDisplay(hudOverlayRoot: HTMLElement): RadarSphe
   equatorDiscRing.rotation.x = -Math.PI / 2
   radarScene.add(equatorDiscRing)
 
-  const playerCenterMarker = new Mesh(
-    new SphereGeometry(0.05, 8, 6),
-    new MeshBasicMaterial({ color: 0x7dffff }),
-  )
+  const playerCenterMarker = new Mesh(new SphereGeometry(0.05, 8, 6), new MeshBasicMaterial({ color: 0x7dffff }))
   radarScene.add(playerCenterMarker)
 
   // faint tick at -Z: "enemy ahead" always reads toward this mark regardless of world heading
@@ -108,28 +150,23 @@ export function createRadarSphereDisplay(hudOverlayRoot: HTMLElement): RadarSphe
     new MeshBasicMaterial({ color: 0x2adfdf, transparent: true, opacity: 0.55 }),
   )
   forwardDirectionTick.position.set(0, 0, -1)
-  forwardDirectionTick.scale.set(0.7, 0.7, 3) // stretched along the look axis so it reads as a tick
+  forwardDirectionTick.scale.set(0.7, 0.7, 3)
   radarScene.add(forwardDirectionTick)
 
-  // STEP 3: pooled contact dot meshes — created on demand, hidden when unused
+  // pooled contact dots + their stem lines (created on demand, hidden when unused)
   const sharedContactDotGeometry = new SphereGeometry(0.045, 8, 6)
   const contactDotMeshPool: Mesh<SphereGeometry, MeshBasicMaterial>[] = []
+  const contactStemLinePool: Line<BufferGeometry, LineBasicMaterial>[] = []
 
   function acquireContactDotMesh(poolIndex: number): Mesh<SphereGeometry, MeshBasicMaterial> {
     let dotMesh = contactDotMeshPool[poolIndex]
     if (!dotMesh) {
-      dotMesh = new Mesh(
-        sharedContactDotGeometry,
-        new MeshBasicMaterial({ transparent: true, depthTest: false }),
-      )
+      dotMesh = new Mesh(sharedContactDotGeometry, new MeshBasicMaterial({ transparent: true, depthTest: false }))
       contactDotMeshPool[poolIndex] = dotMesh
       radarScene.add(dotMesh)
     }
     return dotMesh
   }
-
-  // D36: one stem line per contact dot, drawn from the dot straight down/up to the equator disc
-  const contactStemLinePool: Line<BufferGeometry, LineBasicMaterial>[] = []
 
   function acquireContactStemLine(poolIndex: number): Line<BufferGeometry, LineBasicMaterial> {
     let stemLine = contactStemLinePool[poolIndex]
@@ -150,8 +187,7 @@ export function createRadarSphereDisplay(hudOverlayRoot: HTMLElement): RadarSphe
     unresolvedEnemiesPresent: boolean,
     nowSeconds: number,
   ): void {
-    // STEP 1: the sphere frame rotates WITH the player (R13) — transform every contact into the
-    // ship's local frame: inverse(orientation) × (contactPosition − playerPosition)
+    // the sphere frame rotates WITH the player (R13) — transform contacts into the ship's local frame
     scratchInversePlayerOrientation.copy(playerShipState.orientation).invert()
 
     for (let readingIndex = 0; readingIndex < contactReadings.length; readingIndex++) {
@@ -164,9 +200,8 @@ export function createRadarSphereDisplay(hudOverlayRoot: HTMLElement): RadarSphe
         .sub(playerShipState.positionMeters)
         .applyQuaternion(scratchInversePlayerOrientation)
         .multiplyScalar(1 / RADAR_DETECTION_RANGE_METERS)
-      if (dotMesh.position.lengthSq() > 1) dotMesh.position.normalize() // clamp to the unit sphere
+      if (dotMesh.position.lengthSq() > 1) dotMesh.position.normalize()
 
-      // STEP 2: dot styling — red visible enemy, yellow fading last-seen with decaying opacity (R14)
       if (contactReading.contactState === 'lastSeenFading') {
         dotMesh.material.color.setHex(LAST_SEEN_FADING_DOT_COLOR)
         dotMesh.material.opacity = contactReading.fadeRemainingFraction
@@ -177,7 +212,6 @@ export function createRadarSphereDisplay(hudOverlayRoot: HTMLElement): RadarSphe
         dotMesh.material.opacity = 1
       }
 
-      // D36: drop a vertical stem from the dot to its projection on the equator disc (x, 0, z)
       const stemLine = acquireContactStemLine(readingIndex)
       stemLine.visible = true
       const stemPositions = stemLine.geometry.attributes.position as BufferAttribute
@@ -188,7 +222,6 @@ export function createRadarSphereDisplay(hudOverlayRoot: HTMLElement): RadarSphe
       stemLine.material.opacity = dotMesh.material.opacity * 0.55
     }
 
-    // STEP 3: hide leftover pooled dots + stems beyond the live reading count
     for (let poolIndex = contactReadings.length; poolIndex < contactDotMeshPool.length; poolIndex++) {
       contactDotMeshPool[poolIndex].visible = false
     }
@@ -196,63 +229,34 @@ export function createRadarSphereDisplay(hudOverlayRoot: HTMLElement): RadarSphe
       contactStemLinePool[poolIndex].visible = false
     }
 
-    // STEP 4: gentle pulse on the player marker so the radar reads as live
     const playerMarkerPulseScale = 1 + 0.12 * Math.sin(nowSeconds * 4)
     playerCenterMarker.scale.setScalar(playerMarkerPulseScale)
 
-    // STEP 5: HUD chrome — blinking red outline while unresolved enemies exist + count label (R16)
-    radarOutlineRingElement.classList.toggle('radarOutlineBlinking', unresolvedEnemiesPresent)
-    enemyCountLabelElement.textContent = `RECENT ACTIVE ENEMIES: ${recentActiveEnemyCount}`
+    // HUD chrome — blinking red outline while unresolved enemies exist + count label (R16)
+    radarControlZone.classList.toggle('radarOutlineBlinking', unresolvedEnemiesPresent)
+    enemyCountLabelElement.textContent = `CONTACTS: ${recentActiveEnemyCount}`
     enemyCountLabelElement.classList.toggle('radarEnemyCountLabelAlert', recentActiveEnemyCount > 0)
   }
 
-  // cached so DOM styles are only rewritten when the inset size actually changes
-  let lastAppliedInsetSizePixels = -1
+  let lastRenderedSizePixels = -1
 
-  function renderRadarInset(webglRenderer: WebGLRenderer): void {
-    // STEP 1: size the square inset from the renderer's CSS-pixel size (smaller on narrow screens)
-    webglRenderer.getSize(scratchRendererSize)
-    const insetSizePixels = Math.min(
-      RADAR_INSET_PREFERRED_SIZE_PIXELS,
-      Math.round(scratchRendererSize.x * RADAR_INSET_MAX_VIEWPORT_WIDTH_FRACTION),
-    )
-    const insetLeftPixels = scratchRendererSize.x - insetSizePixels - RADAR_INSET_CORNER_MARGIN_PIXELS
-    // viewport origin is bottom-left, so the TOP-right corner sits at height − inset − margin
-    const insetBottomPixels = scratchRendererSize.y - insetSizePixels - RADAR_INSET_CORNER_MARGIN_PIXELS
-
-    if (insetSizePixels !== lastAppliedInsetSizePixels) {
-      lastAppliedInsetSizePixels = insetSizePixels
-      radarCornerElement.style.width = `${insetSizePixels}px`
-      radarCornerElement.style.height = `${insetSizePixels}px`
-      radarCornerElement.style.top = `${RADAR_INSET_CORNER_MARGIN_PIXELS}px`
-      radarCornerElement.style.right = `${RADAR_INSET_CORNER_MARGIN_PIXELS}px`
+  function renderRadar(): void {
+    // auto-size the drawing buffer to the canvas's CSS size (square); only when it changes
+    const cssSizePixels = radarCanvas.clientWidth
+    if (cssSizePixels > 0 && cssSizePixels !== lastRenderedSizePixels) {
+      lastRenderedSizePixels = cssSizePixels
+      radarRenderer.setSize(cssSizePixels, cssSizePixels, false) // false: CSS controls display size
     }
-
-    // STEP 2: save renderer state so the main scene's next frame is unaffected
-    webglRenderer.getViewport(scratchSavedViewport)
-    webglRenderer.getScissor(scratchSavedScissor)
-    const savedScissorTestEnabled = webglRenderer.getScissorTest()
-    const savedAutoClear = webglRenderer.autoClear
-    webglRenderer.getClearColor(scratchSavedClearColor)
-    const savedClearAlpha = webglRenderer.getClearAlpha()
-
-    // STEP 3: scissor+viewport to the top-right square; clear color+depth INSIDE the inset only
-    webglRenderer.autoClear = false
-    webglRenderer.setScissorTest(true)
-    webglRenderer.setViewport(insetLeftPixels, insetBottomPixels, insetSizePixels, insetSizePixels)
-    webglRenderer.setScissor(insetLeftPixels, insetBottomPixels, insetSizePixels, insetSizePixels)
-    webglRenderer.setClearColor(RADAR_INSET_CLEAR_COLOR, RADAR_INSET_CLEAR_ALPHA)
-    webglRenderer.clear(true, true, false)
-
-    webglRenderer.render(radarScene, radarCamera)
-
-    // STEP 4: restore renderer state and disable the scissor test
-    webglRenderer.setViewport(scratchSavedViewport)
-    webglRenderer.setScissor(scratchSavedScissor)
-    webglRenderer.setScissorTest(savedScissorTestEnabled)
-    webglRenderer.setClearColor(scratchSavedClearColor, savedClearAlpha)
-    webglRenderer.autoClear = savedAutoClear
+    radarRenderer.render(radarScene, radarCamera)
   }
 
-  return { updateRadarDisplay, renderRadarInset }
+  function readRadarRotationInput(): RadarRotationDragInput {
+    return {
+      pitchInput: currentPitchInput,
+      yawInput: currentYawInput,
+      isDragging: steeringPointerId !== null,
+    }
+  }
+
+  return { updateRadarDisplay, renderRadar, readRadarRotationInput }
 }
