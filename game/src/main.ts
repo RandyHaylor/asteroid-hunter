@@ -97,7 +97,7 @@ let currentSquareViewportSizePixels = Math.min(window.innerWidth, window.innerHe
 // size, used by the screen-space HUD projection (edge markers + lens flare).
 const LANDSCAPE_LEFT_STRIP_MIN_PIXELS = 140
 const PORTRAIT_SHIP_SQUARE_HEIGHT_FRACTION = 0.46
-const PORTRAIT_RADAR_SQUARE_HEIGHT_FRACTION = 0.3
+const PORTRAIT_BUTTON_COLUMN_MIN_PIXELS = 132 // min width reserved for the button column left of the radar
 const REGION_GAP_PIXELS = 8
 
 function applyFixedBoxStyle(
@@ -144,29 +144,41 @@ function layoutGameRegions(): void {
     applyFixedBoxStyle(leftControlCluster, 0, 0, leftStripWidthPixels, stripSplitPixels)
     applyFixedBoxStyle(rightControlCluster, 0, stripSplitPixels, leftStripWidthPixels, viewportHeightPixels - stripSplitPixels)
   } else {
-    // ship square on top, radar square centered under it, buttons in a bottom row (left | right)
+    // ship square on top; below it the radar square sits on the RIGHT with the buttons in a column
+    // to its LEFT (throttle/strafe/lasers upper, missiles lower).
     shipSquareSizePixels = Math.min(viewportWidthPixels, Math.floor(viewportHeightPixels * PORTRAIT_SHIP_SQUARE_HEIGHT_FRACTION))
     const shipLeftPixels = Math.floor((viewportWidthPixels - shipSquareSizePixels) / 2)
     for (const squareElement of [gameRenderCanvas, viewHudOverlay]) {
       applyFixedBoxStyle(squareElement, shipLeftPixels, 0, shipSquareSizePixels, shipSquareSizePixels)
     }
-    const radarSquareSizePixels = Math.min(
-      Math.floor(viewportWidthPixels * 0.62),
-      Math.floor(viewportHeightPixels * PORTRAIT_RADAR_SQUARE_HEIGHT_FRACTION),
+
+    const lowerAreaTopPixels = shipSquareSizePixels + REGION_GAP_PIXELS
+    const lowerAreaHeightPixels = Math.max(0, viewportHeightPixels - lowerAreaTopPixels)
+    // radar is as big as the lower area is tall, but leave a button column to its left
+    const radarSquareSizePixels = Math.max(
+      0,
+      Math.min(lowerAreaHeightPixels, viewportWidthPixels - PORTRAIT_BUTTON_COLUMN_MIN_PIXELS),
     )
-    const radarTopPixels = shipSquareSizePixels + REGION_GAP_PIXELS
+    const radarTopPixels = lowerAreaTopPixels + Math.floor((lowerAreaHeightPixels - radarSquareSizePixels) / 2)
     applyFixedBoxStyle(
       radarRegion,
-      Math.floor((viewportWidthPixels - radarSquareSizePixels) / 2),
+      viewportWidthPixels - radarSquareSizePixels,
       radarTopPixels,
       radarSquareSizePixels,
       radarSquareSizePixels,
     )
-    const buttonsTopPixels = radarTopPixels + radarSquareSizePixels + REGION_GAP_PIXELS
-    const buttonsHeightPixels = Math.max(0, viewportHeightPixels - buttonsTopPixels)
-    const halfWidthPixels = Math.floor(viewportWidthPixels / 2)
-    applyFixedBoxStyle(leftControlCluster, 0, buttonsTopPixels, halfWidthPixels, buttonsHeightPixels)
-    applyFixedBoxStyle(rightControlCluster, halfWidthPixels, buttonsTopPixels, viewportWidthPixels - halfWidthPixels, buttonsHeightPixels)
+
+    // button column fills the space LEFT of the radar; split vertically (upper/lower clusters)
+    const buttonColumnWidthPixels = viewportWidthPixels - radarSquareSizePixels
+    const clusterSplitHeightPixels = Math.floor(lowerAreaHeightPixels * 0.6)
+    applyFixedBoxStyle(leftControlCluster, 0, lowerAreaTopPixels, buttonColumnWidthPixels, clusterSplitHeightPixels)
+    applyFixedBoxStyle(
+      rightControlCluster,
+      0,
+      lowerAreaTopPixels + clusterSplitHeightPixels,
+      buttonColumnWidthPixels,
+      lowerAreaHeightPixels - clusterSplitHeightPixels,
+    )
   }
 
   currentSquareViewportSizePixels = shipSquareSizePixels
