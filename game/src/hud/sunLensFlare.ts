@@ -13,8 +13,9 @@ export type SunLensFlare = {
   updateSunLensFlare(
     sunWorldPosition: THREE.Vector3,
     playerViewCamera: THREE.Camera,
-    /** D35: square view pixel size — the flare maps to the square, not the full window */
-    squareViewportSizePixels: number,
+    /** D48: ship view pixel size (4:3) — the flare maps to the view, not the full window */
+    viewWidthPixels: number,
+    viewHeightPixels: number,
   ): void
 }
 
@@ -33,7 +34,7 @@ export function createSunLensFlare(hudOverlayRoot: HTMLElement): SunLensFlare {
   }
 
   return {
-    updateSunLensFlare(sunWorldPosition, playerViewCamera, squareViewportSizePixels): void {
+    updateSunLensFlare(sunWorldPosition, playerViewCamera, viewWidthPixels, viewHeightPixels): void {
       scratchCameraSpacePosition.copy(sunWorldPosition).applyMatrix4(playerViewCamera.matrixWorldInverse)
       if (scratchCameraSpacePosition.z > 0) {
         hideFlare() // sun is behind the camera
@@ -49,8 +50,8 @@ export function createSunLensFlare(hudOverlayRoot: HTMLElement): SunLensFlare {
         return
       }
 
-      const viewportWidthPixels = squareViewportSizePixels
-      const viewportHeightPixels = squareViewportSizePixels
+      const viewportWidthPixels = viewWidthPixels
+      const viewportHeightPixels = viewHeightPixels
       const sunScreenXPixels = (ndcX * 0.5 + 0.5) * viewportWidthPixels
       const sunScreenYPixels = (-ndcY * 0.5 + 0.5) * viewportHeightPixels
 

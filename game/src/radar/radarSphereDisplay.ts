@@ -1,4 +1,6 @@
 import {
+  BufferAttribute,
+  BufferGeometry,
   CircleGeometry,
   CylinderGeometry,
   DoubleSide,
@@ -13,6 +15,7 @@ import {
   WebGLRenderer,
 } from 'three'
 import type { ShipRigidBodyState } from '../gameSimulation/newtonianShipPhysics'
+import { autoAimConfig } from '../weapons/noseConeAutoAim'
 import { RADAR_DETECTION_RANGE_METERS, type RadarContactReading } from './radarSignatureTracker'
 import './radarHud.css'
 
@@ -51,6 +54,24 @@ export type RadarSphereDisplay = {
 
 // scratch reused every frame — no per-frame allocations in the display path
 const scratchInverseCommandedOrientation = new Quaternion()
+
+// D48: flat green wedge on the horizontal disc representing the auto-aim cone — a triangle fan from
+// the center toward the forward tick (-Z), spanning ±coneHalfAngle, lying in the y=0 plane.
+function buildAimConeWedgeGeometry(coneHalfAngleRadians: number): BufferGeometry {
+  const wedgeRadius = 0.98
+  const segmentCount = 14
+  const vertexPositions: number[] = []
+  for (let segmentIndex = 0; segmentIndex < segmentCount; segmentIndex++) {
+    const angleStart = -coneHalfAngleRadians + 2 * coneHalfAngleRadians * (segmentIndex / segmentCount)
+    const angleEnd = -coneHalfAngleRadians + 2 * coneHalfAngleRadians * ((segmentIndex + 1) / segmentCount)
+    vertexPositions.push(0, 0, 0)
+    vertexPositions.push(Math.sin(angleStart) * wedgeRadius, 0, -Math.cos(angleStart) * wedgeRadius)
+    vertexPositions.push(Math.sin(angleEnd) * wedgeRadius, 0, -Math.cos(angleEnd) * wedgeRadius)
+  }
+  const wedgeGeometry = new BufferGeometry()
+  wedgeGeometry.setAttribute('position', new BufferAttribute(new Float32Array(vertexPositions), 3))
+  return wedgeGeometry
+}
 
 export function createRadarSphereDisplay(controlClusterElement: HTMLElement): RadarSphereDisplay {
   // ===== STEP 1: DOM — a big square scope (own canvas) + contacts label =====
@@ -113,16 +134,21 @@ export function createRadarSphereDisplay(controlClusterElement: HTMLElement): Ra
   radarCamera.lookAt(0, 0, 0)
 
   // D44: the OUTER SURFACE rotates with the player's heading (set each frame) so the rotation is
-  // visible. A bright pole marker rides the sphere so the spin is unmistakable.
+  // visible (the wireframe's longitude/latitude lines spinning carry the motion — D48 removed the
+  // pole-dot marker per request).
   const wireframeSphere = new Mesh(
     new SphereGeometry(1, 16, 12),
     new MeshBasicMaterial({ color: 0x2adfdf, wireframe: true, transparent: true, opacity: 0.3 }),
   )
   radarScene.add(wireframeSphere)
 
-  const spherePoleMarker = new Mesh(new SphereGeometry(0.07, 8, 6), new MeshBasicMaterial({ color: 0x9bffff }))
-  spherePoleMarker.position.set(0, 1, 0)
-  wireframeSphere.add(spherePoleMarker) // child → orbits as the sphere rotates
+  // D48: the auto-aim cone (D6) drawn flat on the horizontal disc — a green wedge from center toward
+  // the forward tick (-Z), spanning ±coneHalfAngle. Static (the cone is your fixed forward aim).
+  const aimConeWedgeMesh = new Mesh(
+    buildAimConeWedgeGeometry(autoAimConfig.coneHalfAngleRadians),
+    new MeshBasicMaterial({ color: 0x44ff88, transparent: true, opacity: 0.22, side: DoubleSide, depthWrite: false }),
+  )
+  radarScene.add(aimConeWedgeMesh)
 
   // D36: horizontal reference disc through the sphere's center (ship's local horizontal plane)
   const equatorDiscFill = new Mesh(

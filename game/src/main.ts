@@ -53,6 +53,7 @@ import { computeLeadAimDirection } from './weapons/targetLeadPrediction'
 import { createLaserVolleySystem } from './weapons/laserFire'
 import { createMissileVolleySystem } from './weapons/missileFire'
 import { createWeaponCooldownIndicators } from './hud/weaponCooldownIndicators'
+import { createCockpitFrameOverlay } from './hud/cockpitFrameOverlay'
 import {
   createEnemyFireIntent,
   createEnemyShip,
@@ -83,22 +84,20 @@ const gameScene = new THREE.Scene()
 // D30: an exaggerated colored nebula skybox (procedural, no asset files) replaces the near-black void
 gameScene.background = createProceduralSpaceNebulaTexture()
 
-// D35: the game view is a SQUARE pinned to the top of the window and horizontally centered. The
-// remaining space is the control margin: the bottom strip in portrait, the two side strips in
-// landscape. currentSquareViewportSizePixels feeds screen-space HUD projection (edge markers/flare).
-const playerViewCamera = new THREE.PerspectiveCamera(70, 1, 0.1, 8000)
-let currentSquareViewportSizePixels = Math.min(window.innerWidth, window.innerHeight)
-
-// D41 layout (single source of truth for all on-screen region geometry; applied as inline styles):
-//  - LANDSCAPE: a wide right-aligned block = ship-view square (left) + radar square (right); all the
-//    action buttons live in the left strip (split: throttle/strafe/lasers on top, missiles below).
-//  - PORTRAIT: ship square on top, radar square centered directly under it, buttons in a bottom row.
-// The ship camera is always square (aspect 1). currentSquareViewportSizePixels = the ship square's
-// size, used by the screen-space HUD projection (edge markers + lens flare).
+// D48: the ship view is 4:3 (wider). The radar stays SQUARE. Layout per orientation:
+//  - LANDSCAPE: wide right-aligned block = ship-view (4:3, left) + radar (square, right); buttons in
+//    the left strip (split: throttle/strafe upper, lower cluster below).
+//  - PORTRAIT: ship-view (4:3) on top; radar square on the right of the lower area, button column left.
+// currentShipView{Width,Height}Pixels feed the screen-space HUD projection (edge markers + flare).
+const SHIP_VIEW_ASPECT_RATIO = 4 / 3
 const LANDSCAPE_LEFT_STRIP_MIN_PIXELS = 140
-const PORTRAIT_SHIP_SQUARE_HEIGHT_FRACTION = 0.46
+const PORTRAIT_SHIP_VIEW_HEIGHT_FRACTION = 0.42
 const PORTRAIT_BUTTON_COLUMN_MIN_PIXELS = 132 // min width reserved for the button column left of the radar
 const REGION_GAP_PIXELS = 8
+
+const playerViewCamera = new THREE.PerspectiveCamera(70, SHIP_VIEW_ASPECT_RATIO, 0.1, 8000)
+let currentShipViewWidthPixels = Math.min(window.innerWidth, window.innerHeight)
+let currentShipViewHeightPixels = currentShipViewWidthPixels
 
 function applyFixedBoxStyle(
   element: HTMLElement,
@@ -120,55 +119,49 @@ function layoutGameRegions(): void {
   const viewportWidthPixels = window.innerWidth
   const viewportHeightPixels = window.innerHeight
   const isPortrait = viewportHeightPixels >= viewportWidthPixels
-  let shipSquareSizePixels: number
+  let shipViewWidthPixels: number
+  let shipViewHeightPixels: number
 
   if (!isPortrait) {
-    // ship square + radar square, equal size, right-aligned; left strip holds the buttons
-    shipSquareSizePixels = Math.min(
+    // ship-view (4:3) + radar (square) share a height; right-aligned block, left strip = buttons.
+    // total block width = shipHeight*aspect + shipHeight = shipHeight*(aspect+1)
+    const blockHeightPixels = Math.min(
       viewportHeightPixels,
-      Math.floor((viewportWidthPixels - LANDSCAPE_LEFT_STRIP_MIN_PIXELS) / 2),
+      Math.floor((viewportWidthPixels - LANDSCAPE_LEFT_STRIP_MIN_PIXELS) / (SHIP_VIEW_ASPECT_RATIO + 1)),
     )
-    const leftStripWidthPixels = viewportWidthPixels - 2 * shipSquareSizePixels
-    const blockTopPixels = Math.floor((viewportHeightPixels - shipSquareSizePixels) / 2)
-    for (const squareElement of [gameRenderCanvas, viewHudOverlay]) {
-      applyFixedBoxStyle(squareElement, leftStripWidthPixels, blockTopPixels, shipSquareSizePixels, shipSquareSizePixels)
+    shipViewHeightPixels = blockHeightPixels
+    shipViewWidthPixels = Math.floor(blockHeightPixels * SHIP_VIEW_ASPECT_RATIO)
+    const radarSidePixels = blockHeightPixels
+    const leftStripWidthPixels = viewportWidthPixels - shipViewWidthPixels - radarSidePixels
+    const blockTopPixels = Math.floor((viewportHeightPixels - blockHeightPixels) / 2)
+    for (const viewElement of [gameRenderCanvas, viewHudOverlay]) {
+      applyFixedBoxStyle(viewElement, leftStripWidthPixels, blockTopPixels, shipViewWidthPixels, shipViewHeightPixels)
     }
-    applyFixedBoxStyle(
-      radarRegion,
-      leftStripWidthPixels + shipSquareSizePixels,
-      blockTopPixels,
-      shipSquareSizePixels,
-      shipSquareSizePixels,
-    )
+    applyFixedBoxStyle(radarRegion, leftStripWidthPixels + shipViewWidthPixels, blockTopPixels, radarSidePixels, radarSidePixels)
     const stripSplitPixels = Math.floor(viewportHeightPixels * 0.6)
     applyFixedBoxStyle(leftControlCluster, 0, 0, leftStripWidthPixels, stripSplitPixels)
     applyFixedBoxStyle(rightControlCluster, 0, stripSplitPixels, leftStripWidthPixels, viewportHeightPixels - stripSplitPixels)
   } else {
-    // ship square on top; below it the radar square sits on the RIGHT with the buttons in a column
-    // to its LEFT (throttle/strafe/lasers upper, missiles lower).
-    shipSquareSizePixels = Math.min(viewportWidthPixels, Math.floor(viewportHeightPixels * PORTRAIT_SHIP_SQUARE_HEIGHT_FRACTION))
-    const shipLeftPixels = Math.floor((viewportWidthPixels - shipSquareSizePixels) / 2)
-    for (const squareElement of [gameRenderCanvas, viewHudOverlay]) {
-      applyFixedBoxStyle(squareElement, shipLeftPixels, 0, shipSquareSizePixels, shipSquareSizePixels)
+    // ship-view (4:3) on top; radar square on the right of the lower area, button column to its left
+    shipViewHeightPixels = Math.min(
+      Math.floor(viewportHeightPixels * PORTRAIT_SHIP_VIEW_HEIGHT_FRACTION),
+      Math.floor(viewportWidthPixels / SHIP_VIEW_ASPECT_RATIO),
+    )
+    shipViewWidthPixels = Math.floor(shipViewHeightPixels * SHIP_VIEW_ASPECT_RATIO)
+    const shipLeftPixels = Math.floor((viewportWidthPixels - shipViewWidthPixels) / 2)
+    for (const viewElement of [gameRenderCanvas, viewHudOverlay]) {
+      applyFixedBoxStyle(viewElement, shipLeftPixels, 0, shipViewWidthPixels, shipViewHeightPixels)
     }
 
-    const lowerAreaTopPixels = shipSquareSizePixels + REGION_GAP_PIXELS
+    const lowerAreaTopPixels = shipViewHeightPixels + REGION_GAP_PIXELS
     const lowerAreaHeightPixels = Math.max(0, viewportHeightPixels - lowerAreaTopPixels)
-    // radar is as big as the lower area is tall, but leave a button column to its left
     const radarSquareSizePixels = Math.max(
       0,
       Math.min(lowerAreaHeightPixels, viewportWidthPixels - PORTRAIT_BUTTON_COLUMN_MIN_PIXELS),
     )
     const radarTopPixels = lowerAreaTopPixels + Math.floor((lowerAreaHeightPixels - radarSquareSizePixels) / 2)
-    applyFixedBoxStyle(
-      radarRegion,
-      viewportWidthPixels - radarSquareSizePixels,
-      radarTopPixels,
-      radarSquareSizePixels,
-      radarSquareSizePixels,
-    )
+    applyFixedBoxStyle(radarRegion, viewportWidthPixels - radarSquareSizePixels, radarTopPixels, radarSquareSizePixels, radarSquareSizePixels)
 
-    // button column fills the space LEFT of the radar; split vertically (upper/lower clusters)
     const buttonColumnWidthPixels = viewportWidthPixels - radarSquareSizePixels
     const clusterSplitHeightPixels = Math.floor(lowerAreaHeightPixels * 0.6)
     applyFixedBoxStyle(leftControlCluster, 0, lowerAreaTopPixels, buttonColumnWidthPixels, clusterSplitHeightPixels)
@@ -181,9 +174,10 @@ function layoutGameRegions(): void {
     )
   }
 
-  currentSquareViewportSizePixels = shipSquareSizePixels
-  webglRenderer.setSize(shipSquareSizePixels, shipSquareSizePixels)
-  playerViewCamera.aspect = 1
+  currentShipViewWidthPixels = shipViewWidthPixels
+  currentShipViewHeightPixels = shipViewHeightPixels
+  webglRenderer.setSize(shipViewWidthPixels, shipViewHeightPixels)
+  playerViewCamera.aspect = shipViewWidthPixels / shipViewHeightPixels
   playerViewCamera.updateProjectionMatrix()
 }
 // NOTE: layoutGameRegions() is first called AFTER the control clusters + radar region are created.
@@ -235,6 +229,8 @@ controlsOverlay.appendChild(rightControlCluster)
 const flightControls = createTouchFlightControls(leftControlCluster)
 // D47: weapons are always on (no fire buttons) — tiny on-view cooldown indicators replace them
 const weaponCooldownIndicators = createWeaponCooldownIndicators(viewHudOverlay)
+// D48: cockpit canopy frame overlay (shown only in cockpit view)
+const cockpitFrameOverlay = createCockpitFrameOverlay(viewHudOverlay)
 const playerCameraRig = createPlayerCameraRig(playerViewCamera)
 const playerConditionDisplay = createPlayerConditionDisplay(viewHudOverlay)
 const radarSignatureTracker = createRadarSignatureTracker()
@@ -296,6 +292,7 @@ function toggleCameraView(): void {
   const newViewMode = playerCameraRig.toggleCameraViewMode()
   cameraViewToggleButton.textContent = newViewMode === 'cockpit' ? 'VIEW: COCKPIT' : 'VIEW: CHASE'
   playerShipMesh.visible = newViewMode !== 'cockpit'
+  cockpitFrameOverlay.setCockpitFrameVisible(newViewMode === 'cockpit') // D48
 }
 cameraViewToggleButton.addEventListener('click', toggleCameraView)
 window.addEventListener('keydown', (keyboardEvent) => {
@@ -1150,9 +1147,15 @@ function runFrameLoop(currentFrameTimestampMs: number): void {
     radarSignatureTracker.getContactReadings(),
     playerViewCamera,
     playerShipState.positionMeters,
-    currentSquareViewportSizePixels,
+    currentShipViewWidthPixels,
+    currentShipViewHeightPixels,
   )
-  sunLensFlare.updateSunLensFlare(visibleSunDisk.position, playerViewCamera, currentSquareViewportSizePixels)
+  sunLensFlare.updateSunLensFlare(
+    visibleSunDisk.position,
+    playerViewCamera,
+    currentShipViewWidthPixels,
+    currentShipViewHeightPixels,
+  )
 
   webglRenderer.render(gameScene, playerViewCamera)
   radarSphereDisplay.renderRadar() // D40: radar draws to its own canvas in the control cluster

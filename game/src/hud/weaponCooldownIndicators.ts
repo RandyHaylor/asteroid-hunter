@@ -1,25 +1,21 @@
 import './weaponCooldownIndicators.css'
 
-// D47: weapons are always on (auto-fire at a locked, visible target). These two TINY on-screen
-// indicators (not controls) show each weapon's cooldown recharge — they fill bottom→up as the
-// weapon recharges and glow when ready. Purely presentational.
+// D47/D48: weapons are always on (auto-fire at a locked, visible target). Two TINY horizontal
+// cooldown bars run along the bottom edge of the view (laser above missile) and fill left→right as
+// each weapon recharges, glowing when ready. Purely presentational, not controls.
 
 export type WeaponCooldownIndicators = {
   /** fractions 0..1: 1 = fully recharged / ready to fire, <1 = still cooling down */
   updateWeaponCooldownIndicators(laserReadyFraction: number, missileReadyFraction: number): void
 }
 
-function buildCooldownPip(panel: HTMLElement, label: string, weaponClassName: string): HTMLDivElement {
-  const pip = document.createElement('div')
-  pip.className = `weaponCooldownPip ${weaponClassName}`
+function buildCooldownBar(panel: HTMLElement, weaponClassName: string): HTMLDivElement {
+  const bar = document.createElement('div')
+  bar.className = `weaponCooldownBar ${weaponClassName}`
   const fill = document.createElement('div')
   fill.className = 'weaponCooldownFill'
-  const labelElement = document.createElement('div')
-  labelElement.className = 'weaponCooldownLabel'
-  labelElement.textContent = label
-  pip.appendChild(fill)
-  pip.appendChild(labelElement)
-  panel.appendChild(pip)
+  bar.appendChild(fill)
+  panel.appendChild(bar)
   return fill
 }
 
@@ -28,13 +24,13 @@ export function createWeaponCooldownIndicators(viewHudOverlay: HTMLElement): Wea
   cooldownPanel.className = 'weaponCooldownPanel'
   viewHudOverlay.appendChild(cooldownPanel)
 
-  const laserFill = buildCooldownPip(cooldownPanel, 'L', 'weaponCooldownPipLaser')
-  const missileFill = buildCooldownPip(cooldownPanel, 'M', 'weaponCooldownPipMissile')
+  const laserFill = buildCooldownBar(cooldownPanel, 'weaponCooldownBarLaser')
+  const missileFill = buildCooldownBar(cooldownPanel, 'weaponCooldownBarMissile')
 
   function applyReadyFraction(fillElement: HTMLDivElement, readyFraction: number): void {
     const clampedFraction = Math.max(0, Math.min(1, readyFraction))
-    fillElement.style.height = `${clampedFraction * 100}%`
-    fillElement.parentElement?.classList.toggle('weaponCooldownPipReady', clampedFraction >= 1)
+    fillElement.style.width = `${clampedFraction * 100}%`
+    fillElement.parentElement?.classList.toggle('weaponCooldownBarReady', clampedFraction >= 1)
   }
 
   return {

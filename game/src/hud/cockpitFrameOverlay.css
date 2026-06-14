@@ -1,0 +1,17 @@
+/* D48: cockpit canopy frame overlay — fills the ship view, shown only in cockpit mode. */
+.cockpitFrameOverlay {
+  position: absolute;
+  inset: 0;
+  display: none;
+  pointer-events: none;
+}
+
+.cockpitFrameOverlayVisible {
+  display: block;
+}
+
+.cockpitFrameOverlay svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}

@@ -66,6 +66,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 
 | D47 | Steering model unified to fix the **drag-release camera snap**: the COMMANDED orientation is the single heading target (steered by radar drag, keyboard, or idle aim-assist); the camera = commanded (instant), and the ship eases toward commanded. We no longer snap commanded back to the ship on release (that was the bug) — so on release the camera holds and the ship finishes catching up. **Weapons are now ALWAYS ON** (removed the D45 toggle buttons): lasers + missiles auto-fire at any locked + visible target on cooldown. Replaced the fire buttons with **tiny on-view cooldown indicators** (bottom-center of the view, not controls) that fill as each weapon recharges and glow when ready |
 
+| D48 | Radar/HUD polish + cockpit. (a) Removed the radar sphere's white **pole dot**. (b) Drew the **auto-aim cone** as a flat green wedge on the radar's horizontal disc (from center toward the forward tick, ±coneHalfAngle). (c) Weapon **cooldown indicators are now thin horizontal bars along the bottom edge** of the view (fill left→right, glow when ready). (d) **Ship view is 4:3** (wider) instead of square — radar stays square; screen-space HUD projection now uses the view's width+height. (e) **Cockpit view shows a canopy frame** (SVG: A-pillars, top arch, center strut, dashboard console) so it reads as looking out from inside the ship |
+
 ## Requirements from the design doc
 
 ### Rendering & physics
