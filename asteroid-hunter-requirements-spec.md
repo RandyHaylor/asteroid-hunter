@@ -60,6 +60,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 
 | D44 | **Radar sphere surface visibly rotates** with the player's heading (the wireframe is set to inverse(commanded) each frame, with a bright pole marker riding it so the spin is obvious); the center disc + forward tick stay fixed as the heading reference, and contacts ride the same frame. Confirmed/kept the **thin vertical red stem** (cylinder) from each red contact dot to the center disc (radius 0.009) |
 
+| D45 | **Lasers/missiles are armed TOGGLES with auto-fire.** Tapping LASERS / MISSILES (or Space / KeyX) toggles each weapon's *armed* state (green-glow + "●" indicator); replaces the old hold-to-fire. While armed, the weapon **auto-fires only when an enemy is targeted (nose-cone lock, D6) AND visible** (clear line of sight via `isLineOfSightBlockedByAsteroids`), gated by the weapon cooldown. No locked/visible target → holds fire (never shoots into empty space) |
+
 ## Requirements from the design doc
 
 ### Rendering & physics

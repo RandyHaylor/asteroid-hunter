@@ -1,11 +1,12 @@
 import './fireZoneButtons.css'
 
-// R11: the lower third of the screen is fire input — left zone fires lasers,
-// right zone fires missiles. Intent is "held", not "tapped": the flag stays true
-// while the pointer is down so the game loop can gate fire rate by weapon cooldown.
-// A3: desktop keyboard parity — Space holds laser fire, KeyX holds missile fire.
+// R11 + D45: LASERS / MISSILES are now TOGGLES (armed on/off), not hold-to-fire. While a weapon is
+// armed, the game loop auto-fires it whenever an enemy is targeted (nose-cone lock) AND visible
+// (clear line of sight), gated by the weapon's cooldown. readFireIntent() reports the armed state.
+// A3: desktop keyboard parity — Space toggles lasers, KeyX toggles missiles (one toggle per press).
 
 export type FireIntent = {
+  /** weapon is ARMED — auto-fire when a visible target is locked */
   wantsLaserFire: boolean
   wantsMissileFire: boolean
 }
@@ -14,80 +15,65 @@ export type FireZoneButtons = {
   readFireIntent(): FireIntent
 }
 
-// D37: LASERS button lives in the LEFT control cluster, MISSILES in the RIGHT cluster (R11). The
-// clusters (style.css flex columns) keep every control non-overlapping and shrink them to fit.
+// D37: LASERS button lives in the LEFT control cluster, MISSILES in the RIGHT cluster (R11).
 export function createFireZoneButtons(
   leftControlCluster: HTMLElement,
   rightControlCluster: HTMLElement,
 ): FireZoneButtons {
-  // ===== STEP 1: build the two translucent fire zone buttons (R11) =====
-
   const laserFireZoneButton = document.createElement('div')
   laserFireZoneButton.className = 'fireZoneButton fireZoneButtonLasers'
-  laserFireZoneButton.textContent = 'LASERS'
   leftControlCluster.appendChild(laserFireZoneButton)
 
   const missileFireZoneButton = document.createElement('div')
   missileFireZoneButton.className = 'fireZoneButton fireZoneButtonMissiles'
-  missileFireZoneButton.textContent = 'MISSILES'
   rightControlCluster.appendChild(missileFireZoneButton)
 
-  // ===== STEP 2: pointer hold tracking per zone (same capture pattern as touchFlightControls) =====
+  // ===== armed-toggle state =====
+  let laserAutoFireArmed = false
+  let missileAutoFireArmed = false
 
-  let laserZonePointerIsHeld = false
-  let missileZonePointerIsHeld = false
-
-  function wireFireZonePointerHold(
-    fireZoneButton: HTMLElement,
-    setZoneHeld: (zoneIsHeld: boolean) => void,
-  ): void {
-    let activePointerId: number | null = null
-
-    fireZoneButton.addEventListener('pointerdown', (pointerEvent) => {
-      activePointerId = pointerEvent.pointerId
-      fireZoneButton.setPointerCapture(pointerEvent.pointerId)
-      fireZoneButton.classList.add('fireZoneButtonHeld')
-      setZoneHeld(true)
-    })
-
-    function releaseFireZone(pointerEvent: PointerEvent): void {
-      if (pointerEvent.pointerId !== activePointerId) return
-      activePointerId = null
-      fireZoneButton.classList.remove('fireZoneButtonHeld')
-      setZoneHeld(false)
-    }
-    fireZoneButton.addEventListener('pointerup', releaseFireZone)
-    fireZoneButton.addEventListener('pointercancel', releaseFireZone)
+  function applyLaserArmedState(): void {
+    laserFireZoneButton.textContent = laserAutoFireArmed ? 'LASERS ●' : 'LASERS'
+    laserFireZoneButton.classList.toggle('fireZoneButtonArmed', laserAutoFireArmed)
   }
+  function applyMissileArmedState(): void {
+    missileFireZoneButton.textContent = missileAutoFireArmed ? 'MISSILES ●' : 'MISSILES'
+    missileFireZoneButton.classList.toggle('fireZoneButtonArmed', missileAutoFireArmed)
+  }
+  applyLaserArmedState()
+  applyMissileArmedState()
 
-  wireFireZonePointerHold(laserFireZoneButton, (zoneIsHeld) => {
-    laserZonePointerIsHeld = zoneIsHeld
+  // tap toggles (let the event bubble so the first-gesture audio-resume listener still fires)
+  laserFireZoneButton.addEventListener('pointerdown', () => {
+    laserAutoFireArmed = !laserAutoFireArmed
+    applyLaserArmedState()
   })
-  wireFireZonePointerHold(missileFireZoneButton, (zoneIsHeld) => {
-    missileZonePointerIsHeld = zoneIsHeld
+  missileFireZoneButton.addEventListener('pointerdown', () => {
+    missileAutoFireArmed = !missileAutoFireArmed
+    applyMissileArmedState()
   })
 
-  // ===== STEP 3: keyboard parity — Space = laser held, KeyX = missile held (A3) =====
-
-  const fireKeysCurrentlyHeld = new Set<string>()
-
+  // ===== keyboard parity (A3): one toggle per physical press (ignore auto-repeat) =====
+  const fireToggleKeysCurrentlyHeld = new Set<string>()
   window.addEventListener('keydown', (keyboardEvent) => {
-    if (keyboardEvent.code === 'Space' || keyboardEvent.code === 'KeyX') {
-      fireKeysCurrentlyHeld.add(keyboardEvent.code)
+    if (keyboardEvent.code === 'Space' && !fireToggleKeysCurrentlyHeld.has('Space')) {
+      fireToggleKeysCurrentlyHeld.add('Space')
+      laserAutoFireArmed = !laserAutoFireArmed
+      applyLaserArmedState()
+    }
+    if (keyboardEvent.code === 'KeyX' && !fireToggleKeysCurrentlyHeld.has('KeyX')) {
+      fireToggleKeysCurrentlyHeld.add('KeyX')
+      missileAutoFireArmed = !missileAutoFireArmed
+      applyMissileArmedState()
     }
   })
   window.addEventListener('keyup', (keyboardEvent) => {
-    fireKeysCurrentlyHeld.delete(keyboardEvent.code)
+    fireToggleKeysCurrentlyHeld.delete(keyboardEvent.code)
   })
-
-  // ===== STEP 4: combined intent readout (pointer OR keyboard holds the trigger) =====
 
   return {
     readFireIntent(): FireIntent {
-      return {
-        wantsLaserFire: laserZonePointerIsHeld || fireKeysCurrentlyHeld.has('Space'),
-        wantsMissileFire: missileZonePointerIsHeld || fireKeysCurrentlyHeld.has('KeyX'),
-      }
+      return { wantsLaserFire: laserAutoFireArmed, wantsMissileFire: missileAutoFireArmed }
     },
   }
 }

@@ -154,6 +154,14 @@ body {
   color: rgba(255, 255, 255, 0.95);
 }
 
+/* D45: ARMED toggle state — filled + glowing so on/off is obvious; auto-fires when a target is locked */
+.fireZoneButtonArmed {
+  background: rgba(120, 255, 140, 0.22);
+  border-color: rgba(120, 255, 140, 0.9);
+  color: #eaffea;
+  box-shadow: 0 0 12px rgba(120, 255, 140, 0.5);
+}
+
 /* ===== wave banner (D2) ===== */
 .waveAnnouncementBanner {
   position: absolute;

@@ -15,6 +15,7 @@ import {
   type GameWorld,
 } from './gameSimulation/gameWorldTypes'
 import { applySoftBoundaryPushback } from './gameSimulation/boundedPlayAreaSoftEdge'
+import { isLineOfSightBlockedByAsteroids } from './gameSimulation/lineOfSightProbe'
 import { spawnAsteroidFieldInBoundedSphere, updateDriftingAsteroids } from './asteroids/asteroidFieldSpawner'
 import {
   applyWeaponDamageToAsteroid,
@@ -656,25 +657,31 @@ function updatePlayerWeaponsFire(): void {
     gameWorld.enemyShips,
   )
 
+  // D45: armed weapons auto-fire ONLY at a locked target that is also visible (clear line of sight).
+  // No target, or target hidden behind an asteroid → hold fire (never shoot into empty space).
+  const lockedTarget = currentAutoAimTarget
+  if (lockedTarget === null) return
+  const lockedTargetIsVisible = !isLineOfSightBlockedByAsteroids(
+    playerShipState.positionMeters,
+    lockedTarget.positionMeters,
+    gameWorld.asteroids,
+  )
+  if (!lockedTargetIsVisible) return
+
   const fireIntent = fireZoneButtons.readFireIntent()
   scratchProjectileOrigin
     .copy(playerShipState.positionMeters)
     .addScaledVector(scratchPlayerForwardDirection, 4)
 
   if (fireIntent.wantsLaserFire && simulationClockSeconds >= playerNextLaserFireTimeSeconds) {
-    // D6 + lead: locked shots aim at the predicted intercept for THIS weapon's projectile speed,
-    // so upgrades that change bolt speed automatically change the lead
-    if (currentAutoAimTarget) {
-      computeLeadAimDirection(
-        scratchProjectileOrigin,
-        currentAutoAimTarget.positionMeters,
-        currentAutoAimTarget.velocityMetersPerSecond,
-        playerBaseLaserStats.boltSpeedMetersPerSecond,
-        scratchPlayerAimDirection,
-      )
-    } else {
-      scratchPlayerAimDirection.copy(scratchPlayerForwardDirection)
-    }
+    // D6 + lead: shots aim at the predicted intercept for THIS weapon's projectile speed
+    computeLeadAimDirection(
+      scratchProjectileOrigin,
+      lockedTarget.positionMeters,
+      lockedTarget.velocityMetersPerSecond,
+      playerBaseLaserStats.boltSpeedMetersPerSecond,
+      scratchPlayerAimDirection,
+    )
     laserVolleySystem.tryFireLaserVolley(
       scratchProjectileOrigin,
       scratchPlayerAimDirection,
@@ -688,24 +695,20 @@ function updatePlayerWeaponsFire(): void {
 
   if (fireIntent.wantsMissileFire && simulationClockSeconds >= playerNextMissileFireTimeSeconds) {
     // missiles lead with their own (slower) speed and weakly home toward the lock (R18 stats)
-    if (currentAutoAimTarget) {
-      computeLeadAimDirection(
-        scratchProjectileOrigin,
-        currentAutoAimTarget.positionMeters,
-        currentAutoAimTarget.velocityMetersPerSecond,
-        playerBaseMissileStats.missileSpeedMetersPerSecond,
-        scratchPlayerAimDirection,
-      )
-    } else {
-      scratchPlayerAimDirection.copy(scratchPlayerForwardDirection)
-    }
+    computeLeadAimDirection(
+      scratchProjectileOrigin,
+      lockedTarget.positionMeters,
+      lockedTarget.velocityMetersPerSecond,
+      playerBaseMissileStats.missileSpeedMetersPerSecond,
+      scratchPlayerAimDirection,
+    )
     missileVolleySystem.tryFireMissile(
       scratchProjectileOrigin,
       scratchPlayerAimDirection,
       playerBaseMissileStats,
       true,
       simulationClockSeconds,
-      currentAutoAimTarget,
+      lockedTarget,
     )
     playerNextMissileFireTimeSeconds = simulationClockSeconds + playerBaseMissileStats.fireCooldownSeconds
     gameAudioSystem.playMissileLaunchSound() // D23
