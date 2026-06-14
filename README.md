@@ -23,7 +23,7 @@ Works in desktop and mobile browsers.
 
 Cover grids: **cyan** = full cover available, **yellow** = long-range enemies can still see the cover spot, **red** = short-range enemies can see it. Radar: red dots = visible enemies; fading yellow dots = last-seen positions of enemies that slipped behind asteroids.
 
-On-screen aids: a **green ring** shows the auto-aim cone at the closest enemy's range — line an enemy up inside it to lock. Enemies you can't see show as **edge-of-screen markers** (red = live, yellow = last-known before they hid; bigger = closer). Every enemy carries a floating shield/health bar to help you spot them. The HUD is laid out for phones (safe-area aware, compact controls). Weapons are **armed toggles**: tap LASERS / MISSILES (they glow green) and that weapon auto-fires at any locked, visible enemy — no holding.
+On-screen aids: a **green ring** shows the auto-aim cone at the closest enemy's range — line an enemy up inside it to lock. Enemies you can't see show as **edge-of-screen markers** (red = live, yellow = last-known before they hid; bigger = closer). Every enemy carries a floating shield/health bar (kept a constant on-screen size at any range, so distant enemies are still easy to spot). The HUD is laid out for phones (safe-area aware, compact controls). Weapons are **armed toggles**: tap LASERS / MISSILES (they glow green) and that weapon auto-fires at any locked, visible enemy — no holding.
 
 Background music is a looping playlist of three royalty-free Pixabay techno tracks (normalized and level-balanced); synthesized 8-bit SFX play over it. Mute with the SOUND button or `M`. Music: "Surviving" & "Nightmare on Vinyl" by LandOfTheRisen, "Aggressive" by FreeMusicPro — via Pixabay (Pixabay Content License).
 

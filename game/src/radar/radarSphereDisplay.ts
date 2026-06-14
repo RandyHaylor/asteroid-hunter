@@ -28,7 +28,7 @@ const VISIBLE_FRIENDLY_DOT_COLOR = 0x44ff88 // D4: contract supports friendlies,
 const RADAR_SCOPE_BACKGROUND_COLOR = 0x06122e // dark navy inside the scope
 
 // D42: how far (radians) the radar orientation turns per pixel dragged
-const RADAR_DRAG_RADIANS_PER_PIXEL = 0.006
+const RADAR_DRAG_RADIANS_PER_PIXEL = 0.011 // D46: more sensitive radar rotation
 const CONTACT_STEM_CYLINDER_RADIUS = 0.009 // thin vertical line from each dot to the center disc (D44)
 
 export type RadarSphereDisplay = {

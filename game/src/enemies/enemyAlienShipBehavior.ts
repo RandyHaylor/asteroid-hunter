@@ -26,19 +26,21 @@ const MAX_STEERING_ACCELERATION_METERS_PER_SECOND_SQUARED = 40
 const VELOCITY_CORRECTION_GAIN_PER_SECOND = 2
 /** desired speed ramps down as distanceToGoal * this gain so enemies settle at loiter points (1/seconds) */
 const ARRIVAL_BRAKING_GAIN_PER_SECOND = 1
-const MAX_TURN_RATE_RADIANS_PER_SECOND = 2.4
+// D46: enemies turn more slowly (lazier, longer arcs)
+const MAX_TURN_RATE_RADIANS_PER_SECOND = 1.2
 /** below this speed the ship holds its heading instead of chasing velocity noise */
 const MIN_SPEED_FOR_TRAVEL_FACING_METERS_PER_SECOND = 0.5
 
 // ---- dumbPatrol tuning (D8) ----
-const PATROL_WANDER_SPHERE_RADIUS_METERS = 700
+// D46: patrol waypoints reach much farther, so enemies fly away for longer between turns
+const PATROL_WANDER_SPHERE_RADIUS_METERS = 1300
 const PATROL_WAYPOINT_ARRIVAL_RADIUS_METERS = 30
 const PATROL_CRUISE_SPEED_METERS_PER_SECOND = 30
 /** only fires when the player is roughly ahead: within ~25° of the nose */
 const PATROL_FIRING_CONE_COSINE = Math.cos((25 * Math.PI) / 180)
 
 // ---- orbitStrafe tuning (D8) ----
-const ORBIT_STANDOFF_RADIUS_METERS = 220
+const ORBIT_STANDOFF_RADIUS_METERS = 380 // D46: orbit/strafe farther out (longer passes away)
 const ORBIT_CRUISE_SPEED_METERS_PER_SECOND = 50
 /** tangential lead distance that keeps the goal point sliding around the orbit circle */
 const ORBIT_TANGENTIAL_LEAD_METERS = 120

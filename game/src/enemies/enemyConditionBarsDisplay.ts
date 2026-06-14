@@ -14,6 +14,10 @@ const BAR_WIDTH_METERS = 7
 const BAR_HEIGHT_METERS = 0.55
 const BAR_VERTICAL_GAP_METERS = 0.3
 const BARS_OFFSET_ABOVE_SHIP_METERS = 6
+// D46: keep the bars a CONSTANT on-screen size regardless of distance — world size is scaled by
+// distanceToCamera / this reference, so a far enemy's bars stay just as large as a near one's.
+const BARS_REFERENCE_DISTANCE_METERS = 90
+const BARS_MIN_DISTANCE_SCALE = 0.35
 
 const sharedUnitBarGeometry = new THREE.PlaneGeometry(1, 1)
 const sharedBarBackgroundMaterial = new THREE.MeshBasicMaterial({
@@ -84,6 +88,7 @@ export function createEnemyConditionBarsDisplay(gameScene: THREE.Scene): EnemyCo
 
       // camera-up so the bars sit "above" the ship from the player's point of view
       scratchCameraUpDirection.set(0, 1, 0).applyQuaternion(playerViewCamera.quaternion)
+      const cameraWorldPosition = playerViewCamera.position
 
       for (const enemyShip of enemyShips) {
         if (enemyShip.isDestroyed) continue // D24: bars show for every live enemy, damaged or not
@@ -96,10 +101,15 @@ export function createEnemyConditionBarsDisplay(gameScene: THREE.Scene): EnemyCo
         }
         enemyIdsWithVisibleBars.add(enemyShip.enemyShipId)
 
+        // D46: constant on-screen size — scale the whole bar group (and its above-ship offset) by
+        // distance so perspective shrink is cancelled out
+        const distanceToCameraMeters = enemyShip.positionMeters.distanceTo(cameraWorldPosition)
+        const distanceScale = Math.max(BARS_MIN_DISTANCE_SCALE, distanceToCameraMeters / BARS_REFERENCE_DISTANCE_METERS)
         conditionBars.barsGroup.position
           .copy(enemyShip.positionMeters)
-          .addScaledVector(scratchCameraUpDirection, BARS_OFFSET_ABOVE_SHIP_METERS)
+          .addScaledVector(scratchCameraUpDirection, BARS_OFFSET_ABOVE_SHIP_METERS * distanceScale)
         conditionBars.barsGroup.quaternion.copy(playerViewCamera.quaternion)
+        conditionBars.barsGroup.scale.setScalar(distanceScale)
 
         setBarFillFraction(conditionBars.shieldFillMesh, enemyShip.shieldPointsRemaining / ENEMY_SHIP_MAX_SHIELD_POINTS)
         setBarFillFraction(conditionBars.hullFillMesh, enemyShip.hitPointsRemaining / ENEMY_SHIP_MAX_HULL_POINTS)
