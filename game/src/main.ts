@@ -5,7 +5,6 @@ import {
   createShipRigidBodyStateAtRest,
   getShipForwardDirection,
   stepShipFlightSimulation,
-  stepShipRotationFromJoystick,
 } from './gameSimulation/newtonianShipPhysics'
 import {
   weaponEngagementRanges,
@@ -53,7 +52,7 @@ import {
 import { computeLeadAimDirection } from './weapons/targetLeadPrediction'
 import { createLaserVolleySystem } from './weapons/laserFire'
 import { createMissileVolleySystem } from './weapons/missileFire'
-import { createFireZoneButtons } from './hud/fireZoneButtons'
+import { createWeaponCooldownIndicators } from './hud/weaponCooldownIndicators'
 import {
   createEnemyFireIntent,
   createEnemyShip,
@@ -234,7 +233,8 @@ rightControlCluster.className = 'controlClusterRight'
 controlsOverlay.appendChild(rightControlCluster)
 
 const flightControls = createTouchFlightControls(leftControlCluster)
-const fireZoneButtons = createFireZoneButtons(leftControlCluster, rightControlCluster)
+// D47: weapons are always on (no fire buttons) — tiny on-view cooldown indicators replace them
+const weaponCooldownIndicators = createWeaponCooldownIndicators(viewHudOverlay)
 const playerCameraRig = createPlayerCameraRig(playerViewCamera)
 const playerConditionDisplay = createPlayerConditionDisplay(viewHudOverlay)
 const radarSignatureTracker = createRadarSignatureTracker()
@@ -657,8 +657,8 @@ function updatePlayerWeaponsFire(): void {
     gameWorld.enemyShips,
   )
 
-  // D45: armed weapons auto-fire ONLY at a locked target that is also visible (clear line of sight).
-  // No target, or target hidden behind an asteroid → hold fire (never shoot into empty space).
+  // D47: weapons are ALWAYS ON — they auto-fire at a locked target that is also visible (clear line
+  // of sight), gated only by cooldown. No target, or target hidden behind an asteroid → hold fire.
   const lockedTarget = currentAutoAimTarget
   if (lockedTarget === null) return
   const lockedTargetIsVisible = !isLineOfSightBlockedByAsteroids(
@@ -668,12 +668,11 @@ function updatePlayerWeaponsFire(): void {
   )
   if (!lockedTargetIsVisible) return
 
-  const fireIntent = fireZoneButtons.readFireIntent()
   scratchProjectileOrigin
     .copy(playerShipState.positionMeters)
     .addScaledVector(scratchPlayerForwardDirection, 4)
 
-  if (fireIntent.wantsLaserFire && simulationClockSeconds >= playerNextLaserFireTimeSeconds) {
+  if (simulationClockSeconds >= playerNextLaserFireTimeSeconds) {
     // D6 + lead: shots aim at the predicted intercept for THIS weapon's projectile speed
     computeLeadAimDirection(
       scratchProjectileOrigin,
@@ -693,7 +692,7 @@ function updatePlayerWeaponsFire(): void {
     gameAudioSystem.playLaserZapSound() // D23
   }
 
-  if (fireIntent.wantsMissileFire && simulationClockSeconds >= playerNextMissileFireTimeSeconds) {
+  if (simulationClockSeconds >= playerNextMissileFireTimeSeconds) {
     // missiles lead with their own (slower) speed and weakly home toward the lock (R18 stats)
     computeLeadAimDirection(
       scratchProjectileOrigin,
@@ -840,6 +839,7 @@ const ACTIVE_STEERING_INPUT_DEADBAND = 0.05
 function resolveEffectiveRotationInput(
   playerPitchInput: number,
   playerYawInput: number,
+  aimAssistBaseOrientation: THREE.Quaternion,
 ): { pitchInput: number; yawInput: number } {
   const playerIsActivelySteering =
     Math.abs(playerPitchInput) > ACTIVE_STEERING_INPUT_DEADBAND ||
@@ -847,12 +847,32 @@ function resolveEffectiveRotationInput(
   if (playerIsActivelySteering || currentAutoAimTarget === null || currentAutoAimTarget.isDestroyed) {
     return { pitchInput: playerPitchInput, yawInput: playerYawInput }
   }
+  // D47: the idle aim-assist nudges the COMMANDED heading (which the camera follows) toward the lock
   return computeIdleAimAssistRotationInput(
-    playerShipState.orientation,
+    aimAssistBaseOrientation,
     playerShipState.positionMeters,
     currentAutoAimTarget.positionMeters,
     playerShipBaseFlightStats,
   )
+}
+
+// D47: keyboard / idle-aim-assist pitch+yaw rotate the COMMANDED heading (camera frame) directly,
+// at the ship's max turn rate, in the commanded frame's local axes (same convention as the radar
+// drag). The ship then eases toward commanded; the camera = commanded.
+const SHIP_LOCAL_RIGHT_AXIS = new THREE.Vector3(1, 0, 0)
+const scratchCommandedYawRotation = new THREE.Quaternion()
+const scratchCommandedPitchRotation = new THREE.Quaternion()
+function applyPitchYawToCommandedHeading(
+  commandedOrientation: THREE.Quaternion,
+  pitchInput: number,
+  yawInput: number,
+  deltaSeconds: number,
+): void {
+  if (pitchInput === 0 && yawInput === 0) return
+  const maxStepRadians = playerShipBaseFlightStats.maxTurnRateRadiansPerSecond * deltaSeconds
+  scratchCommandedYawRotation.setFromAxisAngle(SHIP_LOCAL_UP_AXIS, -yawInput * maxStepRadians)
+  scratchCommandedPitchRotation.setFromAxisAngle(SHIP_LOCAL_RIGHT_AXIS, pitchInput * maxStepRadians)
+  commandedOrientation.multiply(scratchCommandedYawRotation).multiply(scratchCommandedPitchRotation).normalize()
 }
 
 // D43: the camera snaps to the commanded (radar) orientation instantly; the SHIP follows at its
@@ -876,12 +896,21 @@ function rotatePlayerShipTowardRadarCommand(deltaSeconds: number): void {
 function updatePlayerMovement(deltaSeconds: number): void {
   const flightControlInput = flightControls.readFlightControlInput()
 
-  // D42: dragging the radar IS the rotation (trackball, handled in radarSphereDisplay). When not
-  // dragging, keep the radar mirroring the ship so it reflects keyboard/aim-assist heading.
+  // D47: the COMMANDED orientation is the single heading target (camera follows it). Radar drag
+  // steers it inside the radar module; keyboard + idle aim-assist steer it here. We do NOT snap it
+  // back to the ship — that caused the camera to jump on drag release. The ship eases toward it.
+  const commandedOrientation = radarSphereDisplay.getCommandedOrientation()
   const radarIsSteeringDrag = radarSphereDisplay.isSteeringDrag()
   if (!radarIsSteeringDrag) {
-    radarSphereDisplay.syncCommandedOrientationToShip(playerShipState.orientation)
+    const headingInput = resolveEffectiveRotationInput(
+      flightControlInput.pitchInput,
+      flightControlInput.yawInput,
+      commandedOrientation,
+    )
+    applyPitchYawToCommandedHeading(commandedOrientation, headingInput.pitchInput, headingInput.yawInput, deltaSeconds)
   }
+  // ship eases toward the commanded heading every frame (camera = commanded, so it stays on release)
+  rotatePlayerShipTowardRadarCommand(deltaSeconds)
 
   if (tractorPullIsActive && activeCoverAsteroid) {
     // D14 escape routes: move the throttle (it was zeroed on tap) or tap another asteroid
@@ -890,22 +919,7 @@ function updatePlayerMovement(deltaSeconds: number): void {
     } else if (flightControlInput.throttleFraction > COVER_ESCAPE_THROTTLE_THRESHOLD) {
       releaseTractorPull()
     } else {
-      // D42: drag the radar to rotate (ship catches up); otherwise keyboard + idle aim-assist (D22)
-      if (radarIsSteeringDrag) {
-        rotatePlayerShipTowardRadarCommand(deltaSeconds)
-      } else {
-        const coverRotationInput = resolveEffectiveRotationInput(
-          flightControlInput.pitchInput,
-          flightControlInput.yawInput,
-        )
-        stepShipRotationFromJoystick(
-          playerShipState,
-          coverRotationInput.pitchInput,
-          coverRotationInput.yawInput,
-          playerShipBaseFlightStats,
-          deltaSeconds,
-        )
-      }
+      // rotation (above) already aimed the ship via the commanded heading; here just strafe + hold
 
       // D18: the strafe joystick slides the hold point; first manual nudge stops the auto re-solve
       const strafeControlInput = flightControls.readStrafeControlInput()
@@ -960,33 +974,14 @@ function updatePlayerMovement(deltaSeconds: number): void {
     }
   }
 
-  // D42: drag-to-steer rotates the ship toward the radar command (no damping); otherwise keyboard
-  // + idle aim-assist (D22). Throttle/thrust are applied either way (zero pitch/yaw when dragging,
-  // since the rotation was already applied above).
-  if (radarIsSteeringDrag) {
-    rotatePlayerShipTowardRadarCommand(deltaSeconds)
-    stepShipFlightSimulation(
-      playerShipState,
-      { pitchInput: 0, yawInput: 0, throttleFraction: flightControlInput.throttleFraction },
-      playerShipBaseFlightStats,
-      deltaSeconds,
-    )
-  } else {
-    const flightRotationInput = resolveEffectiveRotationInput(
-      flightControlInput.pitchInput,
-      flightControlInput.yawInput,
-    )
-    stepShipFlightSimulation(
-      playerShipState,
-      {
-        pitchInput: flightRotationInput.pitchInput,
-        yawInput: flightRotationInput.yawInput,
-        throttleFraction: flightControlInput.throttleFraction,
-      },
-      playerShipBaseFlightStats,
-      deltaSeconds,
-    )
-  }
+  // D47: rotation was already applied above (ship eased toward the commanded heading); here we only
+  // apply throttle/thrust (zero pitch/yaw so the flight sim doesn't re-rotate).
+  stepShipFlightSimulation(
+    playerShipState,
+    { pitchInput: 0, yawInput: 0, throttleFraction: flightControlInput.throttleFraction },
+    playerShipBaseFlightStats,
+    deltaSeconds,
+  )
   applySoftBoundaryPushback(playerShipState.positionMeters, playerShipState.velocityMetersPerSecond, deltaSeconds)
 }
 
@@ -1118,6 +1113,13 @@ function syncRenderObjectsFromSimulation(frameDeltaSeconds: number): void {
     radarSignatureTracker.hasUnresolvedEnemies(),
     simulationClockSeconds,
   )
+
+  // D47: tiny on-view weapon cooldown indicators (1 = recharged/ready)
+  const laserReadyFraction =
+    1 - (playerNextLaserFireTimeSeconds - simulationClockSeconds) / playerBaseLaserStats.fireCooldownSeconds
+  const missileReadyFraction =
+    1 - (playerNextMissileFireTimeSeconds - simulationClockSeconds) / playerBaseMissileStats.fireCooldownSeconds
+  weaponCooldownIndicators.updateWeaponCooldownIndicators(laserReadyFraction, missileReadyFraction)
 }
 
 function runFrameLoop(currentFrameTimestampMs: number): void {

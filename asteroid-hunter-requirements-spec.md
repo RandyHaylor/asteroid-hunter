@@ -64,6 +64,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 
 | D46 | Tuning: enemies **turn more slowly** (max turn rate 2.4 → 1.2 rad/s) and **fly away/travel farther** between turns (patrol wander sphere 700 → 1300 m, orbit standoff 220 → 380 m) for longer passes. Enemy **shield/HP bars are now a constant on-screen size** at any distance (world size scaled by distanceToCamera / 90 m so perspective shrink is cancelled). Radar **rotation is more sensitive** (0.006 → 0.011 rad per drag pixel) |
 
+| D47 | Steering model unified to fix the **drag-release camera snap**: the COMMANDED orientation is the single heading target (steered by radar drag, keyboard, or idle aim-assist); the camera = commanded (instant), and the ship eases toward commanded. We no longer snap commanded back to the ship on release (that was the bug) — so on release the camera holds and the ship finishes catching up. **Weapons are now ALWAYS ON** (removed the D45 toggle buttons): lasers + missiles auto-fire at any locked + visible target on cooldown. Replaced the fire buttons with **tiny on-view cooldown indicators** (bottom-center of the view, not controls) that fill as each weapon recharges and glow when ready |
+
 ## Requirements from the design doc
 
 ### Rendering & physics

@@ -14,7 +14,7 @@ Works in desktop and mobile browsers.
 |---|---|---|
 | Rotate ship (always, even in cover) | **drag the radar sphere** (right half of the view in landscape, under the view in portrait) | WASD / arrow keys |
 | Throttle (sets target speed) | left lever | Shift up / Ctrl down |
-| Arm lasers / missiles (auto-fire toggle) | tap the LASERS / MISSILES button | Space / X |
+| Fire lasers / missiles | **automatic** — always on, fires at any locked, visible enemy | (automatic) |
 | Take cover | tap a grid-marked asteroid (within tractor range) | click it |
 | Strafe around the asteroid in cover | green joystick beside the throttle | IJKL |
 | Leave cover | move the throttle, or tap another asteroid | Shift |
@@ -23,7 +23,7 @@ Works in desktop and mobile browsers.
 
 Cover grids: **cyan** = full cover available, **yellow** = long-range enemies can still see the cover spot, **red** = short-range enemies can see it. Radar: red dots = visible enemies; fading yellow dots = last-seen positions of enemies that slipped behind asteroids.
 
-On-screen aids: a **green ring** shows the auto-aim cone at the closest enemy's range — line an enemy up inside it to lock. Enemies you can't see show as **edge-of-screen markers** (red = live, yellow = last-known before they hid; bigger = closer). Every enemy carries a floating shield/health bar (kept a constant on-screen size at any range, so distant enemies are still easy to spot). The HUD is laid out for phones (safe-area aware, compact controls). Weapons are **armed toggles**: tap LASERS / MISSILES (they glow green) and that weapon auto-fires at any locked, visible enemy — no holding.
+On-screen aids: a **green ring** shows the auto-aim cone at the closest enemy's range — line an enemy up inside it to lock. Enemies you can't see show as **edge-of-screen markers** (red = live, yellow = last-known before they hid; bigger = closer). Every enemy carries a floating shield/health bar (kept a constant on-screen size at any range, so distant enemies are still easy to spot). The HUD is laid out for phones (safe-area aware, compact controls). Weapons are **always on**: lasers and missiles auto-fire at any locked, visible enemy. Two tiny on-screen cooldown indicators (bottom of the view) show each weapon recharging.
 
 Background music is a looping playlist of three royalty-free Pixabay techno tracks (normalized and level-balanced); synthesized 8-bit SFX play over it. Mute with the SOUND button or `M`. Music: "Surviving" & "Nightmare on Vinyl" by LandOfTheRisen, "Aggressive" by FreeMusicPro — via Pixabay (Pixabay Content License).
 
