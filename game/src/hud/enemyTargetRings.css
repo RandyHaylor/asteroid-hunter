@@ -1,0 +1,32 @@
+/* D49: per-enemy rotating red target reticle. Outer element is positioned/sized in JS; the inner
+   spinner rotates continuously so the reticle reads as "rotating". Locked enemy = brighter + glow. */
+.enemyTargetRing {
+  position: absolute;
+  display: none;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  color: rgba(255, 64, 64, 0.85); /* SVG strokes use currentColor */
+}
+
+.enemyTargetRingSpinner {
+  width: 100%;
+  height: 100%;
+  animation: enemyTargetRingSpin 5s linear infinite;
+}
+
+.enemyTargetRingSpinner svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.enemyTargetRingLocked {
+  color: #ff5a5a;
+  filter: drop-shadow(0 0 5px rgba(255, 64, 64, 0.85));
+}
+
+@keyframes enemyTargetRingSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}

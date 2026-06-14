@@ -68,6 +68,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 
 | D48 | Radar/HUD polish + cockpit. (a) Removed the radar sphere's white **pole dot**. (b) Drew the **auto-aim cone** as a flat green wedge on the radar's horizontal disc (from center toward the forward tick, ±coneHalfAngle). (c) Weapon **cooldown indicators are now thin horizontal bars along the bottom edge** of the view (fill left→right, glow when ready). (d) **Ship view is 4:3** (wider) instead of square — radar stays square; screen-space HUD projection now uses the view's width+height. (e) **Cockpit view shows a canopy frame** (SVG: A-pillars, top arch, center strut, dashboard console) so it reads as looking out from inside the ship |
 
+| D49 | Unified target/aim reticles. (a) The **aim ring** is now a **fixed, thin, always-on green reticle at the view center** (≈ the 10° cone's on-screen size) — replaces D29's depth-scaled green cone ring (which jumped/hid). (b) **Every live enemy gets a rotating RED target reticle** (ring + 4 ticks, CSS-spun): on screen it encircles the enemy at a constant size; off screen it **shrinks and clamps to the view rim as the direction indicator**. The locked enemy's ring gets a brighter "locked" style. This replaces the D28 edge dot markers and the D6 single lock-highlight ring (both removed). Driven off `gameWorld.enemyShips` so it covers all enemies, not just radar-detected ones |
+
 ## Requirements from the design doc
 
 ### Rendering & physics

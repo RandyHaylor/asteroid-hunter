@@ -1,0 +1,14 @@
+/* D49: fixed thin always-on aiming reticle, centered in the ship view. Diameter ≈ 25% of the view
+   height (≈ the 10° auto-aim cone's on-screen size at the 70° vertical FOV). */
+.aimingReticle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  height: 25%;
+  aspect-ratio: 1;
+  border: 1.5px solid rgba(120, 255, 160, 0.6);
+  border-radius: 50%;
+  box-shadow: 0 0 6px rgba(120, 255, 160, 0.25);
+  pointer-events: none;
+}

@@ -36,11 +36,11 @@ import {
   playerBaseLaserStats,
   playerBaseMissileStats,
 } from './weapons/weaponStats'
-import { selectAutoAimTargetInNoseCone, updateAutoAimTargetHighlight } from './weapons/noseConeAutoAim'
+import { selectAutoAimTargetInNoseCone } from './weapons/noseConeAutoAim'
 import { computeIdleAimAssistRotationInput } from './weapons/idleAimAssistTowardTarget'
 import { createGameAudioSystem } from './audio/proceduralGameAudio'
-import { createOffscreenEnemyIndicators } from './hud/offscreenEnemyIndicators'
-import { createTargetingConeRing } from './weapons/targetingConeRing'
+import { createEnemyTargetRings } from './hud/enemyTargetRings'
+import { createAimingReticle } from './hud/aimingReticle'
 import { createSunLensFlare } from './hud/sunLensFlare'
 import { createProceduralSpaceNebulaTexture } from './scene/proceduralSpaceSkybox'
 import { createPowerUpSelectionOverlay } from './hud/powerUpSelectionOverlay'
@@ -247,8 +247,8 @@ window.addEventListener('resize', layoutGameRegions)
 const laserVolleySystem = createLaserVolleySystem(gameScene)
 const missileVolleySystem = createMissileVolleySystem(gameScene)
 const enemyConditionBarsDisplay = createEnemyConditionBarsDisplay(gameScene)
-const offscreenEnemyIndicators = createOffscreenEnemyIndicators(viewHudOverlay) // D28
-const targetingConeRing = createTargetingConeRing(gameScene) // D29
+const enemyTargetRings = createEnemyTargetRings(viewHudOverlay) // D49 (per-enemy red rotating rings)
+createAimingReticle(viewHudOverlay) // D49 (fixed center aim reticle)
 const sunLensFlare = createSunLensFlare(viewHudOverlay) // D31
 const powerUpSelectionOverlay = createPowerUpSelectionOverlay(controlsOverlay) // D33 (blocks full window)
 
@@ -1080,25 +1080,8 @@ function syncRenderObjectsFromSimulation(frameDeltaSeconds: number): void {
     )
   }
 
-  updateAutoAimTargetHighlight(currentAutoAimTarget, gameScene, playerViewCamera)
-
-  // D29: green targeting ring sized to the aim cone at the closest live enemy's depth
-  getShipForwardDirection(playerShipState, scratchPlayerForwardDirection)
-  let nearestLiveEnemy: EnemyShip | null = null
-  let nearestEnemyDistanceSquared = Infinity
-  for (const enemyShip of gameWorld.enemyShips) {
-    if (enemyShip.isDestroyed) continue
-    const distanceSquared = enemyShip.positionMeters.distanceToSquared(playerShipState.positionMeters)
-    if (distanceSquared < nearestEnemyDistanceSquared) {
-      nearestEnemyDistanceSquared = distanceSquared
-      nearestLiveEnemy = enemyShip
-    }
-  }
-  targetingConeRing.updateTargetingConeRing(
-    nearestLiveEnemy,
-    playerShipState.positionMeters,
-    scratchPlayerForwardDirection,
-  )
+  // D49: the aim reticle is a fixed center ring (static DOM); the locked enemy + every other enemy
+  // get rotating red rings updated in the screen-space HUD pass (after the camera moves).
   playerConditionDisplay.updatePlayerConditionDisplay(
     playerShipCondition.getShieldPointsFraction(),
     playerShipCondition.getHullPointsFraction(),
@@ -1141,14 +1124,14 @@ function runFrameLoop(currentFrameTimestampMs: number): void {
   )
 
   // screen-space HUD must run AFTER the camera moves this frame, with fresh matrices, so projection
-  // to screen has no one-frame lag (D28 off-screen enemy markers, D31 sun lens flare)
+  // to screen has no one-frame lag (D49 per-enemy rings, D31 sun lens flare)
   playerViewCamera.updateMatrixWorld()
-  offscreenEnemyIndicators.updateOffscreenEnemyIndicators(
-    radarSignatureTracker.getContactReadings(),
+  enemyTargetRings.updateEnemyTargetRings(
+    gameWorld.enemyShips,
     playerViewCamera,
-    playerShipState.positionMeters,
     currentShipViewWidthPixels,
     currentShipViewHeightPixels,
+    currentAutoAimTarget !== null ? currentAutoAimTarget.enemyShipId : null,
   )
   sunLensFlare.updateSunLensFlare(
     visibleSunDisk.position,
