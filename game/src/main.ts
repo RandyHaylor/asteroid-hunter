@@ -1126,8 +1126,9 @@ function runFrameLoop(currentFrameTimestampMs: number): void {
   // screen-space HUD must run AFTER the camera moves this frame, with fresh matrices, so projection
   // to screen has no one-frame lag (D49 per-enemy rings, D31 sun lens flare)
   playerViewCamera.updateMatrixWorld()
+  // D50: driven by radar readings so the visible(red)/last-seen(yellow) mechanic is preserved
   enemyTargetRings.updateEnemyTargetRings(
-    gameWorld.enemyShips,
+    radarSignatureTracker.getContactReadings(),
     playerViewCamera,
     currentShipViewWidthPixels,
     currentShipViewHeightPixels,

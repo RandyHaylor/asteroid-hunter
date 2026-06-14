@@ -1,11 +1,13 @@
 import * as THREE from 'three'
 import './enemyTargetRings.css'
-import type { EnemyShip } from '../gameSimulation/gameWorldTypes'
+import type { RadarContactReading } from '../radar/radarSignatureTracker'
 
-// D49: every live enemy gets a rotating RED target reticle. On screen it encircles the enemy; when
-// the enemy is off screen the reticle SHRINKS and clamps to the screen rim as a direction indicator.
-// The currently-locked enemy's ring gets a brighter "locked" style. Replaces the old edge dot
-// markers (D28) and the single lock-highlight ring (D6).
+// D49/D50: every radar-tracked enemy gets a rotating target reticle. On screen it encircles the
+// enemy; when off screen the reticle SHRINKS and clamps to the screen rim as a direction indicator.
+// D50: color carries the radar state — RED for a visible (clear-sight) contact, YELLOW for a
+// last-seen (obscured/fading) contact at its last-known spot. The locked enemy's ring glows.
+// Driven by the radar contact readings (same source as the old edge markers) so the visible/
+// last-seen mechanic is preserved; the ring is just the new visual.
 
 const ON_SCREEN_RING_PIXELS = 56
 const OFF_SCREEN_RING_PIXELS = 26
@@ -20,7 +22,7 @@ const TARGET_RETICLE_SVG_MARKUP = `
 
 export type EnemyTargetRings = {
   updateEnemyTargetRings(
-    enemyShips: readonly EnemyShip[],
+    contactReadings: readonly RadarContactReading[],
     playerViewCamera: THREE.Camera,
     viewWidthPixels: number,
     viewHeightPixels: number,
@@ -32,10 +34,10 @@ const scratchCameraSpacePosition = new THREE.Vector3()
 const scratchNormalizedDeviceCoords = new THREE.Vector3()
 
 export function createEnemyTargetRings(viewHudOverlay: HTMLElement): EnemyTargetRings {
-  const ringElementsByEnemyShipId = new Map<number, HTMLDivElement>()
+  const ringElementsByContactId = new Map<number, HTMLDivElement>()
 
-  function getOrCreateRingElement(enemyShipId: number): HTMLDivElement {
-    let ringElement = ringElementsByEnemyShipId.get(enemyShipId)
+  function getOrCreateRingElement(contactSignatureId: number): HTMLDivElement {
+    let ringElement = ringElementsByContactId.get(contactSignatureId)
     if (!ringElement) {
       ringElement = document.createElement('div')
       ringElement.className = 'enemyTargetRing'
@@ -44,22 +46,20 @@ export function createEnemyTargetRings(viewHudOverlay: HTMLElement): EnemyTarget
       spinner.innerHTML = TARGET_RETICLE_SVG_MARKUP
       ringElement.appendChild(spinner)
       viewHudOverlay.appendChild(ringElement)
-      ringElementsByEnemyShipId.set(enemyShipId, ringElement)
+      ringElementsByContactId.set(contactSignatureId, ringElement)
     }
     return ringElement
   }
 
   return {
-    updateEnemyTargetRings(enemyShips, playerViewCamera, viewWidthPixels, viewHeightPixels, lockedEnemyShipId): void {
-      const enemyIdsShownThisFrame = new Set<number>()
+    updateEnemyTargetRings(contactReadings, playerViewCamera, viewWidthPixels, viewHeightPixels, lockedEnemyShipId): void {
+      const contactIdsShownThisFrame = new Set<number>()
 
-      for (const enemyShip of enemyShips) {
-        if (enemyShip.isDestroyed) continue
-
-        scratchCameraSpacePosition.copy(enemyShip.positionMeters).applyMatrix4(playerViewCamera.matrixWorldInverse)
+      for (const contactReading of contactReadings) {
+        scratchCameraSpacePosition.copy(contactReading.positionMeters).applyMatrix4(playerViewCamera.matrixWorldInverse)
         const isBehindCamera = scratchCameraSpacePosition.z > 0
 
-        scratchNormalizedDeviceCoords.copy(enemyShip.positionMeters).project(playerViewCamera)
+        scratchNormalizedDeviceCoords.copy(contactReading.positionMeters).project(playerViewCamera)
         let ndcX = scratchNormalizedDeviceCoords.x
         let ndcY = scratchNormalizedDeviceCoords.y
         if (isBehindCamera) {
@@ -70,7 +70,6 @@ export function createEnemyTargetRings(viewHudOverlay: HTMLElement): EnemyTarget
         const isOnScreen = !isBehindCamera && Math.abs(ndcX) <= 1 && Math.abs(ndcY) <= 1
         let ringSizePixels: number
         if (!isOnScreen) {
-          // off screen → shrink + clamp the bearing onto the screen rim (direction indicator)
           ringSizePixels = OFF_SCREEN_RING_PIXELS
           const largestComponentMagnitude = Math.max(Math.abs(ndcX), Math.abs(ndcY))
           if (largestComponentMagnitude === 0) {
@@ -87,21 +86,25 @@ export function createEnemyTargetRings(viewHudOverlay: HTMLElement): EnemyTarget
         const screenXPixels = (ndcX * 0.5 + 0.5) * viewWidthPixels
         const screenYPixels = (-ndcY * 0.5 + 0.5) * viewHeightPixels
 
-        const ringElement = getOrCreateRingElement(enemyShip.enemyShipId)
-        enemyIdsShownThisFrame.add(enemyShip.enemyShipId)
+        const ringElement = getOrCreateRingElement(contactReading.contactSignatureId)
+        contactIdsShownThisFrame.add(contactReading.contactSignatureId)
+        const isLastSeen = contactReading.contactState === 'lastSeenFading'
         ringElement.style.width = `${ringSizePixels}px`
         ringElement.style.height = `${ringSizePixels}px`
         ringElement.style.left = `${screenXPixels}px`
         ringElement.style.top = `${screenYPixels}px`
         ringElement.style.display = 'block'
-        ringElement.classList.toggle('enemyTargetRingLocked', enemyShip.enemyShipId === lockedEnemyShipId)
+        // D50: yellow + fade for last-seen; red for visible
+        ringElement.classList.toggle('enemyTargetRingLastSeen', isLastSeen)
+        ringElement.style.opacity = isLastSeen ? `${0.3 + 0.6 * contactReading.fadeRemainingFraction}` : '1'
+        ringElement.classList.toggle('enemyTargetRingLocked', contactReading.contactSignatureId === lockedEnemyShipId)
       }
 
-      // drop rings for enemies that died or despawned this frame
-      for (const [enemyShipId, ringElement] of ringElementsByEnemyShipId) {
-        if (enemyIdsShownThisFrame.has(enemyShipId)) continue
+      // drop rings for contacts no longer reported (destroyed, re-detected as the same, or aged out)
+      for (const [contactSignatureId, ringElement] of ringElementsByContactId) {
+        if (contactIdsShownThisFrame.has(contactSignatureId)) continue
         viewHudOverlay.removeChild(ringElement)
-        ringElementsByEnemyShipId.delete(enemyShipId)
+        ringElementsByContactId.delete(contactSignatureId)
       }
     },
   }

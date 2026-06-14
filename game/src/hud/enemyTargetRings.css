@@ -5,7 +5,12 @@
   display: none;
   transform: translate(-50%, -50%);
   pointer-events: none;
-  color: rgba(255, 64, 64, 0.85); /* SVG strokes use currentColor */
+  color: rgba(255, 64, 64, 0.9); /* SVG strokes use currentColor — red = visible (D50) */
+}
+
+/* D50: last-seen (obscured/fading) contact — same ring, yellow */
+.enemyTargetRingLastSeen {
+  color: rgba(255, 204, 51, 0.95);
 }
 
 .enemyTargetRingSpinner {
@@ -20,9 +25,9 @@
   height: 100%;
 }
 
+/* locked enemy → glow only (keeps the red/yellow state color) */
 .enemyTargetRingLocked {
-  color: #ff5a5a;
-  filter: drop-shadow(0 0 5px rgba(255, 64, 64, 0.85));
+  filter: drop-shadow(0 0 5px currentColor);
 }
 
 @keyframes enemyTargetRingSpin {

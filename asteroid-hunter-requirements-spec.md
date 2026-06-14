@@ -70,6 +70,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 
 | D49 | Unified target/aim reticles. (a) The **aim ring** is now a **fixed, thin, always-on green reticle at the view center** (≈ the 10° cone's on-screen size) — replaces D29's depth-scaled green cone ring (which jumped/hid). (b) **Every live enemy gets a rotating RED target reticle** (ring + 4 ticks, CSS-spun): on screen it encircles the enemy at a constant size; off screen it **shrinks and clamps to the view rim as the direction indicator**. The locked enemy's ring gets a brighter "locked" style. This replaces the D28 edge dot markers and the D6 single lock-highlight ring (both removed). Driven off `gameWorld.enemyShips` so it covers all enemies, not just radar-detected ones |
 
+| D50 | Restored the visible/last-seen mechanic the D49 ring rework had dropped. The per-enemy rotating rings are again driven by the **radar contact readings** (not the raw enemy list), so: **RED ring = visible (clear-sight) contact**, **YELLOW ring = last-seen (obscured/fading) contact** at its last-known spot (opacity fades with the contact), same rotating-ring visual + on/off-screen shrink-to-edge. Locked enemy's ring glows (color preserved). (D49's "all enemies incl. undetected" was the unintended change — detected/last-seen is the intended set) |
+
 ## Requirements from the design doc
 
 ### Rendering & physics
