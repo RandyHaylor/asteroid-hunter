@@ -852,12 +852,20 @@ function resolveEffectiveRotationInput(
   )
 }
 
-// D42: while dragging the radar, the ship slews toward the radar's commanded orientation at its max
-// turn rate (no ease-in damping) — "the ship catches up on its own". Clears the eased-rate state so
-// no stale rotation lingers once the drag ends.
+// D43: the camera snaps to the commanded (radar) orientation instantly; the SHIP follows at its
+// smoothed turn speed/progression — an eased slerp toward the commanded orientation (decelerates as
+// it arrives), capped so it never turns faster than the ship's max turn rate.
+const SHIP_FOLLOW_SMOOTHING_PER_SECOND = 6
 function rotatePlayerShipTowardRadarCommand(deltaSeconds: number): void {
-  const maxTurnStepRadians = playerShipBaseFlightStats.maxTurnRateRadiansPerSecond * deltaSeconds
-  playerShipState.orientation.rotateTowards(radarSphereDisplay.getCommandedOrientation(), maxTurnStepRadians)
+  const commandedOrientation = radarSphereDisplay.getCommandedOrientation()
+  const smoothingBlend = 1 - Math.exp(-SHIP_FOLLOW_SMOOTHING_PER_SECOND * deltaSeconds)
+  const angleToCommandedRadians = playerShipState.orientation.angleTo(commandedOrientation)
+  if (angleToCommandedRadians > 1e-4) {
+    // eased step, but never exceed the max turn rate this frame (keeps big jumps physical)
+    const maxTurnStepRadians = playerShipBaseFlightStats.maxTurnRateRadiansPerSecond * deltaSeconds
+    const easedStepRadians = Math.min(angleToCommandedRadians * smoothingBlend, maxTurnStepRadians)
+    playerShipState.orientation.rotateTowards(commandedOrientation, easedStepRadians)
+  }
   playerShipState.currentPitchRateRadiansPerSecond = 0
   playerShipState.currentYawRateRadiansPerSecond = 0
 }
@@ -1122,7 +1130,13 @@ function runFrameLoop(currentFrameTimestampMs: number): void {
   }
 
   syncRenderObjectsFromSimulation(frameDeltaSeconds)
-  playerCameraRig.updateCameraFollowingShip(playerShipState, frameDeltaSeconds)
+  // D43: the camera aligns to the COMMANDED (radar) orientation and snaps instantly when the radar
+  // is rotated; the ship lags behind it (catches up). When idle, commanded == ship.
+  playerCameraRig.updateCameraFollowingShip(
+    playerShipState,
+    radarSphereDisplay.getCommandedOrientation(),
+    frameDeltaSeconds,
+  )
 
   // screen-space HUD must run AFTER the camera moves this frame, with fresh matrices, so projection
   // to screen has no one-frame lag (D28 off-screen enemy markers, D31 sun lens flare)
