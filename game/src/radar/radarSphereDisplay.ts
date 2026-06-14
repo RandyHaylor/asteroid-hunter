@@ -29,7 +29,7 @@ const RADAR_SCOPE_BACKGROUND_COLOR = 0x06122e // dark navy inside the scope
 
 // D42: how far (radians) the radar orientation turns per pixel dragged
 const RADAR_DRAG_RADIANS_PER_PIXEL = 0.006
-const CONTACT_STEM_CYLINDER_RADIUS = 0.012
+const CONTACT_STEM_CYLINDER_RADIUS = 0.009 // thin vertical line from each dot to the center disc (D44)
 
 export type RadarSphereDisplay = {
   updateRadarDisplay(
@@ -112,11 +112,17 @@ export function createRadarSphereDisplay(controlClusterElement: HTMLElement): Ra
   radarCamera.position.set(0, 0.9, 2.1)
   radarCamera.lookAt(0, 0, 0)
 
+  // D44: the OUTER SURFACE rotates with the player's heading (set each frame) so the rotation is
+  // visible. A bright pole marker rides the sphere so the spin is unmistakable.
   const wireframeSphere = new Mesh(
     new SphereGeometry(1, 16, 12),
-    new MeshBasicMaterial({ color: 0x2adfdf, wireframe: true, transparent: true, opacity: 0.18 }),
+    new MeshBasicMaterial({ color: 0x2adfdf, wireframe: true, transparent: true, opacity: 0.3 }),
   )
   radarScene.add(wireframeSphere)
+
+  const spherePoleMarker = new Mesh(new SphereGeometry(0.07, 8, 6), new MeshBasicMaterial({ color: 0x9bffff }))
+  spherePoleMarker.position.set(0, 1, 0)
+  wireframeSphere.add(spherePoleMarker) // child → orbits as the sphere rotates
 
   // D36: horizontal reference disc through the sphere's center (ship's local horizontal plane)
   const equatorDiscFill = new Mesh(
@@ -189,6 +195,10 @@ export function createRadarSphereDisplay(controlClusterElement: HTMLElement): Ra
     // D42: the radar frame follows the (player-dragged) COMMANDED orientation, not the ship's lagged
     // one — transform contacts into that frame: inverse(commanded) × (contactPos − playerPos)
     scratchInverseCommandedOrientation.copy(radarCommandedOrientation).invert()
+
+    // D44: spin the outer sphere surface to match (the contacts ride this same frame), so the
+    // rotation is visible. The center disc + forward tick stay fixed as your heading reference.
+    wireframeSphere.quaternion.copy(scratchInverseCommandedOrientation)
 
     for (let readingIndex = 0; readingIndex < contactReadings.length; readingIndex++) {
       const contactReading = contactReadings[readingIndex]

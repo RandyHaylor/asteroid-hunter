@@ -58,6 +58,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 
 | D43 | **Camera aligns to the radar; ship lags.** The chase/cockpit camera's ORIENTATION now follows the **commanded (radar) orientation directly and snaps to it instantly** when the radar is rotated (camera orientation smoothing removed; only camera *position* is still smoothed). The radar shows the same commanded frame, so radar == camera. The **ship's heading follows at its smoothed turn speed** — an eased slerp toward the commanded orientation, capped at the ship's max turn rate — so during a turn the ship visibly rotates within the view and re-centers as it catches up. When not dragging, commanded == ship |
 
+| D44 | **Radar sphere surface visibly rotates** with the player's heading (the wireframe is set to inverse(commanded) each frame, with a bright pole marker riding it so the spin is obvious); the center disc + forward tick stay fixed as the heading reference, and contacts ride the same frame. Confirmed/kept the **thin vertical red stem** (cylinder) from each red contact dot to the center disc (radius 0.009) |
+
 ## Requirements from the design doc
 
 ### Rendering & physics
