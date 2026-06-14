@@ -14,7 +14,6 @@ import {
   type GameWorld,
 } from './gameSimulation/gameWorldTypes'
 import { applySoftBoundaryPushback } from './gameSimulation/boundedPlayAreaSoftEdge'
-import { isLineOfSightBlockedByAsteroids } from './gameSimulation/lineOfSightProbe'
 import { spawnAsteroidFieldInBoundedSphere, updateDriftingAsteroids } from './asteroids/asteroidFieldSpawner'
 import {
   applyWeaponDamageToAsteroid,
@@ -248,7 +247,7 @@ const laserVolleySystem = createLaserVolleySystem(gameScene)
 const missileVolleySystem = createMissileVolleySystem(gameScene)
 const enemyConditionBarsDisplay = createEnemyConditionBarsDisplay(gameScene)
 const enemyTargetRings = createEnemyTargetRings(viewHudOverlay) // D49 (per-enemy red rotating rings)
-createAimingReticle(viewHudOverlay) // D49 (fixed center aim reticle)
+const aimingReticle = createAimingReticle(viewHudOverlay) // D49 (fixed center aim reticle)
 const sunLensFlare = createSunLensFlare(viewHudOverlay) // D31
 const powerUpSelectionOverlay = createPowerUpSelectionOverlay(controlsOverlay) // D33 (blocks full window)
 
@@ -648,22 +647,18 @@ const scratchEnemyProjectileOrigin = new THREE.Vector3()
 
 function updatePlayerWeaponsFire(): void {
   getShipForwardDirection(playerShipState, scratchPlayerForwardDirection)
+  // D51: the lock selection itself skips occluded enemies (clear line of sight required), so the
+  // lock only ever sits on a visible enemy — we never lock onto or fire at a yellow/occluded target.
   currentAutoAimTarget = selectAutoAimTargetInNoseCone(
     playerShipState.positionMeters,
     scratchPlayerForwardDirection,
     gameWorld.enemyShips,
-  )
-
-  // D47: weapons are ALWAYS ON — they auto-fire at a locked target that is also visible (clear line
-  // of sight), gated only by cooldown. No target, or target hidden behind an asteroid → hold fire.
-  const lockedTarget = currentAutoAimTarget
-  if (lockedTarget === null) return
-  const lockedTargetIsVisible = !isLineOfSightBlockedByAsteroids(
-    playerShipState.positionMeters,
-    lockedTarget.positionMeters,
     gameWorld.asteroids,
   )
-  if (!lockedTargetIsVisible) return
+
+  // D47: weapons are ALWAYS ON — auto-fire at the locked (visible) target, gated only by cooldown.
+  const lockedTarget = currentAutoAimTarget
+  if (lockedTarget === null) return
 
   scratchProjectileOrigin
     .copy(playerShipState.positionMeters)
@@ -1080,8 +1075,8 @@ function syncRenderObjectsFromSimulation(frameDeltaSeconds: number): void {
     )
   }
 
-  // D49: the aim reticle is a fixed center ring (static DOM); the locked enemy + every other enemy
-  // get rotating red rings updated in the screen-space HUD pass (after the camera moves).
+  // D51: the center aim reticle turns red while actively locked onto a (visible) enemy
+  aimingReticle.setEngaged(currentAutoAimTarget !== null)
   playerConditionDisplay.updatePlayerConditionDisplay(
     playerShipCondition.getShieldPointsFraction(),
     playerShipCondition.getHullPointsFraction(),

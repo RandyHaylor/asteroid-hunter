@@ -5,8 +5,19 @@ import './aimingReticle.css'
 // was ahead. Its diameter is a constant fraction of the view height ≈ the auto-aim cone's on-screen
 // angular size, so the locked enemy sits inside it. Purely presentational; sized entirely in CSS.
 
-export function createAimingReticle(viewHudOverlay: HTMLElement): void {
+export type AimingReticle = {
+  /** D51: turn the reticle RED while actively locked/firing on an enemy (green when idle) */
+  setEngaged(isEngaged: boolean): void
+}
+
+export function createAimingReticle(viewHudOverlay: HTMLElement): AimingReticle {
   const aimingReticleElement = document.createElement('div')
   aimingReticleElement.className = 'aimingReticle'
   viewHudOverlay.appendChild(aimingReticleElement)
+
+  return {
+    setEngaged(isEngaged: boolean): void {
+      aimingReticleElement.classList.toggle('aimingReticleEngaged', isEngaged)
+    },
+  }
 }

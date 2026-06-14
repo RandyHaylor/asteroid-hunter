@@ -72,6 +72,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 
 | D50 | Restored the visible/last-seen mechanic the D49 ring rework had dropped. The per-enemy rotating rings are again driven by the **radar contact readings** (not the raw enemy list), so: **RED ring = visible (clear-sight) contact**, **YELLOW ring = last-seen (obscured/fading) contact** at its last-known spot (opacity fades with the contact), same rotating-ring visual + on/off-screen shrink-to-edge. Locked enemy's ring glows (color preserved). (D49's "all enemies incl. undetected" was the unintended change — detected/last-seen is the intended set) |
 
+| D51 | (1) **Auto-aim never locks onto an occluded enemy**: `selectAutoAimTargetInNoseCone` now takes the asteroids and skips any in-cone enemy whose line of sight is blocked — so the lock only sits on a visible (red) enemy and weapons never fire at a yellow/occluded target (the separate fire-time LOS recheck is now redundant, removed). [unit-tested]. (2) The **center aim reticle turns red while actively locked** onto an enemy (green when idle) |
+
 ## Requirements from the design doc
 
 ### Rendering & physics

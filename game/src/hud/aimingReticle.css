@@ -12,3 +12,9 @@
   box-shadow: 0 0 6px rgba(120, 255, 160, 0.25);
   pointer-events: none;
 }
+
+/* D51: red while actively locked onto / firing at an enemy */
+.aimingReticleEngaged {
+  border-color: rgba(255, 70, 70, 0.85);
+  box-shadow: 0 0 8px rgba(255, 70, 70, 0.5);
+}

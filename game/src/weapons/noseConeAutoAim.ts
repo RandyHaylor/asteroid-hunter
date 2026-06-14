@@ -1,8 +1,9 @@
 import * as THREE from 'three'
-import type { EnemyShip } from '../gameSimulation/gameWorldTypes'
+import type { AsteroidBody, EnemyShip } from '../gameSimulation/gameWorldTypes'
+import { isLineOfSightBlockedByAsteroids } from '../gameSimulation/lineOfSightProbe'
 
 // D6: auto-aim within a nose cone — the closest live enemy inside the cone becomes
-// the target and is visually highlighted with a pulsing ring.
+// the target. D51: occluded enemies (no clear line of sight) are NOT locked onto.
 
 /** D6: cone angle is a mutable config object so upgrades/abilities can expand it later */
 export const autoAimConfig = {
@@ -16,6 +17,7 @@ export function selectAutoAimTargetInNoseCone(
   playerPositionMeters: THREE.Vector3,
   playerForwardDirection: THREE.Vector3,
   enemyShips: readonly EnemyShip[],
+  asteroids: readonly AsteroidBody[],
 ): EnemyShip | null {
   // STEP 1: scan every live enemy, keeping the closest one whose bearing fits the cone
   let closestEnemyInCone: EnemyShip | null = null
@@ -32,6 +34,9 @@ export function selectAutoAimTargetInNoseCone(
     scratchEnemyBearingDirection.divideScalar(enemyDistanceMeters)
     const bearingOffNoseRadians = playerForwardDirection.angleTo(scratchEnemyBearingDirection)
     if (bearingOffNoseRadians > autoAimConfig.coneHalfAngleRadians) continue
+
+    // STEP 3 (D51): never lock onto an occluded enemy — require a clear line of sight
+    if (isLineOfSightBlockedByAsteroids(playerPositionMeters, enemyShip.positionMeters, asteroids)) continue
 
     closestEnemyInCone = enemyShip
     closestEnemyDistanceMeters = enemyDistanceMeters
