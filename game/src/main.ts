@@ -852,18 +852,25 @@ function resolveEffectiveRotationInput(
   )
 }
 
+// D42: while dragging the radar, the ship slews toward the radar's commanded orientation at its max
+// turn rate (no ease-in damping) — "the ship catches up on its own". Clears the eased-rate state so
+// no stale rotation lingers once the drag ends.
+function rotatePlayerShipTowardRadarCommand(deltaSeconds: number): void {
+  const maxTurnStepRadians = playerShipBaseFlightStats.maxTurnRateRadiansPerSecond * deltaSeconds
+  playerShipState.orientation.rotateTowards(radarSphereDisplay.getCommandedOrientation(), maxTurnStepRadians)
+  playerShipState.currentPitchRateRadiansPerSecond = 0
+  playerShipState.currentYawRateRadiansPerSecond = 0
+}
+
 function updatePlayerMovement(deltaSeconds: number): void {
   const flightControlInput = flightControls.readFlightControlInput()
 
-  // D40: steering pitch/yaw come from dragging the radar sphere; fall back to keyboard when not
-  // dragging. These feed the same eased-rotation + idle-aim-assist path the joystick used to.
-  const radarSteeringInput = radarSphereDisplay.readRadarRotationInput()
-  const playerCommandedPitchInput = radarSteeringInput.isDragging
-    ? radarSteeringInput.pitchInput
-    : flightControlInput.pitchInput
-  const playerCommandedYawInput = radarSteeringInput.isDragging
-    ? radarSteeringInput.yawInput
-    : flightControlInput.yawInput
+  // D42: dragging the radar IS the rotation (trackball, handled in radarSphereDisplay). When not
+  // dragging, keep the radar mirroring the ship so it reflects keyboard/aim-assist heading.
+  const radarIsSteeringDrag = radarSphereDisplay.isSteeringDrag()
+  if (!radarIsSteeringDrag) {
+    radarSphereDisplay.syncCommandedOrientationToShip(playerShipState.orientation)
+  }
 
   if (tractorPullIsActive && activeCoverAsteroid) {
     // D14 escape routes: move the throttle (it was zeroed on tap) or tap another asteroid
@@ -872,20 +879,22 @@ function updatePlayerMovement(deltaSeconds: number): void {
     } else if (flightControlInput.throttleFraction > COVER_ESCAPE_THROTTLE_THRESHOLD) {
       releaseTractorPull()
     } else {
-      // D18: the rotation joystick keeps aiming the ship even while held on the shell —
-      // orientation only changes when the player commands it (no auto-facing).
-      // D22: when the player isn't steering, the weak aim-assist nudges the nose toward the lock.
-      const coverRotationInput = resolveEffectiveRotationInput(
-        playerCommandedPitchInput,
-        playerCommandedYawInput,
-      )
-      stepShipRotationFromJoystick(
-        playerShipState,
-        coverRotationInput.pitchInput,
-        coverRotationInput.yawInput,
-        playerShipBaseFlightStats,
-        deltaSeconds,
-      )
+      // D42: drag the radar to rotate (ship catches up); otherwise keyboard + idle aim-assist (D22)
+      if (radarIsSteeringDrag) {
+        rotatePlayerShipTowardRadarCommand(deltaSeconds)
+      } else {
+        const coverRotationInput = resolveEffectiveRotationInput(
+          flightControlInput.pitchInput,
+          flightControlInput.yawInput,
+        )
+        stepShipRotationFromJoystick(
+          playerShipState,
+          coverRotationInput.pitchInput,
+          coverRotationInput.yawInput,
+          playerShipBaseFlightStats,
+          deltaSeconds,
+        )
+      }
 
       // D18: the strafe joystick slides the hold point; first manual nudge stops the auto re-solve
       const strafeControlInput = flightControls.readStrafeControlInput()
@@ -940,21 +949,33 @@ function updatePlayerMovement(deltaSeconds: number): void {
     }
   }
 
-  // D22: apply the weak idle aim-assist to free-flight rotation too (throttle/thrust unchanged)
-  const flightRotationInput = resolveEffectiveRotationInput(
-    playerCommandedPitchInput,
-    playerCommandedYawInput,
-  )
-  stepShipFlightSimulation(
-    playerShipState,
-    {
-      pitchInput: flightRotationInput.pitchInput,
-      yawInput: flightRotationInput.yawInput,
-      throttleFraction: flightControlInput.throttleFraction,
-    },
-    playerShipBaseFlightStats,
-    deltaSeconds,
-  )
+  // D42: drag-to-steer rotates the ship toward the radar command (no damping); otherwise keyboard
+  // + idle aim-assist (D22). Throttle/thrust are applied either way (zero pitch/yaw when dragging,
+  // since the rotation was already applied above).
+  if (radarIsSteeringDrag) {
+    rotatePlayerShipTowardRadarCommand(deltaSeconds)
+    stepShipFlightSimulation(
+      playerShipState,
+      { pitchInput: 0, yawInput: 0, throttleFraction: flightControlInput.throttleFraction },
+      playerShipBaseFlightStats,
+      deltaSeconds,
+    )
+  } else {
+    const flightRotationInput = resolveEffectiveRotationInput(
+      flightControlInput.pitchInput,
+      flightControlInput.yawInput,
+    )
+    stepShipFlightSimulation(
+      playerShipState,
+      {
+        pitchInput: flightRotationInput.pitchInput,
+        yawInput: flightRotationInput.yawInput,
+        throttleFraction: flightControlInput.throttleFraction,
+      },
+      playerShipBaseFlightStats,
+      deltaSeconds,
+    )
+  }
   applySoftBoundaryPushback(playerShipState.positionMeters, playerShipState.velocityMetersPerSecond, deltaSeconds)
 }
 

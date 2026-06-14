@@ -54,6 +54,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 
 | D41 | **Side-by-side view layout** (one JS layout fn = single source of geometry, applied as inline styles). LANDSCAPE: a wide **right-aligned block** of two equal squares — **ship view (left) + radar (right)** — with all action buttons in a **left strip** (throttle/strafe/lasers upper, missiles lower). PORTRAIT: ship square on top; below it the **radar square sits on the right with the button column to its left** (throttle/strafe/lasers upper, missiles lower). The radar became its own JS-positioned square region (out of the control cluster); ship camera stays square. Replaces D35's centered-square + margin model |
 
+| D42 | **Radar trackball steering + visible stems.** (a) The dot→disc stems are now **solid vertical cylinders** (the old 1px lines were invisible — WebGL ignores line width). (b) Dragging the radar now rotates the radar's **own commanded orientation directly, 1:1, with no damping** (it's a trackball); the radar renders that commanded frame so it responds immediately. The **ship's heading then slews toward the commanded orientation at its max turn rate** (`Quaternion.rotateTowards`, no ease-in) — "catches up on its own". When not dragging, the radar mirrors the ship (so keyboard + idle aim-assist heading still show). Replaces D40's grab-offset rate control |
+
 ## Requirements from the design doc
 
 ### Rendering & physics
