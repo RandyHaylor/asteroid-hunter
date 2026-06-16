@@ -51,7 +51,8 @@ Design history: see [asteroid-hunter-initial-design-proposal.md](asteroid-hunter
 cd game
 npm run build
 cd dist
-git init; git add -A; git commit -m "deploy"; git branch -M gh-pages
+rm -rf .git
+git init -q; git add -A; git commit -q -m "deploy"; git branch -M gh-pages
 git push -f git@github.com:RandyHaylor/asteroid-hunter.git gh-pages
-cd ..; Remove-Item -Recurse -Force dist/.git
+cd ..; rm -rf dist/.git
 ```
