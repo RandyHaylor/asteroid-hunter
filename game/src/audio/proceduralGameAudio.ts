@@ -12,8 +12,13 @@ import {
 // gesture (resumeAfterFirstUserGesture), so nothing plays until the player first interacts.
 
 const MASTER_OUTPUT_GAIN = 0.5
-const MUSIC_BUS_GAIN = 0.35
+// D53: background music reduced by 50% (per request). The synth-fallback music bus is halved here;
+// the .ogg file playlist is halved via MUSIC_FILE_OUTPUT_GAIN below.
+const MUSIC_BUS_GAIN = 0.175 // D53: was 0.35 — halved
 const SOUND_EFFECTS_BUS_GAIN = 0.6
+// D53: the .ogg playlist gain. The files are baked to 0.3 by ffmpeg (D39); this extra 0.5 multiplier
+// is the requested −50% music reduction, applied without re-encoding. Also the unmuted target level.
+const MUSIC_FILE_OUTPUT_GAIN = 0.5
 
 // Web Audio lookahead scheduler ("A Tale of Two Clocks"): a coarse timer schedules precise
 // AudioContext-timed events a little ahead of the playhead so timing never depends on JS jitter.
@@ -83,7 +88,7 @@ export function createGameAudioSystem(): GameAudioSystem {
   // plays through its own gain straight to the destination, so the file's baked 0.3 IS the level
   // (it doesn't get the extra master attenuation that the synth SFX get). Muted alongside master.
   const musicFileOutputGainNode = audioContext.createGain()
-  musicFileOutputGainNode.gain.value = 1
+  musicFileOutputGainNode.gain.value = MUSIC_FILE_OUTPUT_GAIN
   musicFileOutputGainNode.connect(audioContext.destination)
 
   // ===== one shared white-noise buffer, reused for every drum hit / noisy SFX =====
@@ -301,7 +306,7 @@ export function createGameAudioSystem(): GameAudioSystem {
     toggleMuted(): boolean {
       muted = !muted
       masterGainNode.gain.value = muted ? 0 : MASTER_OUTPUT_GAIN
-      musicFileOutputGainNode.gain.value = muted ? 0 : 1 // D39: mute the file playlist too
+      musicFileOutputGainNode.gain.value = muted ? 0 : MUSIC_FILE_OUTPUT_GAIN // D39: mute the file playlist too (D53: −50%)
       return muted
     },
     isMuted(): boolean {

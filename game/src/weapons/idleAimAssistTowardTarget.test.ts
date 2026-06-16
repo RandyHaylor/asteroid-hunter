@@ -13,6 +13,7 @@ const baseFlightStats: ShipFlightStats = {
   maxTurnRateRadiansPerSecond: 1.6,
   maxForwardSpeedMetersPerSecond: 80,
   aimAssistMaxTurnRateRadiansPerSecond: 0.5,
+  enemyTrackTurnRateRadiansPerSecond: 1.2,
 }
 
 const maxAssistInputFraction =

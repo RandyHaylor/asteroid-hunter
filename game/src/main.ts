@@ -36,10 +36,11 @@ import {
   playerBaseMissileStats,
 } from './weapons/weaponStats'
 import { selectAutoAimTargetInNoseCone } from './weapons/noseConeAutoAim'
-import { computeIdleAimAssistRotationInput } from './weapons/idleAimAssistTowardTarget'
+import { isShipAlignedForLaserFire } from './weapons/laserAlignmentGate'
 import { createGameAudioSystem } from './audio/proceduralGameAudio'
 import { createEnemyTargetRings } from './hud/enemyTargetRings'
 import { createAimingReticle } from './hud/aimingReticle'
+import { createShipWeaponCrosshair } from './hud/shipWeaponCrosshair'
 import { createSunLensFlare } from './hud/sunLensFlare'
 import { createProceduralSpaceNebulaTexture } from './scene/proceduralSpaceSkybox'
 import { createPowerUpSelectionOverlay } from './hud/powerUpSelectionOverlay'
@@ -248,6 +249,7 @@ const missileVolleySystem = createMissileVolleySystem(gameScene)
 const enemyConditionBarsDisplay = createEnemyConditionBarsDisplay(gameScene)
 const enemyTargetRings = createEnemyTargetRings(viewHudOverlay) // D49 (per-enemy red rotating rings)
 const aimingReticle = createAimingReticle(viewHudOverlay) // D49 (fixed center aim reticle)
+const shipWeaponCrosshair = createShipWeaponCrosshair(viewHudOverlay) // D52 (true weapon-bore marker)
 const sunLensFlare = createSunLensFlare(viewHudOverlay) // D31
 const powerUpSelectionOverlay = createPowerUpSelectionOverlay(controlsOverlay) // D33 (blocks full window)
 
@@ -673,15 +675,19 @@ function updatePlayerWeaponsFire(): void {
       playerBaseLaserStats.boltSpeedMetersPerSecond,
       scratchPlayerAimDirection,
     )
-    laserVolleySystem.tryFireLaserVolley(
-      scratchProjectileOrigin,
-      scratchPlayerAimDirection,
-      playerBaseLaserStats,
-      true,
-      simulationClockSeconds,
-    )
-    playerNextLaserFireTimeSeconds = simulationClockSeconds + playerBaseLaserStats.fireCooldownSeconds
-    gameAudioSystem.playLaserZapSound() // D23
+    // D52: lasers fly straight out of the nose, so they only fire once the hull has rotated close
+    // enough to the firing solution (the ship aims ahead via D53). Missiles below bypass this — they home.
+    if (isShipAlignedForLaserFire(scratchPlayerForwardDirection, scratchPlayerAimDirection)) {
+      laserVolleySystem.tryFireLaserVolley(
+        scratchProjectileOrigin,
+        scratchPlayerAimDirection,
+        playerBaseLaserStats,
+        true,
+        simulationClockSeconds,
+      )
+      playerNextLaserFireTimeSeconds = simulationClockSeconds + playerBaseLaserStats.fireCooldownSeconds
+      gameAudioSystem.playLaserZapSound() // D23
+    }
   }
 
   if (simulationClockSeconds >= playerNextMissileFireTimeSeconds) {
@@ -819,38 +825,10 @@ function adjustCoverHoldPointFromStrafeInput(
     .addScaledVector(scratchCoverHoldDirection, computeCoverHoldShellRadiusMeters(coverAsteroid))
 }
 
-// D22: below this rotation-input magnitude the player counts as "not actively steering",
-// so the weak idle aim-assist may take over and nudge the nose toward the locked target.
-const ACTIVE_STEERING_INPUT_DEADBAND = 0.05
-
-/**
- * The pitch/yaw inputs to actually rotate with: the player's own input whenever they are steering,
- * otherwise the weak aim-assist toward the locked target (D22). Falls back to the raw player input
- * when there is no live target, so behaviour is unchanged when nothing is locked.
- */
-function resolveEffectiveRotationInput(
-  playerPitchInput: number,
-  playerYawInput: number,
-  aimAssistBaseOrientation: THREE.Quaternion,
-): { pitchInput: number; yawInput: number } {
-  const playerIsActivelySteering =
-    Math.abs(playerPitchInput) > ACTIVE_STEERING_INPUT_DEADBAND ||
-    Math.abs(playerYawInput) > ACTIVE_STEERING_INPUT_DEADBAND
-  if (playerIsActivelySteering || currentAutoAimTarget === null || currentAutoAimTarget.isDestroyed) {
-    return { pitchInput: playerPitchInput, yawInput: playerYawInput }
-  }
-  // D47: the idle aim-assist nudges the COMMANDED heading (which the camera follows) toward the lock
-  return computeIdleAimAssistRotationInput(
-    aimAssistBaseOrientation,
-    playerShipState.positionMeters,
-    currentAutoAimTarget.positionMeters,
-    playerShipBaseFlightStats,
-  )
-}
-
-// D47: keyboard / idle-aim-assist pitch+yaw rotate the COMMANDED heading (camera frame) directly,
-// at the ship's max turn rate, in the commanded frame's local axes (same convention as the radar
-// drag). The ship then eases toward commanded; the camera = commanded.
+// D47/D53: keyboard pitch+yaw rotate the COMMANDED heading (camera frame) directly, at the ship's
+// max turn rate, in the commanded frame's local axes (same convention as the radar drag). The
+// camera = commanded. (D53 removed the old idle aim-assist that nudged the CAMERA toward the lock —
+// the SHIP now does the aiming, decoupled from the camera; see rotatePlayerShipTowardAimDirection.)
 const SHIP_LOCAL_RIGHT_AXIS = new THREE.Vector3(1, 0, 0)
 const scratchCommandedYawRotation = new THREE.Quaternion()
 const scratchCommandedPitchRotation = new THREE.Quaternion()
@@ -885,6 +863,36 @@ function rotatePlayerShipTowardRadarCommand(deltaSeconds: number): void {
   playerShipState.currentYawRateRadiansPerSecond = 0
 }
 
+// D53: turn the SHIP toward a world-space aim direction (the lead-ahead point of the locked enemy),
+// at the upgradeable enemyTrackTurnRateRadiansPerSecond. This is DECOUPLED from the camera: it runs
+// whenever an enemy is locked, regardless of radar drag/release, so the ship points its weapons
+// ahead of the target even while the camera is aimed elsewhere. Uses the minimal-arc rotation (no
+// roll change) toward the aim direction, capped at the tracking rate this frame.
+const scratchShipAimCurrentForward = new THREE.Vector3()
+const scratchShipAimDeltaRotation = new THREE.Quaternion()
+const scratchShipAimTargetOrientation = new THREE.Quaternion()
+function rotatePlayerShipTowardAimDirection(aimDirectionWorld: THREE.Vector3, deltaSeconds: number): void {
+  if (aimDirectionWorld.lengthSq() < 1e-12) {
+    rotatePlayerShipTowardRadarCommand(deltaSeconds) // degenerate aim — fall back to camera follow
+    return
+  }
+  getShipForwardDirection(playerShipState, scratchShipAimCurrentForward)
+  scratchShipAimCurrentForward.normalize()
+  scratchShipAimDeltaRotation.setFromUnitVectors(scratchShipAimCurrentForward, aimDirectionWorld)
+  scratchShipAimTargetOrientation.copy(scratchShipAimDeltaRotation).multiply(playerShipState.orientation).normalize()
+  const angleToAimRadians = playerShipState.orientation.angleTo(scratchShipAimTargetOrientation)
+  if (angleToAimRadians > 1e-4) {
+    const maxStepRadians = playerShipBaseFlightStats.enemyTrackTurnRateRadiansPerSecond * deltaSeconds
+    playerShipState.orientation.rotateTowards(scratchShipAimTargetOrientation, maxStepRadians)
+  }
+  playerShipState.currentPitchRateRadiansPerSecond = 0
+  playerShipState.currentYawRateRadiansPerSecond = 0
+}
+
+const scratchShipAimLeadDirection = new THREE.Vector3()
+const scratchShipWeaponBoreForward = new THREE.Vector3()
+const scratchShipWeaponBoreWorldPoint = new THREE.Vector3()
+
 function updatePlayerMovement(deltaSeconds: number): void {
   const flightControlInput = flightControls.readFlightControlInput()
 
@@ -893,16 +901,34 @@ function updatePlayerMovement(deltaSeconds: number): void {
   // back to the ship — that caused the camera to jump on drag release. The ship eases toward it.
   const commandedOrientation = radarSphereDisplay.getCommandedOrientation()
   const radarIsSteeringDrag = radarSphereDisplay.isSteeringDrag()
+  // camera/commanded heading: radar drag (in the radar module) + keyboard here. The camera is NOT
+  // auto-aimed at the lock — per D53 the SHIP does the aiming (below), decoupled from the camera.
   if (!radarIsSteeringDrag) {
-    const headingInput = resolveEffectiveRotationInput(
+    applyPitchYawToCommandedHeading(
+      commandedOrientation,
       flightControlInput.pitchInput,
       flightControlInput.yawInput,
-      commandedOrientation,
+      deltaSeconds,
     )
-    applyPitchYawToCommandedHeading(commandedOrientation, headingInput.pitchInput, headingInput.yawInput, deltaSeconds)
   }
-  // ship eases toward the commanded heading every frame (camera = commanded, so it stays on release)
-  rotatePlayerShipTowardRadarCommand(deltaSeconds)
+
+  // D53: whenever an enemy is locked (in the reticle), the SHIP's rotation target becomes the
+  // aim-ahead (lead) point — regardless of whether the radar is being dragged or released. The ship
+  // turns to point its weapons ahead of the enemy while the camera stays on the commanded heading.
+  // With no lock, the ship eases toward the commanded (camera/radar) heading as before.
+  const lockedAimTarget = currentAutoAimTarget
+  if (lockedAimTarget !== null && !lockedAimTarget.isDestroyed) {
+    computeLeadAimDirection(
+      playerShipState.positionMeters,
+      lockedAimTarget.positionMeters,
+      lockedAimTarget.velocityMetersPerSecond,
+      playerBaseLaserStats.boltSpeedMetersPerSecond,
+      scratchShipAimLeadDirection,
+    )
+    rotatePlayerShipTowardAimDirection(scratchShipAimLeadDirection, deltaSeconds)
+  } else {
+    rotatePlayerShipTowardRadarCommand(deltaSeconds)
+  }
 
   if (tractorPullIsActive && activeCoverAsteroid) {
     // D14 escape routes: move the throttle (it was zeroed on tap) or tap another asteroid
@@ -1121,6 +1147,18 @@ function runFrameLoop(currentFrameTimestampMs: number): void {
   // screen-space HUD must run AFTER the camera moves this frame, with fresh matrices, so projection
   // to screen has no one-frame lag (D49 per-enemy rings, D31 sun lens flare)
   playerViewCamera.updateMatrixWorld()
+  // D52: mark the ship's true weapon bore — a point straight ahead of the nose projected to the
+  // view. It drifts off the center reticle as the ship aims ahead of the camera (D53).
+  getShipForwardDirection(playerShipState, scratchShipWeaponBoreForward)
+  scratchShipWeaponBoreWorldPoint
+    .copy(playerShipState.positionMeters)
+    .addScaledVector(scratchShipWeaponBoreForward, 300)
+  shipWeaponCrosshair.updateShipWeaponCrosshair(
+    scratchShipWeaponBoreWorldPoint,
+    playerViewCamera,
+    currentShipViewWidthPixels,
+    currentShipViewHeightPixels,
+  )
   // D50: driven by radar readings so the visible(red)/last-seen(yellow) mechanic is preserved
   enemyTargetRings.updateEnemyTargetRings(
     radarSignatureTracker.getContactReadings(),

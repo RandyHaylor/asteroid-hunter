@@ -73,6 +73,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 | D50 | Restored the visible/last-seen mechanic the D49 ring rework had dropped. The per-enemy rotating rings are again driven by the **radar contact readings** (not the raw enemy list), so: **RED ring = visible (clear-sight) contact**, **YELLOW ring = last-seen (obscured/fading) contact** at its last-known spot (opacity fades with the contact), same rotating-ring visual + on/off-screen shrink-to-edge. Locked enemy's ring glows (color preserved). (D49's "all enemies incl. undetected" was the unintended change — detected/last-seen is the intended set) |
 
 | D51 | (1) **Auto-aim never locks onto an occluded enemy**: `selectAutoAimTargetInNoseCone` now takes the asteroids and skips any in-cone enemy whose line of sight is blocked — so the lock only sits on a visible (red) enemy and weapons never fire at a yellow/occluded target (the separate fire-time LOS recheck is now redundant, removed). [unit-tested]. (2) The **center aim reticle turns red while actively locked** onto an enemy (green when idle) |
+| D52 | Weapon-bore aiming primitives. (a) `laserAlignmentGate.ts` — lasers fly straight from the nose, so they may fire only once the hull is within **5°** of the firing solution (missiles bypass — they home) [unit-tested]. (b) `shipWeaponCrosshair.ts` — a small red crosshair marking the ship's true weapon bore projected into the view (drifts off the fixed center reticle as the ship aims ahead of the camera). (c) New upgradeable `enemyTrackTurnRateRadiansPerSecond` flight stat (the ship's locked-aim turn rate); power-ups reworked: **AUTO-AIM TRACKING** (+25% `enemyTrackTurnRate`) replaces the old cone-widen, and a new **SHIP HANDLING** (+25% `maxTurnRate`) added → **9** power-ups |
+| D53 | (1) **Radar dot→disc intersection circles**: each enemy contact's vertical stem now ends in a flat ring on the equator disc at its `(x,0,z)` foot, so the stems "form a circle on the disc where they intersect". (2) **Ship aims ahead at the locked target, decoupled from the camera**: whenever an enemy is locked (in the reticle), the SHIP's rotation target becomes the lead-aim point (`computeLeadAimDirection`) and it slews there at `enemyTrackTurnRate` — regardless of radar drag/release — while the camera stays on the commanded (radar) heading. This wires in D52's gate + bore crosshair and **removes the old D22/D47 idle aim-assist that nudged the *camera* toward the lock** (`idleAimAssistTowardTarget.ts` is now unused by the game loop). (3) **Background music −50%** via gain (synth `MUSIC_BUS_GAIN` halved + `MUSIC_FILE_OUTPUT_GAIN` 0.5 on the .ogg playlist) — no re-encoding |
 
 ## Requirements from the design doc
 
@@ -132,7 +134,9 @@ src/
     asteroidDestructibleBody.ts    — HP, chunk loss, shrink, damage particles (R12)
   weapons/
     noseConeAutoAim.ts             — 10° cone target selection + highlight (D6) [unit-tested]
-    idleAimAssistTowardTarget.ts   — weak turn-toward-lock when not steering (D22) [unit-tested]
+    targetLeadPrediction.ts        — lead-the-target intercept solver (any projectile speed) [unit-tested]
+    idleAimAssistTowardTarget.ts   — weak turn-toward-lock (D22); now UNUSED by the loop (superseded by D53 ship-aim) [unit-tested]
+    laserAlignmentGate.ts          — lasers fire only when hull ≤5° off the firing solution (D52) [unit-tested]
     laserFire.ts / missileFire.ts  — short-range bolts / slow AOE projectiles (R9)
   enemies/
     enemyAlienShipBehavior.ts      — patrol / orbit-strafe / cover-hunter states (D8)
@@ -152,10 +156,11 @@ src/
   (additional hud/) 
     offscreenEnemyIndicators.ts    — edge-of-screen markers for off-screen enemies (D28)
     sunLensFlare.ts                — faux lens flare overlay when the sun is in view (D31)
+    shipWeaponCrosshair.ts         — red crosshair at the ship's true weapon bore (D52)
   (additional weapons/)
     targetingConeRing.ts           — green aim-cone cross-section ring at closest enemy depth (D29)
   upgrades/
-    powerUpDefinitions.ts          — 8 power-ups (icon + stat mutation) + 2-of-8 selector (D33) [unit-tested]
+    powerUpDefinitions.ts          — 9 power-ups (icon + stat mutation) + 2-of-N selector (D33, D52) [unit-tested]
   (additional hud/, cont.)
     powerUpSelectionOverlay.ts     — between-wave upgrade picker overlay (D33)
   shipStats.ts                     — data-driven stat table (upgrade-ready, R17/R18)

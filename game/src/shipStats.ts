@@ -12,6 +12,8 @@ export type ShipFlightStats = {
    * later (a "targeting computer" upgrade raises it); 0 disables the assist entirely.
    */
   aimAssistMaxTurnRateRadiansPerSecond: number
+  // D52: camera enemy-tracking turn rate (how fast the camera/reticle swings to look straight at a LOCKED enemy) — separate from maxTurnRateRadiansPerSecond (the ship's own turn rate); upgradeable.
+  enemyTrackTurnRateRadiansPerSecond: number
 }
 
 export const playerShipBaseFlightStats: ShipFlightStats = {
@@ -20,6 +22,7 @@ export const playerShipBaseFlightStats: ShipFlightStats = {
   maxTurnRateRadiansPerSecond: 1.6,
   maxForwardSpeedMetersPerSecond: 80,
   aimAssistMaxTurnRateRadiansPerSecond: 0.5, // ~1/3 of manual turn rate — a nudge, not autopilot
+  enemyTrackTurnRateRadiansPerSecond: 1.2, // D52: a bit slower than the ship's 1.6 turn rate so the camera can't fully keep up with a close, fast-crossing enemy
 }
 
 export type TractorBeamStats = {

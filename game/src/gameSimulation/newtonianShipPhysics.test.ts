@@ -14,6 +14,7 @@ const testFlightStats: ShipFlightStats = {
   maxTurnRateRadiansPerSecond: 1.6,
   maxForwardSpeedMetersPerSecond: 80,
   aimAssistMaxTurnRateRadiansPerSecond: 0.5,
+  enemyTrackTurnRateRadiansPerSecond: 1.2,
 }
 
 const FIXED_TIMESTEP_SECONDS = 1 / 60

@@ -185,8 +185,12 @@ export function createRadarSphereDisplay(controlClusterElement: HTMLElement): Ra
     1,
     6,
   )
+  // D53: a flat ring lying on the equator disc at the point where each contact's vertical stem
+  // intersects it (x, 0, z) — so the stems "form a circle on the disc where they intersect".
+  const sharedContactDiscCircleGeometry = new RingGeometry(0.05, 0.075, 16)
   const contactDotMeshPool: Mesh<SphereGeometry, MeshBasicMaterial>[] = []
   const contactStemCylinderPool: Mesh<CylinderGeometry, MeshBasicMaterial>[] = []
+  const contactDiscCirclePool: Mesh<RingGeometry, MeshBasicMaterial>[] = []
 
   function acquireContactDotMesh(poolIndex: number): Mesh<SphereGeometry, MeshBasicMaterial> {
     let dotMesh = contactDotMeshPool[poolIndex]
@@ -209,6 +213,20 @@ export function createRadarSphereDisplay(controlClusterElement: HTMLElement): Ra
       radarScene.add(stemCylinder)
     }
     return stemCylinder
+  }
+
+  function acquireContactDiscCircle(poolIndex: number): Mesh<RingGeometry, MeshBasicMaterial> {
+    let discCircle = contactDiscCirclePool[poolIndex]
+    if (!discCircle) {
+      discCircle = new Mesh(
+        sharedContactDiscCircleGeometry,
+        new MeshBasicMaterial({ transparent: true, depthTest: false, side: DoubleSide }),
+      )
+      discCircle.rotation.x = -Math.PI / 2 // lie flat in the equator (y=0) plane
+      contactDiscCirclePool[poolIndex] = discCircle
+      radarScene.add(discCircle)
+    }
+    return discCircle
   }
 
   function updateRadarDisplay(
@@ -260,6 +278,13 @@ export function createRadarSphereDisplay(controlClusterElement: HTMLElement): Ra
         stemCylinder.material.color.copy(dotMesh.material.color)
         stemCylinder.material.opacity = dotMesh.material.opacity * 0.75
       }
+
+      // D53: a circle on the disc at the stem's intersection point (x, 0, z), matching the dot color
+      const discCircle = acquireContactDiscCircle(readingIndex)
+      discCircle.visible = true
+      discCircle.position.set(dotMesh.position.x, 0, dotMesh.position.z)
+      discCircle.material.color.copy(dotMesh.material.color)
+      discCircle.material.opacity = dotMesh.material.opacity
     }
 
     for (let poolIndex = contactReadings.length; poolIndex < contactDotMeshPool.length; poolIndex++) {
@@ -267,6 +292,9 @@ export function createRadarSphereDisplay(controlClusterElement: HTMLElement): Ra
     }
     for (let poolIndex = contactReadings.length; poolIndex < contactStemCylinderPool.length; poolIndex++) {
       contactStemCylinderPool[poolIndex].visible = false
+    }
+    for (let poolIndex = contactReadings.length; poolIndex < contactDiscCirclePool.length; poolIndex++) {
+      contactDiscCirclePool[poolIndex].visible = false
     }
 
     const playerMarkerPulseScale = 1 + 0.12 * Math.sin(nowSeconds * 4)

@@ -3,9 +3,9 @@ import { ALL_POWER_UP_DEFINITIONS, selectTwoDistinctPowerUps } from './powerUpDe
 
 describe('ALL_POWER_UP_DEFINITIONS', () => {
   it('contains the eight requested power-ups with unique ids', () => {
-    expect(ALL_POWER_UP_DEFINITIONS).toHaveLength(8)
+    expect(ALL_POWER_UP_DEFINITIONS).toHaveLength(9)
     const uniqueIds = new Set(ALL_POWER_UP_DEFINITIONS.map((p) => p.powerUpId))
-    expect(uniqueIds.size).toBe(8)
+    expect(uniqueIds.size).toBe(9)
   })
 
   it('every definition has a name, description, a unique-looking SVG icon, and an apply fn', () => {
@@ -17,7 +17,7 @@ describe('ALL_POWER_UP_DEFINITIONS', () => {
       expect(typeof powerUp.applyToPlayerStats).toBe('function')
       iconMarkups.add(powerUp.iconSvgMarkup)
     }
-    expect(iconMarkups.size).toBe(8) // each icon is distinct
+    expect(iconMarkups.size).toBe(9) // each icon is distinct
   })
 })
 

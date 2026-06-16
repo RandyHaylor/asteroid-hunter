@@ -1,6 +1,5 @@
 import { playerShipBaseFlightStats, playerShipBaseTractorBeamStats } from '../shipStats'
 import { playerBaseLaserStats, playerBaseMissileStats } from '../weapons/weaponStats'
-import { autoAimConfig } from '../weapons/noseConeAutoAim'
 
 // D33: between-wave power-ups (finally implements R17/R18). Each definition mutates one of the
 // live, data-driven stat singletons — the same objects every system already reads each frame — so
@@ -13,9 +12,10 @@ export type PowerUpId =
   | 'laserDamage'
   | 'missileDamage'
   | 'missileSpeed'
-  | 'autoAimPower'
+  | 'autoAimTrackingSpeed'
   | 'missileFireRate'
   | 'missileTrackingTurn'
+  | 'shipTurnRate'
 
 export type PowerUpDefinition = {
   powerUpId: PowerUpId
@@ -85,13 +85,13 @@ export const ALL_POWER_UP_DEFINITIONS: readonly PowerUpDefinition[] = [
     },
   },
   {
-    powerUpId: 'autoAimPower',
-    displayName: 'AUTO-AIM POWER',
-    description: '+30% auto-aim lock cone',
+    powerUpId: 'autoAimTrackingSpeed',
+    displayName: 'AUTO-AIM TRACKING',
+    description: '+25% lock tracking speed',
     // target reticle
     iconSvgMarkup: iconSvg('<circle cx="12" cy="12" r="8"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="2"/>'),
     applyToPlayerStats(): void {
-      autoAimConfig.coneHalfAngleRadians *= 1.3
+      playerShipBaseFlightStats.enemyTrackTurnRateRadiansPerSecond *= 1.25
     },
   },
   {
@@ -112,6 +112,16 @@ export const ALL_POWER_UP_DEFINITIONS: readonly PowerUpDefinition[] = [
     iconSvgMarkup: iconSvg('<path d="M5 19c0-8 6-12 13-12"/><path d="M14 3l4 4-4 4"/>'),
     applyToPlayerStats(): void {
       playerBaseMissileStats.homingTurnRateRadiansPerSecond *= 1.5
+    },
+  },
+  {
+    powerUpId: 'shipTurnRate',
+    displayName: 'SHIP HANDLING',
+    description: '+25% ship turn rate',
+    // rotation / curved arrows
+    iconSvgMarkup: iconSvg('<path d="M4 12a8 8 0 0 1 13-6"/><path d="M17 3v4h-4"/><path d="M20 12a8 8 0 0 1-13 6"/><path d="M7 21v-4h4"/>'),
+    applyToPlayerStats(): void {
+      playerShipBaseFlightStats.maxTurnRateRadiansPerSecond *= 1.25
     },
   },
 ]
