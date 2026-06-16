@@ -1,117 +1,54 @@
 import { PerspectiveCamera, Quaternion, Vector3 } from 'three'
 import type { ShipRigidBodyState } from '../gameSimulation/newtonianShipPhysics'
 
-// D9: third-person chase camera is the default, with a toggleable cockpit view.
-// D43: the camera's ORIENTATION follows the player's COMMANDED (radar) orientation and snaps to it
-// instantly when the radar is rotated — only the camera POSITION is smoothed. The ship lags behind
-// the commanded heading (it slews toward it), so during a turn the ship visibly rotates within view.
+// D9: third-person chase camera (default) + toggleable cockpit view.
+// D55-fix: a RIGID chase rig. The camera orientation IS the commanded (radar) orientation, and the
+// camera sits at a fixed offset behind+above the ship — so the ship is always pinned the same
+// distance in front of the camera and slightly below center. Rotating the radar orbits the whole rig
+// around the ship (the ship is the pivot — it never swims closer/farther and never flops off-center).
+// The ship's OWN facing is set in main.ts (= the camera heading, or the fire-ahead lead when locked).
 
 export type PlayerCameraViewMode = 'thirdPersonChase' | 'cockpit'
 
-// D26/D34: raised above the ship for a mild top-down angle, and pulled ~1.6× farther back (D34) so
-// the ship and asteroids read smaller / less crowded on screen (the y:z ratio keeps the same tilt).
-const CHASE_CAMERA_LOCAL_OFFSET = new Vector3(0, 8.5, 18)
-/** higher = snappier follow; applied frame-rate independently via exponential damping */
-const CHASE_FOLLOW_STIFFNESS_PER_SECOND = 5
-
-/** D18: while tractored to an asteroid the chase view pulls back so the rock doesn't fill the screen */
-const COVER_CAMERA_ZOOM_OUT_FACTOR = 2.6
-const COVER_ZOOM_RESPONSE_PER_SECOND = 3
-
+// +y lifts the camera above the ship and +z sets it behind, so with the camera looking straight along
+// the commanded heading the ship rides in front of it and slightly below screen center.
+const CHASE_CAMERA_LOCAL_OFFSET = new Vector3(0, 5, 18)
 const COCKPIT_CAMERA_LOCAL_OFFSET = new Vector3(0, 0.45, -1.2)
 
-const scratchDesiredCameraPosition = new Vector3()
-const scratchBankedUpDirection = new Vector3()
-
-const SHIP_LOCAL_UP_AXIS = new Vector3(0, 1, 0)
+const scratchCameraPosition = new Vector3()
 
 export type PlayerCameraRig = {
-  /** viewOrientation = the commanded (radar) orientation the camera aligns to instantly (D43) */
-  updateCameraFollowingShip(
-    shipState: ShipRigidBodyState,
-    viewOrientation: Quaternion,
-    deltaSeconds: number,
-  ): void
+  /** viewOrientation = the commanded (radar) orientation; the camera adopts it rigidly (D55-fix) */
+  updateCameraFollowingShip(shipState: ShipRigidBodyState, viewOrientation: Quaternion): void
   toggleCameraViewMode(): PlayerCameraViewMode
   getCameraViewMode(): PlayerCameraViewMode
-  /** D18: smoothly zooms the chase view out while the ship is tractored to cover */
-  setCoverZoomActive(coverZoomActive: boolean): void
 }
 
 export function createPlayerCameraRig(playerViewCamera: PerspectiveCamera): PlayerCameraRig {
-  let cameraHasSnappedToInitialPose = false
   let cameraViewMode: PlayerCameraViewMode = 'thirdPersonChase'
-  let coverZoomIsActive = false
-  let currentZoomFactor = 1
 
-  function updateChaseCamera(
+  function placeCameraRigidly(
     shipState: ShipRigidBodyState,
     viewOrientation: Quaternion,
-    deltaSeconds: number,
+    localOffset: Vector3,
   ): void {
-    // D43: orientation is the COMMANDED frame, used directly (instant) — no orientation smoothing
-
-    // D18: ease the offset distance toward the cover zoom-out (or back to normal)
-    const targetZoomFactor = coverZoomIsActive ? COVER_CAMERA_ZOOM_OUT_FACTOR : 1
-    const zoomBlend = 1 - Math.exp(-COVER_ZOOM_RESPONSE_PER_SECOND * deltaSeconds)
-    currentZoomFactor += (targetZoomFactor - currentZoomFactor) * zoomBlend
-
-    scratchDesiredCameraPosition
-      .copy(CHASE_CAMERA_LOCAL_OFFSET)
-      .multiplyScalar(currentZoomFactor)
-      .applyQuaternion(viewOrientation)
-      .add(shipState.positionMeters)
-
-    // only the camera POSITION is smoothed (so translation isn't jittery as the ship drifts)
-    if (cameraHasSnappedToInitialPose) {
-      const positionBlend = 1 - Math.exp(-CHASE_FOLLOW_STIFFNESS_PER_SECOND * deltaSeconds)
-      playerViewCamera.position.lerp(scratchDesiredCameraPosition, positionBlend)
-    } else {
-      playerViewCamera.position.copy(scratchDesiredCameraPosition)
-      cameraHasSnappedToInitialPose = true
-    }
-
-    // up comes from the commanded orientation (instant) so "up" never inverts as the player aims
-    scratchBankedUpDirection.copy(SHIP_LOCAL_UP_AXIS).applyQuaternion(viewOrientation)
-    playerViewCamera.up.copy(scratchBankedUpDirection)
-
-    // D55: look straight AT the ship's center so it stays centered and the camera ORBITS the ship
-    // (rotating the radar pivots around the ship, not a point ahead of it — no more "flop")
-    playerViewCamera.lookAt(shipState.positionMeters)
-  }
-
-  function updateCockpitCamera(shipState: ShipRigidBodyState, viewOrientation: Quaternion): void {
-    // D43: cockpit mount follows the commanded orientation too (instant), anchored at the ship
-    scratchDesiredCameraPosition
-      .copy(COCKPIT_CAMERA_LOCAL_OFFSET)
-      .applyQuaternion(viewOrientation)
-      .add(shipState.positionMeters)
-    playerViewCamera.position.copy(scratchDesiredCameraPosition)
+    scratchCameraPosition.copy(localOffset).applyQuaternion(viewOrientation).add(shipState.positionMeters)
+    playerViewCamera.position.copy(scratchCameraPosition)
     playerViewCamera.quaternion.copy(viewOrientation)
   }
 
   return {
-    updateCameraFollowingShip(
-      shipState: ShipRigidBodyState,
-      viewOrientation: Quaternion,
-      deltaSeconds: number,
-    ): void {
-      if (cameraViewMode === 'cockpit') {
-        updateCockpitCamera(shipState, viewOrientation)
-      } else {
-        updateChaseCamera(shipState, viewOrientation, deltaSeconds)
-      }
+    updateCameraFollowingShip(shipState: ShipRigidBodyState, viewOrientation: Quaternion): void {
+      const localOffset =
+        cameraViewMode === 'cockpit' ? COCKPIT_CAMERA_LOCAL_OFFSET : CHASE_CAMERA_LOCAL_OFFSET
+      placeCameraRigidly(shipState, viewOrientation, localOffset)
     },
     toggleCameraViewMode(): PlayerCameraViewMode {
       cameraViewMode = cameraViewMode === 'thirdPersonChase' ? 'cockpit' : 'thirdPersonChase'
-      cameraHasSnappedToInitialPose = false // re-snap the chase camera when switching back
       return cameraViewMode
     },
     getCameraViewMode(): PlayerCameraViewMode {
       return cameraViewMode
-    },
-    setCoverZoomActive(coverZoomActive: boolean): void {
-      coverZoomIsActive = coverZoomActive
     },
   }
 }

@@ -708,16 +708,17 @@ function applyPitchYawToCommandedHeading(
 // D43/D53: the ONE ship-rotation path. The ship's rotation GOAL is the camera (commanded/radar)
 // heading — UNLESS an enemy is locked, in which case the goal becomes the lead-ahead aim point
 // instead (NOT the camera), so the ship tracks the target even while you drag the camera elsewhere.
-// There is no "idle" state. Locked: minimal-arc toward the lead direction (no roll change) at the
-// steady enemyTrackTurnRate. Unlocked: eased catch-up toward the camera heading (D43), rate-capped.
-const SHIP_FOLLOW_SMOOTHING_PER_SECOND = 6
+// Unlocked, the ship faces exactly where the camera looks (D55-fix).
 const scratchShipAimLeadDirection = new THREE.Vector3()
 const scratchShipAimCurrentForward = new THREE.Vector3()
 const scratchShipAimDeltaRotation = new THREE.Quaternion()
 const scratchShipRotationGoalOrientation = new THREE.Quaternion()
 function rotatePlayerShipTowardAimGoal(deltaSeconds: number): void {
+  // D55-fix: the ship points exactly where the CAMERA looks (commanded heading) — UNLESS an enemy is
+  // locked in the reticle, in which case the ship's facing slews to the fire-ahead (lead) position.
+  const commandedOrientation = radarSphereDisplay.getCommandedOrientation()
   const lockedAimTarget = currentAutoAimTarget
-  let isTrackingLockedTarget = false
+
   if (lockedAimTarget !== null && !lockedAimTarget.isDestroyed) {
     computeLeadAimDirection(
       playerShipState.positionMeters,
@@ -727,27 +728,22 @@ function rotatePlayerShipTowardAimGoal(deltaSeconds: number): void {
       scratchShipAimLeadDirection,
     )
     if (scratchShipAimLeadDirection.lengthSq() > 1e-12) {
-      // GOAL = aim ahead of the locked enemy (minimal-arc rotation from the nose to the lead dir)
+      // GOAL = fire-ahead: build the orientation whose nose points along the lead direction, then
+      // slew the ship toward it at the enemy-tracking rate (a smooth "alter to fire-ahead").
       getShipForwardDirection(playerShipState, scratchShipAimCurrentForward)
       scratchShipAimCurrentForward.normalize()
       scratchShipAimDeltaRotation.setFromUnitVectors(scratchShipAimCurrentForward, scratchShipAimLeadDirection)
       scratchShipRotationGoalOrientation.copy(scratchShipAimDeltaRotation).multiply(playerShipState.orientation).normalize()
-      isTrackingLockedTarget = true
+      const stepRadians = playerShipBaseFlightStats.enemyTrackTurnRateRadiansPerSecond * deltaSeconds
+      playerShipState.orientation.rotateTowards(scratchShipRotationGoalOrientation, stepRadians)
+      playerShipState.currentPitchRateRadiansPerSecond = 0
+      playerShipState.currentYawRateRadiansPerSecond = 0
+      return
     }
   }
-  if (!isTrackingLockedTarget) {
-    // GOAL = the camera (commanded/radar) heading
-    scratchShipRotationGoalOrientation.copy(radarSphereDisplay.getCommandedOrientation())
-  }
 
-  const angleToGoalRadians = playerShipState.orientation.angleTo(scratchShipRotationGoalOrientation)
-  if (angleToGoalRadians > 1e-4) {
-    const maxTurnStepRadians = playerShipBaseFlightStats.maxTurnRateRadiansPerSecond * deltaSeconds
-    const stepRadians = isTrackingLockedTarget
-      ? playerShipBaseFlightStats.enemyTrackTurnRateRadiansPerSecond * deltaSeconds
-      : Math.min(angleToGoalRadians * (1 - Math.exp(-SHIP_FOLLOW_SMOOTHING_PER_SECOND * deltaSeconds)), maxTurnStepRadians)
-    playerShipState.orientation.rotateTowards(scratchShipRotationGoalOrientation, stepRadians)
-  }
+  // no lock: facing = the camera heading, exactly (the ship aims where you're looking)
+  playerShipState.orientation.copy(commandedOrientation)
   playerShipState.currentPitchRateRadiansPerSecond = 0
   playerShipState.currentYawRateRadiansPerSecond = 0
 }
@@ -913,12 +909,11 @@ function runFrameLoop(currentFrameTimestampMs: number): void {
   }
 
   syncRenderObjectsFromSimulation(frameDeltaSeconds)
-  // D43: the camera aligns to the COMMANDED (radar) orientation and snaps instantly when the radar
-  // is rotated; the ship lags behind it (catches up). When idle, commanded == ship.
+  // D55-fix: rigid chase rig — the camera adopts the commanded (radar) orientation and sits at a fixed
+  // offset, so the ship is pinned in front of and slightly below it at a constant distance.
   playerCameraRig.updateCameraFollowingShip(
     playerShipState,
     radarSphereDisplay.getCommandedOrientation(),
-    frameDeltaSeconds,
   )
 
   // screen-space HUD must run AFTER the camera moves this frame, with fresh matrices, so projection
