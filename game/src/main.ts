@@ -1,13 +1,12 @@
 import './style.css'
 import * as THREE from 'three'
-import { playerShipBaseFlightStats, playerShipBaseTractorBeamStats } from './shipStats'
+import { playerShipBaseFlightStats } from './shipStats'
 import {
   createShipRigidBodyStateAtRest,
   getShipForwardDirection,
   stepShipFlightSimulation,
 } from './gameSimulation/newtonianShipPhysics'
 import {
-  weaponEngagementRanges,
   type AsteroidBody,
   type EnemyShip,
   type EnemyShipBehaviorTier,
@@ -19,16 +18,6 @@ import {
   applyWeaponDamageToAsteroid,
   updateAsteroidDamageParticles,
 } from './asteroids/asteroidDestructibleBody'
-import { findTappedLargeAsteroid } from './tractorCover/asteroidTapTargeting'
-import {
-  computeCoverHoldShellRadiusMeters,
-  solveCoverPositionBehindAsteroid,
-} from './tractorCover/coverPositionSolver'
-import { stepTractorBeamPull } from './tractorCover/tractorBeamPullForce'
-import {
-  createCoverGridOverlaysForLargeAsteroids,
-  updateCoverGridOverlayColors,
-} from './tractorCover/coverGridOverlayDisplay'
 import {
   enemyBaseLaserStats,
   enemyBaseMissileStats,
@@ -210,7 +199,6 @@ const gameWorld: GameWorld = {
   asteroids: spawnAsteroidFieldInBoundedSphere(gameScene),
   enemyShips: [],
 }
-createCoverGridOverlaysForLargeAsteroids(gameWorld.asteroids)
 
 const playerShipState = createShipRigidBodyStateAtRest()
 const playerShipMesh = createPlayerShipMesh()
@@ -283,6 +271,39 @@ function resumeGameAudioOnFirstGesture(): void {
 window.addEventListener('pointerdown', resumeGameAudioOnFirstGesture)
 window.addEventListener('keydown', resumeGameAudioOnFirstGesture)
 
+// D54: simple start screen — shown at boot; the simulation is frozen until the player dismisses it.
+// Dismissing also satisfies the audio autoplay gesture requirement.
+const startScreenOverlay = document.createElement('div')
+startScreenOverlay.className = 'startScreenOverlay'
+startScreenOverlay.innerHTML = `
+  <div class="startScreenInner">
+    <h1 class="startScreenTitle">ASTEROID HUNTER</h1>
+    <p class="startScreenTagline">In space, turning is expensive — there's no air to push against.
+      Slingshot around asteroids to change direction, and hunt the swarm.</p>
+    <ul class="startScreenControls">
+      <li>Hold <b>THRUST</b> to curve your momentum toward where you're facing</li>
+      <li>Drag the <b>radar sphere</b> to aim</li>
+      <li>Weapons fire <b>automatically</b> at a locked, visible enemy</li>
+    </ul>
+    <p class="startScreenPrompt">Tap or press Enter to begin</p>
+  </div>`
+document.body.appendChild(startScreenOverlay)
+
+let gameHasStarted = false
+function beginGameFromStartScreen(): void {
+  if (gameHasStarted) return
+  gameHasStarted = true
+  startScreenOverlay.classList.add('startScreenOverlayHidden')
+  resumeGameAudioOnFirstGesture()
+}
+startScreenOverlay.addEventListener('pointerdown', (pointerEvent) => {
+  pointerEvent.stopPropagation()
+  beginGameFromStartScreen()
+})
+window.addEventListener('keydown', (keyboardEvent) => {
+  if (keyboardEvent.code === 'Enter') beginGameFromStartScreen()
+})
+
 // camera view toggle button (D9) + KeyC shortcut
 const cameraViewToggleButton = document.createElement('button')
 cameraViewToggleButton.className = 'cameraViewToggleButton'
@@ -313,101 +334,12 @@ function hideWaveBanner(): void {
   waveAnnouncementBanner.classList.remove('waveAnnouncementBannerVisible')
 }
 
-// ===== STEP 4: tractor beam cover state (R4, R5, D14) =====
-
-let tractorPullIsActive = false
-let activeCoverAsteroid: AsteroidBody | null = null
-const activeCoverPointMeters = new THREE.Vector3()
-/** true once the player has slid around the shell with the joystick — stops the auto re-solve fighting them */
-let coverHoldManuallyAdjusted = false
-let coverPointResolveCountdownSeconds = 0
-
-/** how fast the joystick slides the hold point around the asteroid shell (radians/second) */
-const COVER_ORBIT_RATE_RADIANS_PER_SECOND = 0.9
-/** moving the throttle past this releases the ship from cover (it was zeroed on tap) */
-const COVER_ESCAPE_THROTTLE_THRESHOLD = 0.05
-
-const tractorBeamLineGeometry = new THREE.BufferGeometry().setFromPoints([
-  new THREE.Vector3(),
-  new THREE.Vector3(),
-])
-const tractorBeamLine = new THREE.Line(
-  tractorBeamLineGeometry,
-  new THREE.LineBasicMaterial({ color: 0x55ddff, transparent: true, opacity: 0.8 }),
-)
-tractorBeamLine.visible = false
-gameScene.add(tractorBeamLine)
+// ===== STEP 4: player-facing scratch + DEV verification hooks =====
 
 const scratchPlayerForwardDirection = new THREE.Vector3()
 
-function engageTractorPullTowardAsteroid(tappedAsteroid: AsteroidBody): void {
-  activeCoverAsteroid = tappedAsteroid
-  getShipForwardDirection(playerShipState, scratchPlayerForwardDirection)
-  solveCoverPositionBehindAsteroid(
-    tappedAsteroid,
-    gameWorld.enemyShips,
-    playerShipState.positionMeters,
-    scratchPlayerForwardDirection,
-    activeCoverPointMeters,
-  )
-  tractorPullIsActive = true
-  coverHoldManuallyAdjusted = false
-  coverPointResolveCountdownSeconds = 0.5
-  // D14: tapping an asteroid cuts the throttle to zero — pushing it back up is the escape
-  flightControls.setThrottleFraction(0)
-  // D18: cover mode pulls the camera back and reveals the strafe joystick
-  flightControls.setStrafeJoystickVisible(true)
-  playerCameraRig.setCoverZoomActive(true)
-}
-
-function releaseTractorPull(): void {
-  tractorPullIsActive = false
-  activeCoverAsteroid = null
-  tractorBeamLine.visible = false
-  flightControls.setStrafeJoystickVisible(false)
-  playerCameraRig.setCoverZoomActive(false)
-}
-
-// tap on the world (not on a HUD control) targets a large asteroid for cover (R4, R6),
-// but only within tractor grab range of the player (D16)
-gameRenderCanvas.addEventListener('pointerdown', (pointerEvent) => {
-  const normalizedDeviceX = (pointerEvent.clientX / window.innerWidth) * 2 - 1
-  const normalizedDeviceY = -(pointerEvent.clientY / window.innerHeight) * 2 + 1
-  const tappedAsteroid = findTappedLargeAsteroid(
-    normalizedDeviceX,
-    normalizedDeviceY,
-    playerViewCamera,
-    gameWorld.asteroids,
-  )
-  if (!tappedAsteroid) return
-  const distanceToAsteroidSurfaceMeters =
-    playerShipState.positionMeters.distanceTo(tappedAsteroid.positionMeters) -
-    tappedAsteroid.currentRadiusMeters
-  if (distanceToAsteroidSurfaceMeters > playerShipBaseTractorBeamStats.tractorGrabMaxRangeMeters) return
-  engageTractorPullTowardAsteroid(tappedAsteroid) // re-tap re-targets (R5)
-})
-
 // DEV-only verification hooks for automated browser testing (import.meta.env.DEV is false in production builds)
 if (import.meta.env.DEV) {
-  ;(window as unknown as Record<string, unknown>).debugEngageNearestGrabbableAsteroid = () => {
-    let nearestLargeAsteroid: AsteroidBody | null = null
-    let nearestSurfaceDistanceMeters = Infinity
-    for (const asteroid of gameWorld.asteroids) {
-      if (asteroid.isDestroyed || asteroid.sizeClass !== 'large') continue
-      const surfaceDistanceMeters =
-        playerShipState.positionMeters.distanceTo(asteroid.positionMeters) - asteroid.currentRadiusMeters
-      if (surfaceDistanceMeters < nearestSurfaceDistanceMeters) {
-        nearestSurfaceDistanceMeters = surfaceDistanceMeters
-        nearestLargeAsteroid = asteroid
-      }
-    }
-    if (!nearestLargeAsteroid) return null
-    if (nearestSurfaceDistanceMeters > playerShipBaseTractorBeamStats.tractorGrabMaxRangeMeters) {
-      return { outOfRange: true, surfaceDistanceMeters: nearestSurfaceDistanceMeters }
-    }
-    engageTractorPullTowardAsteroid(nearestLargeAsteroid)
-    return { asteroidId: nearestLargeAsteroid.asteroidId, surfaceDistanceMeters: nearestSurfaceDistanceMeters }
-  }
   ;(window as unknown as Record<string, unknown>).debugDamageNearestEnemy = (damageAmount = 25) => {
     let nearestEnemy: EnemyShip | null = null
     let nearestDistanceMeters = Infinity
@@ -448,24 +380,14 @@ if (import.meta.env.DEV) {
     nearestEnemy.velocityMetersPerSecond.set(0, 0, 0)
     return nearestEnemy.enemyShipId
   }
-  ;(window as unknown as Record<string, unknown>).debugReadTractorState = () => {
-    let coverLatitudeDegrees: number | null = null
-    if (tractorPullIsActive && activeCoverAsteroid) {
-      const holdDirection = activeCoverPointMeters.clone().sub(activeCoverAsteroid.positionMeters).normalize()
-      const shipUpDirection = new THREE.Vector3(0, 1, 0).applyQuaternion(playerShipState.orientation)
-      coverLatitudeDegrees = 90 - THREE.MathUtils.radToDeg(holdDirection.angleTo(shipUpDirection))
-    }
+  // D54: read player kinematics for movement verification
+  ;(window as unknown as Record<string, unknown>).debugReadShipKinematics = () => {
+    getShipForwardDirection(playerShipState, scratchPlayerForwardDirection)
     return {
-      tractorPullIsActive,
-      distanceToCoverAsteroidCenter: activeCoverAsteroid
-        ? playerShipState.positionMeters.distanceTo(activeCoverAsteroid.positionMeters)
-        : null,
-      holdShellRadius: activeCoverAsteroid ? computeCoverHoldShellRadiusMeters(activeCoverAsteroid) : null,
-      distanceToCoverPoint:
-        tractorPullIsActive && activeCoverAsteroid
-          ? playerShipState.positionMeters.distanceTo(activeCoverPointMeters)
-          : null,
-      coverLatitudeDegrees,
+      position: playerShipState.positionMeters.toArray(),
+      velocity: playerShipState.velocityMetersPerSecond.toArray(),
+      speed: playerShipState.velocityMetersPerSecond.length(),
+      forward: scratchPlayerForwardDirection.toArray(),
     }
   }
   // D33: force the between-wave power-up picker open (clears enemies, parks the machine)
@@ -545,7 +467,6 @@ function resetPlayerShipForWaveRestart(): void {
   playerShipMesh.position.copy(playerShipState.positionMeters)
   playerShipMesh.quaternion.copy(playerShipState.orientation)
   playerShipCondition.restoreForWaveRestart()
-  releaseTractorPull()
 }
 
 // D33: offer two random distinct power-ups; the picker waits for the player's tap
@@ -760,70 +681,9 @@ function updateEnemyShipsAndFire(deltaSeconds: number): void {
   }
 }
 
-// ===== STEP 8: player movement — tractor pull overrides flight (both integrate, never run together) =====
-
-const scratchCoverHoldDirection = new THREE.Vector3()
-const scratchOrbitRotationAxis = new THREE.Vector3()
-const scratchOrbitRotation = new THREE.Quaternion()
-const scratchShipUpDirection = new THREE.Vector3()
+// ===== STEP 8: player movement (D54 momentum model) =====
 
 const SHIP_LOCAL_UP_AXIS = new THREE.Vector3(0, 1, 0)
-
-/** keep this margin short of the poles so the latitude frame never degenerates or flips (D20) */
-const COVER_POLE_CLAMP_MARGIN_RADIANS = 0.1
-
-// D20: latitude/longitude strafing — the pole axis is the ship's CURRENT up, so the grid is always
-// oriented to the player. Up/down climbs latitude lines (toward/away from the up-pole), left/right
-// travels around the current latitude line. No compounding cross-axis rotations = no gimbal drift.
-function adjustCoverHoldPointFromStrafeInput(
-  coverAsteroid: AsteroidBody,
-  strafeXInput: number,
-  strafeYInput: number,
-  deltaSeconds: number,
-): void {
-  scratchCoverHoldDirection.copy(activeCoverPointMeters).sub(coverAsteroid.positionMeters).normalize()
-  scratchShipUpDirection.copy(SHIP_LOCAL_UP_AXIS).applyQuaternion(playerShipState.orientation)
-
-  // STEP 1: left/right — travel around the current latitude line (rotate around the pole axis)
-  if (strafeXInput !== 0) {
-    scratchOrbitRotation.setFromAxisAngle(
-      scratchShipUpDirection,
-      strafeXInput * COVER_ORBIT_RATE_RADIANS_PER_SECOND * deltaSeconds,
-    )
-    scratchCoverHoldDirection.applyQuaternion(scratchOrbitRotation)
-  }
-
-  // STEP 2: up/down — change latitude within the meridian plane, clamped short of the poles
-  if (strafeYInput !== 0) {
-    scratchOrbitRotationAxis.crossVectors(scratchCoverHoldDirection, scratchShipUpDirection)
-    if (scratchOrbitRotationAxis.lengthSq() > 1e-8) {
-      scratchOrbitRotationAxis.normalize()
-
-      const angleToUpPoleRadians = scratchCoverHoldDirection.angleTo(scratchShipUpDirection)
-      let latitudeStepRadians = strafeYInput * COVER_ORBIT_RATE_RADIANS_PER_SECOND * deltaSeconds
-      if (latitudeStepRadians > 0) {
-        // climbing toward the up-pole: stop just before it
-        latitudeStepRadians = Math.min(
-          latitudeStepRadians,
-          Math.max(0, angleToUpPoleRadians - COVER_POLE_CLAMP_MARGIN_RADIANS),
-        )
-      } else {
-        // descending toward the down-pole: stop just before it
-        latitudeStepRadians = Math.max(
-          latitudeStepRadians,
-          -Math.max(0, Math.PI - angleToUpPoleRadians - COVER_POLE_CLAMP_MARGIN_RADIANS),
-        )
-      }
-
-      scratchOrbitRotation.setFromAxisAngle(scratchOrbitRotationAxis, latitudeStepRadians)
-      scratchCoverHoldDirection.applyQuaternion(scratchOrbitRotation)
-    }
-  }
-
-  activeCoverPointMeters
-    .copy(coverAsteroid.positionMeters)
-    .addScaledVector(scratchCoverHoldDirection, computeCoverHoldShellRadiusMeters(coverAsteroid))
-}
 
 // D47/D53: keyboard pitch+yaw rotate the COMMANDED heading (camera frame) directly, at the ship's
 // max turn rate, in the commanded frame's local axes (same convention as the radar drag). The
@@ -914,73 +774,11 @@ function updatePlayerMovement(deltaSeconds: number): void {
   // The ship's rotation goal is the camera heading, or the lead-aim point when an enemy is locked.
   rotatePlayerShipTowardAimGoal(deltaSeconds)
 
-  if (tractorPullIsActive && activeCoverAsteroid) {
-    // D14 escape routes: move the throttle (it was zeroed on tap) or tap another asteroid
-    if (activeCoverAsteroid.isDestroyed) {
-      releaseTractorPull()
-    } else if (flightControlInput.throttleFraction > COVER_ESCAPE_THROTTLE_THRESHOLD) {
-      releaseTractorPull()
-    } else {
-      // rotation (above) already aimed the ship via the commanded heading; here just strafe + hold
-
-      // D18: the strafe joystick slides the hold point; first manual nudge stops the auto re-solve
-      const strafeControlInput = flightControls.readStrafeControlInput()
-      const strafeEngaged =
-        Math.abs(strafeControlInput.strafeXInput) > 0.1 || Math.abs(strafeControlInput.strafeYInput) > 0.1
-      if (strafeEngaged) {
-        coverHoldManuallyAdjusted = true
-        adjustCoverHoldPointFromStrafeInput(
-          activeCoverAsteroid,
-          strafeControlInput.strafeXInput,
-          strafeControlInput.strafeYInput,
-          deltaSeconds,
-        )
-      }
-
-      // re-solve the cover point a couple of times a second so it tracks moving enemies (R7),
-      // unless the player has taken manual control of their position on the shell.
-      // D18: only when enemies actually threaten the asteroid — otherwise the facing-based default
-      // would drag the parked ship around whenever the player rotates to look elsewhere
-      if (!coverHoldManuallyAdjusted) {
-        coverPointResolveCountdownSeconds -= deltaSeconds
-        if (coverPointResolveCountdownSeconds <= 0) {
-          coverPointResolveCountdownSeconds = 0.5
-          const coverAsteroidPosition = activeCoverAsteroid.positionMeters
-          const enemiesThreatenCoverAsteroid = gameWorld.enemyShips.some(
-            (enemyShip) =>
-              !enemyShip.isDestroyed &&
-              enemyShip.positionMeters.distanceTo(coverAsteroidPosition) <=
-                weaponEngagementRanges.missileEffectiveLongRangeMeters,
-          )
-          if (enemiesThreatenCoverAsteroid) {
-            getShipForwardDirection(playerShipState, scratchPlayerForwardDirection)
-            solveCoverPositionBehindAsteroid(
-              activeCoverAsteroid,
-              gameWorld.enemyShips,
-              playerShipState.positionMeters,
-              scratchPlayerForwardDirection,
-              activeCoverPointMeters,
-            )
-          }
-        }
-      }
-
-      stepTractorBeamPull(
-        playerShipState,
-        activeCoverPointMeters,
-        activeCoverAsteroid.positionMeters,
-        playerShipBaseTractorBeamStats,
-        deltaSeconds,
-      )
-      return
-    }
-  }
-
-  // D47: rotation was already applied above (ship eased toward the commanded heading); here we only
-  // apply throttle/thrust (zero pitch/yaw so the flight sim doesn't re-rotate).
+  // D54: constant-momentum flight — rotation (facing) was already applied above; here we hold the
+  // cruise speed and, while THRUST is held, curve the velocity vector toward the facing.
   stepShipFlightSimulation(
     playerShipState,
-    { pitchInput: 0, yawInput: 0, throttleFraction: flightControlInput.throttleFraction },
+    { pitchInput: 0, yawInput: 0, thrustActive: flightControls.isThrustActive() },
     playerShipBaseFlightStats,
     deltaSeconds,
   )
@@ -994,6 +792,8 @@ let simulationTimeAccumulatorSeconds = 0
 let previousFrameTimestampMs = performance.now()
 
 function updateGameSimulation(deltaSeconds: number): void {
+  // D54: hold the whole simulation until the player dismisses the start screen
+  if (!gameHasStarted) return
   simulationClockSeconds += deltaSeconds
 
   updateWavePhase(deltaSeconds)
@@ -1034,8 +834,6 @@ function updateGameSimulation(deltaSeconds: number): void {
 
 // ===== STEP 10: per-frame render sync (HUD refresh, overlays, radar inset) =====
 
-let coverGridRecolorCountdownSeconds = 0
-
 /** D21: light visual smoothing buffer — filters single-frame placement thrash without visible lag */
 const PLAYER_MESH_SMOOTHING_STIFFNESS_PER_SECOND = 25
 
@@ -1044,46 +842,11 @@ function syncRenderObjectsFromSimulation(frameDeltaSeconds: number): void {
   playerShipMesh.position.lerp(playerShipState.positionMeters, meshSmoothingBlend)
   playerShipMesh.quaternion.slerp(playerShipState.orientation, meshSmoothingBlend)
 
-  // D19: thrust plume diamond — sized by throttle, color cycling red→yellow
-  updatePlayerEngineExhaust(flightControls.readFlightControlInput().throttleFraction, simulationClockSeconds)
+  // D54: thrust plume shows while THRUST is held (momentum steering), color cycling red→yellow
+  updatePlayerEngineExhaust(flightControls.isThrustActive() ? 1 : 0, simulationClockSeconds)
 
   // D21: blue shield / red hull bars over damaged enemies, billboarded to the player camera
   enemyConditionBarsDisplay.updateEnemyConditionBars(gameWorld.enemyShips, playerViewCamera)
-
-  if (tractorPullIsActive && activeCoverAsteroid) {
-    tractorBeamLine.visible = true
-    const beamEndpoints = tractorBeamLineGeometry.attributes.position as THREE.BufferAttribute
-    beamEndpoints.setXYZ(
-      0,
-      playerShipState.positionMeters.x,
-      playerShipState.positionMeters.y,
-      playerShipState.positionMeters.z,
-    )
-    beamEndpoints.setXYZ(
-      1,
-      activeCoverAsteroid.positionMeters.x,
-      activeCoverAsteroid.positionMeters.y,
-      activeCoverAsteroid.positionMeters.z,
-    )
-    beamEndpoints.needsUpdate = true
-  } else {
-    tractorBeamLine.visible = false
-  }
-
-  // recolor cover grids a few times per second, not every frame (R8)
-  coverGridRecolorCountdownSeconds -= frameDeltaSeconds
-  if (coverGridRecolorCountdownSeconds <= 0) {
-    coverGridRecolorCountdownSeconds = 0.25
-    getShipForwardDirection(playerShipState, scratchPlayerForwardDirection)
-    updateCoverGridOverlayColors(
-      gameWorld.asteroids,
-      gameWorld.enemyShips,
-      playerShipState.positionMeters,
-      scratchPlayerForwardDirection,
-      gameWorld.asteroids,
-      playerShipBaseTractorBeamStats.tractorGrabMaxRangeMeters,
-    )
-  }
 
   // D51: the center aim reticle turns red while actively locked onto a (visible) enemy
   aimingReticle.setEngaged(currentAutoAimTarget !== null)

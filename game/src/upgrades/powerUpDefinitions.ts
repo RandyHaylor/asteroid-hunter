@@ -36,12 +36,11 @@ export const ALL_POWER_UP_DEFINITIONS: readonly PowerUpDefinition[] = [
   {
     powerUpId: 'speedBoost',
     displayName: 'SPEED BOOST',
-    description: '+18% top speed & thrust',
+    description: '+18% cruise speed',
     // double chevron (fast-forward)
     iconSvgMarkup: iconSvg('<path d="M4 5l7 7-7 7"/><path d="M13 5l7 7-7 7"/>'),
     applyToPlayerStats(): void {
-      playerShipBaseFlightStats.maxForwardSpeedMetersPerSecond *= 1.18
-      playerShipBaseFlightStats.maxThrustNewtons *= 1.18
+      playerShipBaseFlightStats.cruiseSpeedMetersPerSecond *= 1.18
     },
   },
   {

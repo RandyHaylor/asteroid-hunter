@@ -53,70 +53,29 @@ body {
 
 /* ===== control widgets — clamp()/vmin sizing so they shrink to fit; flex never overlaps them ===== */
 
-/* D40: the rotation joystick was removed — steering is now dragging the radar sphere
-   (see .radarControlZone / .radarControlCanvas in radarHud.css), which sits in the right cluster. */
-
-/* D18: strafe joystick — only visible while tractored to cover */
-.strafeJoystickZone {
-  position: relative;
-  width: clamp(52px, 22vmin, 92px);
+/* D40/D54: steering is dragging the radar sphere (radarHud.css). The only flight control widget is
+   the hold-to-thrust button, which sits in the left cluster (bottom-left relative to the radar). */
+.thrustButton {
+  width: clamp(64px, 22vmin, 104px);
   aspect-ratio: 1;
-  border: 2px solid rgba(120, 255, 200, 0.4);
   border-radius: 50%;
-  background: rgba(20, 70, 50, 0.25);
+  border: 2px solid rgba(110, 180, 255, 0.6);
+  background: rgba(20, 50, 90, 0.4);
+  color: rgba(205, 228, 255, 0.95);
+  font: 700 clamp(11px, 3vmin, 15px) / 1 system-ui, sans-serif;
+  letter-spacing: 1px;
   pointer-events: auto;
   touch-action: none;
-  display: none;
-  align-items: center;
-  justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
   flex: 0 1 auto;
 }
 
-.strafeJoystickZoneVisible {
-  display: flex;
-}
-
-.strafeJoystickKnob {
-  width: 44%;
-  height: 44%;
-  border-radius: 50%;
-  background: rgba(120, 255, 200, 0.55);
-  border: 2px solid rgba(170, 255, 225, 0.8);
-  will-change: transform;
-}
-
-.throttleLeverTrack {
-  position: relative;
-  width: clamp(24px, 7vmin, 34px);
-  height: clamp(92px, 30vmin, 160px);
-  border: 2px solid rgba(110, 180, 255, 0.35);
-  border-radius: 17px;
-  background: rgba(20, 40, 70, 0.25);
-  pointer-events: auto;
-  touch-action: none;
-  flex: 0 1 auto;
-}
-
-.throttleLeverFill {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  border-radius: 0 0 15px 15px;
-  background: rgba(110, 180, 255, 0.3);
-}
-
-.throttleLeverKnob {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: -12px;
-  width: 150%;
-  max-width: 44px;
-  height: 24px;
-  border-radius: 8px;
-  background: rgba(110, 180, 255, 0.7);
-  border: 2px solid rgba(160, 215, 255, 0.9);
+.thrustButtonActive {
+  background: rgba(90, 160, 255, 0.85);
+  border-color: rgba(180, 220, 255, 0.95);
+  box-shadow: 0 0 16px rgba(120, 190, 255, 0.7);
 }
 
 .fireZoneButton {
@@ -206,4 +165,74 @@ body {
 
 .soundToggleButton {
   right: 12px;
+}
+
+/* D54: start screen overlay — shown at boot, dismissed on first tap/Enter */
+.startScreenOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6vmin;
+  background: radial-gradient(ellipse at center, rgba(20, 30, 60, 0.82), rgba(4, 8, 20, 0.95));
+  color: rgba(220, 235, 255, 0.96);
+  text-align: center;
+  font-family: system-ui, sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: pointer;
+}
+
+.startScreenOverlayHidden {
+  display: none;
+}
+
+.startScreenInner {
+  max-width: 640px;
+}
+
+.startScreenTitle {
+  margin: 0 0 2vmin;
+  font-size: clamp(28px, 8vmin, 64px);
+  letter-spacing: clamp(2px, 1vmin, 8px);
+  color: #8fe3ff;
+  text-shadow: 0 0 18px rgba(80, 180, 255, 0.6);
+}
+
+.startScreenTagline {
+  margin: 0 auto 4vmin;
+  max-width: 30em;
+  font-size: clamp(13px, 2.6vmin, 19px);
+  line-height: 1.5;
+  color: rgba(200, 220, 245, 0.9);
+}
+
+.startScreenControls {
+  display: inline-block;
+  margin: 0 0 5vmin;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+  font-size: clamp(12px, 2.3vmin, 17px);
+  line-height: 1.9;
+  color: rgba(210, 228, 250, 0.92);
+}
+
+.startScreenControls b {
+  color: #8fe3ff;
+}
+
+.startScreenPrompt {
+  margin: 0;
+  font-size: clamp(13px, 2.8vmin, 20px);
+  font-weight: 700;
+  color: #ffffff;
+  animation: startScreenPromptPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes startScreenPromptPulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
 }

@@ -9,54 +9,72 @@ import {
 import type { ShipFlightStats } from '../shipStats'
 
 const testFlightStats: ShipFlightStats = {
-  shipMassKg: 1000,
-  maxThrustNewtons: 60_000,
+  cruiseSpeedMetersPerSecond: 80,
   maxTurnRateRadiansPerSecond: 1.6,
-  maxForwardSpeedMetersPerSecond: 80,
+  thrustTurnRateRadiansPerSecond: 0.6,
   enemyTrackTurnRateRadiansPerSecond: 1.2,
 }
 
 const FIXED_TIMESTEP_SECONDS = 1 / 60
 
 function makeControlInput(overrides: Partial<ShipFlightControlInput>): ShipFlightControlInput {
-  return { pitchInput: 0, yawInput: 0, throttleFraction: 0, ...overrides }
+  return { pitchInput: 0, yawInput: 0, thrustActive: false, ...overrides }
 }
 
-describe('stepShipFlightSimulation', () => {
-  it('full throttle from rest accelerates forward (-Z) and settles at max speed without exceeding it', () => {
+describe('stepShipFlightSimulation (D54 constant-momentum model)', () => {
+  it('holds a constant cruise speed regardless of input (from rest it seeds along the facing)', () => {
     const shipState = createShipRigidBodyStateAtRest()
-    const fullThrottleInput = makeControlInput({ throttleFraction: 1 })
+    const input = makeControlInput({ thrustActive: true, yawInput: 1 })
 
     for (let stepIndex = 0; stepIndex < 600; stepIndex++) {
-      stepShipFlightSimulation(shipState, fullThrottleInput, testFlightStats, FIXED_TIMESTEP_SECONDS)
-      expect(shipState.velocityMetersPerSecond.length()).toBeLessThanOrEqual(
-        testFlightStats.maxForwardSpeedMetersPerSecond * 1.001,
+      stepShipFlightSimulation(shipState, input, testFlightStats, FIXED_TIMESTEP_SECONDS)
+      // after the first step the speed is exactly the cruise speed and never drifts from it
+      expect(shipState.velocityMetersPerSecond.length()).toBeCloseTo(
+        testFlightStats.cruiseSpeedMetersPerSecond,
+        6,
       )
     }
-
-    expect(shipState.velocityMetersPerSecond.length()).toBeGreaterThan(
-      testFlightStats.maxForwardSpeedMetersPerSecond * 0.95,
-    )
-    expect(shipState.velocityMetersPerSecond.z).toBeLessThan(0)
-    expect(shipState.positionMeters.z).toBeLessThan(0)
   })
 
-  it('per-step velocity change never exceeds what max engine thrust allows (realistic acceleration, R3)', () => {
+  it('coasts in a straight line when thrust is NOT held — velocity direction is unchanged even while the facing rotates', () => {
     const shipState = createShipRigidBodyStateAtRest()
-    const fullThrottleInput = makeControlInput({ throttleFraction: 1 })
-    const maxEngineAcceleration = testFlightStats.maxThrustNewtons / testFlightStats.shipMassKg
-    const maxVelocityChangePerStep = maxEngineAcceleration * FIXED_TIMESTEP_SECONDS
+    shipState.velocityMetersPerSecond.set(testFlightStats.cruiseSpeedMetersPerSecond, 0, 0) // moving +X
+    // hold yaw (facing rotates) but no thrust → momentum must stay pointing +X
+    const noThrustTurningInput = makeControlInput({ yawInput: 1, thrustActive: false })
 
-    const velocityBeforeStep = new Vector3()
     for (let stepIndex = 0; stepIndex < 120; stepIndex++) {
-      velocityBeforeStep.copy(shipState.velocityMetersPerSecond)
-      stepShipFlightSimulation(shipState, fullThrottleInput, testFlightStats, FIXED_TIMESTEP_SECONDS)
-      const velocityChange = shipState.velocityMetersPerSecond.distanceTo(velocityBeforeStep)
-      expect(velocityChange).toBeLessThanOrEqual(maxVelocityChangePerStep * 1.0001)
+      stepShipFlightSimulation(shipState, noThrustTurningInput, testFlightStats, FIXED_TIMESTEP_SECONDS)
     }
+
+    const velocityDirection = shipState.velocityMetersPerSecond.clone().normalize()
+    expect(velocityDirection.x).toBeGreaterThan(0.9999) // still +X
+    expect(shipState.velocityMetersPerSecond.length()).toBeCloseTo(testFlightStats.cruiseSpeedMetersPerSecond, 6)
   })
 
-  it('positive yaw input turns the nose right (+X) from the initial -Z facing', () => {
+  it('holding thrust rotates the velocity vector toward the ship facing (slingshot-free direction change)', () => {
+    const shipState = createShipRigidBodyStateAtRest()
+    shipState.velocityMetersPerSecond.set(testFlightStats.cruiseSpeedMetersPerSecond, 0, 0) // moving +X
+    // facing stays at the default -Z; thrust should curve velocity from +X toward -Z
+    const thrustInput = makeControlInput({ thrustActive: true })
+
+    const forwardDirection = getShipForwardDirection(shipState, new Vector3())
+    const initialAngle = shipState.velocityMetersPerSecond.clone().normalize().angleTo(forwardDirection)
+
+    for (let stepIndex = 0; stepIndex < 5; stepIndex++) {
+      stepShipFlightSimulation(shipState, thrustInput, testFlightStats, FIXED_TIMESTEP_SECONDS)
+    }
+    const angleAfterFewSteps = shipState.velocityMetersPerSecond.clone().normalize().angleTo(forwardDirection)
+    expect(angleAfterFewSteps).toBeLessThan(initialAngle) // turning toward the nose
+
+    for (let stepIndex = 0; stepIndex < 300; stepIndex++) {
+      stepShipFlightSimulation(shipState, thrustInput, testFlightStats, FIXED_TIMESTEP_SECONDS)
+    }
+    const finalDirection = shipState.velocityMetersPerSecond.clone().normalize()
+    expect(finalDirection.dot(forwardDirection)).toBeGreaterThan(0.999) // velocity now aligned with facing
+    expect(shipState.velocityMetersPerSecond.length()).toBeCloseTo(testFlightStats.cruiseSpeedMetersPerSecond, 6)
+  })
+
+  it('positive yaw input turns the nose right (+X) from the initial -Z facing (facing is independent)', () => {
     const shipState = createShipRigidBodyStateAtRest()
     const yawRightInput = makeControlInput({ yawInput: 1 })
 
@@ -80,33 +98,6 @@ describe('stepShipFlightSimulation', () => {
     expect(forwardDirection.y).toBeGreaterThan(0.1)
   })
 
-  it('cutting the throttle decelerates the ship back toward rest', () => {
-    const shipState = createShipRigidBodyStateAtRest()
-    shipState.velocityMetersPerSecond.set(0, 0, -60)
-    const zeroThrottleInput = makeControlInput({ throttleFraction: 0 })
-
-    for (let stepIndex = 0; stepIndex < 600; stepIndex++) {
-      stepShipFlightSimulation(shipState, zeroThrottleInput, testFlightStats, FIXED_TIMESTEP_SECONDS)
-    }
-
-    expect(shipState.velocityMetersPerSecond.length()).toBeLessThan(1)
-  })
-
-  it('velocity lags facing when turning at speed (inertia/drift, D12)', () => {
-    const shipState = createShipRigidBodyStateAtRest()
-    shipState.velocityMetersPerSecond.set(0, 0, -80)
-    const turningInput = makeControlInput({ throttleFraction: 1, yawInput: 1 })
-
-    for (let stepIndex = 0; stepIndex < 30; stepIndex++) {
-      stepShipFlightSimulation(shipState, turningInput, testFlightStats, FIXED_TIMESTEP_SECONDS)
-    }
-
-    const forwardDirection = getShipForwardDirection(shipState, new Vector3())
-    const velocityDirection = shipState.velocityMetersPerSecond.clone().normalize()
-    const alignment = forwardDirection.dot(velocityDirection)
-    expect(alignment).toBeLessThan(0.9999)
-  })
-
   it('D15: turn rate ramps in instead of snapping to max — first step rotates less than a full-rate step', () => {
     const shipState = createShipRigidBodyStateAtRest()
     const yawRightInput = makeControlInput({ yawInput: 1 })
@@ -117,7 +108,6 @@ describe('stepShipFlightSimulation', () => {
     const firstStepAngle = Math.asin(Math.min(1, Math.abs(forwardAfterFirstStep.x)))
     expect(firstStepAngle).toBeLessThan(fullRateStepAngle * 0.5)
 
-    // with the input held, the smoothed rate converges to the commanded max
     for (let stepIndex = 0; stepIndex < 120; stepIndex++) {
       stepShipFlightSimulation(shipState, yawRightInput, testFlightStats, FIXED_TIMESTEP_SECONDS)
     }

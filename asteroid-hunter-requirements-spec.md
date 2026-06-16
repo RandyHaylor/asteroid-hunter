@@ -76,6 +76,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 | D52 | Weapon-bore aiming primitives. (a) `laserAlignmentGate.ts` — lasers fly straight from the nose, so they may fire only once the hull is within **5°** of the firing solution (missiles bypass — they home) [unit-tested]. (b) `shipWeaponCrosshair.ts` — a small red crosshair marking the ship's true weapon bore projected into the view (drifts off the fixed center reticle as the ship aims ahead of the camera). (c) New upgradeable `enemyTrackTurnRateRadiansPerSecond` flight stat (the ship's locked-aim turn rate); power-ups reworked: **AUTO-AIM TRACKING** (+25% `enemyTrackTurnRate`) replaces the old cone-widen, and a new **SHIP HANDLING** (+25% `maxTurnRate`) added → **9** power-ups |
 | D53 | (1) **Radar dot→disc intersection circles**: each enemy contact's vertical stem now ends in a flat ring on the equator disc at its `(x,0,z)` foot, so the stems "form a circle on the disc where they intersect". (2) **Ship aims ahead at the locked target, decoupled from the camera**: whenever an enemy is locked (in the reticle), the SHIP's rotation target becomes the lead-aim point (`computeLeadAimDirection`) and it slews there at `enemyTrackTurnRate` — regardless of radar drag/release — while the camera stays on the commanded (radar) heading. This wires in D52's gate + bore crosshair. There is now **one ship-rotation path** (`rotatePlayerShipTowardAimGoal`): goal = camera heading, or the lead-aim point when locked — **no "idle" concept**. The old D22/D47 idle aim-assist that nudged the *camera* toward the lock is **deleted** (`idleAimAssistTowardTarget.ts` + test removed, along with the now-dead `aimAssistMaxTurnRateRadiansPerSecond` stat). (3) **Background music −50%** via gain (synth `MUSIC_BUS_GAIN` halved + `MUSIC_FILE_OUTPUT_GAIN` 0.5 on the .ogg playlist) — no re-encoding |
 
+| D54 | **Grapple/slingshot mechanic — Phase 1: momentum movement + control swap + cover removal + start screen.** (1) **Constant-momentum flight** (`newtonianShipPhysics.ts` `stepShipFlightSimulation`): ships always travel at a fixed `cruiseSpeedMetersPerSecond`; holding thrust rotates the velocity VECTOR toward the facing at `thrustTurnRateRadiansPerSecond` (no speed change); facing is independent (radar drag-steer). `ShipFlightControlInput.throttleFraction`→`thrustActive`. `ShipFlightStats`: dropped `shipMassKg`/`maxThrustNewtons`, renamed `maxForwardSpeed`→`cruiseSpeed`, added `thrustTurnRate`. SPEED BOOST power-up now bumps cruise speed. [unit-tested]. (2) **Cover mechanic removed**: deleted `tractorCover/` + all main.ts cover state/handlers/branch/render-sync/debug hooks. (3) **Controls**: throttle lever + strafe joystick replaced by a single **hold-to-thrust button** (bottom-left of the radar; Shift/Space on desktop); facing still via radar drag-steer. (4) **Start screen** overlay (title/tagline/controls) freezes the sim until the player taps/Enters. (Phases 2–3 to follow: radar asteroid-orbit icons + slingshot; three enemy grapple tiers.) |
+
 ## Requirements from the design doc
 
 ### Rendering & physics
@@ -123,12 +125,8 @@ src/
   main.ts                          — bootstrap, renderer, fixed-timestep game loop
   gameSimulation/
     gameWorld.ts                   — entity collections, spawn/despawn, wave state
-    newtonianShipPhysics.ts        — thrust/mass/rotation integration (ships, reactive asteroids)
+    newtonianShipPhysics.ts        — D54 constant-momentum flight: thrust steers the velocity vector toward the facing [unit-tested]
     boundedPlayAreaSoftEdge.ts     — soft boundary push-back force
-  tractorCover/
-    coverPositionSolver.ts         — hide-point math from facing dir / weighted enemy set (R7) [unit-tested]
-    tractorBeamPullForce.ts        — PD-controller pull to solved cover point (R4, R5)
-    coverQualityEvaluator.ts       — LOS checks → grid color red/yellow/normal (R8)
   asteroids/
     asteroidFieldSpawner.ts        — procedural field in bounded sphere, size classes (D10)
     asteroidDestructibleBody.ts    — HP, chunk loss, shrink, damage particles (R12)
@@ -145,7 +143,7 @@ src/
   player/
     playerShipCondition.ts         — hull HP + regen shield, death/restart (D7)
   hud/
-    touchFlightControls.ts         — joystick, throttle lever, fire zones (D5, R11)
+    touchFlightControls.ts         — D54 hold-to-thrust button + keyboard pitch/yaw fallback
     cameraChaseAndCockpit.ts       — third-person chase + cockpit toggle (D9)
   audio/
     chiptuneMusicTheory.ts         — note→freq, step timing, techno loop pattern (D23) [unit-tested]
