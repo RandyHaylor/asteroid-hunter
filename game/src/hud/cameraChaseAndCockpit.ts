@@ -11,7 +11,6 @@ export type PlayerCameraViewMode = 'thirdPersonChase' | 'cockpit'
 // D26/D34: raised above the ship for a mild top-down angle, and pulled ~1.6× farther back (D34) so
 // the ship and asteroids read smaller / less crowded on screen (the y:z ratio keeps the same tilt).
 const CHASE_CAMERA_LOCAL_OFFSET = new Vector3(0, 8.5, 18)
-const CHASE_LOOK_AHEAD_DISTANCE_METERS = 30
 /** higher = snappier follow; applied frame-rate independently via exponential damping */
 const CHASE_FOLLOW_STIFFNESS_PER_SECOND = 5
 
@@ -22,12 +21,9 @@ const COVER_ZOOM_RESPONSE_PER_SECOND = 3
 const COCKPIT_CAMERA_LOCAL_OFFSET = new Vector3(0, 0.45, -1.2)
 
 const scratchDesiredCameraPosition = new Vector3()
-const scratchLookTargetPosition = new Vector3()
-const scratchForwardDirection = new Vector3()
 const scratchBankedUpDirection = new Vector3()
 
 const SHIP_LOCAL_UP_AXIS = new Vector3(0, 1, 0)
-const SHIP_LOCAL_FORWARD_AXIS = new Vector3(0, 0, -1)
 
 export type PlayerCameraRig = {
   /** viewOrientation = the commanded (radar) orientation the camera aligns to instantly (D43) */
@@ -75,16 +71,13 @@ export function createPlayerCameraRig(playerViewCamera: PerspectiveCamera): Play
       cameraHasSnappedToInitialPose = true
     }
 
-    // up + look direction come from the commanded orientation (instant) so "up" never inverts and
-    // the view points where the player aimed the radar
+    // up comes from the commanded orientation (instant) so "up" never inverts as the player aims
     scratchBankedUpDirection.copy(SHIP_LOCAL_UP_AXIS).applyQuaternion(viewOrientation)
     playerViewCamera.up.copy(scratchBankedUpDirection)
 
-    scratchForwardDirection.copy(SHIP_LOCAL_FORWARD_AXIS).applyQuaternion(viewOrientation)
-    scratchLookTargetPosition
-      .copy(shipState.positionMeters)
-      .addScaledVector(scratchForwardDirection, CHASE_LOOK_AHEAD_DISTANCE_METERS)
-    playerViewCamera.lookAt(scratchLookTargetPosition)
+    // D55: look straight AT the ship's center so it stays centered and the camera ORBITS the ship
+    // (rotating the radar pivots around the ship, not a point ahead of it — no more "flop")
+    playerViewCamera.lookAt(shipState.positionMeters)
   }
 
   function updateCockpitCamera(shipState: ShipRigidBodyState, viewOrientation: Quaternion): void {

@@ -569,12 +569,13 @@ const scratchProjectileOrigin = new THREE.Vector3()
 const scratchEnemyProjectileOrigin = new THREE.Vector3()
 
 function updatePlayerWeaponsFire(): void {
-  getShipForwardDirection(playerShipState, scratchPlayerForwardDirection)
-  // D51: the lock selection itself skips occluded enemies (clear line of sight required), so the
-  // lock only ever sits on a visible enemy — we never lock onto or fire at a yellow/occluded target.
+  getShipForwardDirection(playerShipState, scratchPlayerForwardDirection) // nose — for the firing origin + laser-alignment gate
+  // D55: lock onto the enemy centered in the camera RETICLE (commanded forward), not the lagged nose,
+  // so the lock matches what the player aimed the radar at. D51: occluded enemies are still skipped.
+  scratchCommandedForward.copy(COMMANDED_FORWARD_LOCAL).applyQuaternion(radarSphereDisplay.getCommandedOrientation())
   currentAutoAimTarget = selectAutoAimTargetInNoseCone(
     playerShipState.positionMeters,
-    scratchPlayerForwardDirection,
+    scratchCommandedForward,
     gameWorld.enemyShips,
     gameWorld.asteroids,
   )
@@ -754,12 +755,37 @@ function rotatePlayerShipTowardAimGoal(deltaSeconds: number): void {
 const scratchShipWeaponBoreForward = new THREE.Vector3()
 const scratchShipWeaponBoreWorldPoint = new THREE.Vector3()
 
+// D55: ease the commanded (camera) heading to keep a locked enemy centered in the reticle, at the
+// enemy-tracking rate. Only runs when the player is NOT dragging the radar — a drag always wins
+// (camera rotation IS the heading target then). Restores the camera-tracks-lock behavior.
+const COMMANDED_FORWARD_LOCAL = new THREE.Vector3(0, 0, -1)
+const scratchCommandedForward = new THREE.Vector3()
+const scratchCommandedToEnemy = new THREE.Vector3()
+const scratchCommandedTrackDelta = new THREE.Quaternion()
+const scratchCommandedTrackTarget = new THREE.Quaternion()
+function easeCommandedHeadingTowardEnemy(
+  commandedOrientation: THREE.Quaternion,
+  enemyPositionMeters: THREE.Vector3,
+  deltaSeconds: number,
+): void {
+  scratchCommandedToEnemy.copy(enemyPositionMeters).sub(playerShipState.positionMeters)
+  if (scratchCommandedToEnemy.lengthSq() < 1e-8) return
+  scratchCommandedToEnemy.normalize()
+  scratchCommandedForward.copy(COMMANDED_FORWARD_LOCAL).applyQuaternion(commandedOrientation)
+  scratchCommandedTrackDelta.setFromUnitVectors(scratchCommandedForward, scratchCommandedToEnemy)
+  scratchCommandedTrackTarget.copy(scratchCommandedTrackDelta).multiply(commandedOrientation).normalize()
+  const maxStepRadians = playerShipBaseFlightStats.enemyTrackTurnRateRadiansPerSecond * deltaSeconds
+  commandedOrientation.rotateTowards(scratchCommandedTrackTarget, maxStepRadians)
+}
+
 function updatePlayerMovement(deltaSeconds: number): void {
   const flightControlInput = flightControls.readFlightControlInput()
 
-  // Camera/commanded heading: steered by radar drag (in the radar module) + keyboard here. The
-  // camera is purely player-controlled — it is NOT auto-aimed at the lock. We do NOT snap it back to
-  // the ship (that caused a camera jump on drag release).
+  // Camera/commanded heading: steered by radar drag (in the radar module) + keyboard here. When the
+  // player is NOT dragging, the camera also eases to keep a LOCKED enemy centered (D55), at the
+  // enemy-tracking rate. A drag always wins — then the camera rotation IS the heading target, and if
+  // the drag carries the enemy out of the reticle there's no lock to track (hard rule). We never snap
+  // the heading back to the ship (that caused a camera jump on drag release).
   const commandedOrientation = radarSphereDisplay.getCommandedOrientation()
   const radarIsSteeringDrag = radarSphereDisplay.isSteeringDrag()
   if (!radarIsSteeringDrag) {
@@ -769,6 +795,10 @@ function updatePlayerMovement(deltaSeconds: number): void {
       flightControlInput.yawInput,
       deltaSeconds,
     )
+    const lockedEnemyForCameraTracking = currentAutoAimTarget
+    if (lockedEnemyForCameraTracking !== null && !lockedEnemyForCameraTracking.isDestroyed) {
+      easeCommandedHeadingTowardEnemy(commandedOrientation, lockedEnemyForCameraTracking.positionMeters, deltaSeconds)
+    }
   }
 
   // The ship's rotation goal is the camera heading, or the lead-aim point when an enemy is locked.
