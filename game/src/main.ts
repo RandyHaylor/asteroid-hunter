@@ -827,8 +827,7 @@ function adjustCoverHoldPointFromStrafeInput(
 
 // D47/D53: keyboard pitch+yaw rotate the COMMANDED heading (camera frame) directly, at the ship's
 // max turn rate, in the commanded frame's local axes (same convention as the radar drag). The
-// camera = commanded. (D53 removed the old idle aim-assist that nudged the CAMERA toward the lock —
-// the SHIP now does the aiming, decoupled from the camera; see rotatePlayerShipTowardAimDirection.)
+// camera = commanded; the SHIP does the aiming separately (see rotatePlayerShipTowardAimGoal).
 const SHIP_LOCAL_RIGHT_AXIS = new THREE.Vector3(1, 0, 0)
 const scratchCommandedYawRotation = new THREE.Quaternion()
 const scratchCommandedPitchRotation = new THREE.Quaternion()
@@ -845,64 +844,64 @@ function applyPitchYawToCommandedHeading(
   commandedOrientation.multiply(scratchCommandedYawRotation).multiply(scratchCommandedPitchRotation).normalize()
 }
 
-// D43: the camera snaps to the commanded (radar) orientation instantly; the SHIP follows at its
-// smoothed turn speed/progression — an eased slerp toward the commanded orientation (decelerates as
-// it arrives), capped so it never turns faster than the ship's max turn rate.
+// D43/D53: the ONE ship-rotation path. The ship's rotation GOAL is the camera (commanded/radar)
+// heading — UNLESS an enemy is locked, in which case the goal becomes the lead-ahead aim point
+// instead (NOT the camera), so the ship tracks the target even while you drag the camera elsewhere.
+// There is no "idle" state. Locked: minimal-arc toward the lead direction (no roll change) at the
+// steady enemyTrackTurnRate. Unlocked: eased catch-up toward the camera heading (D43), rate-capped.
 const SHIP_FOLLOW_SMOOTHING_PER_SECOND = 6
-function rotatePlayerShipTowardRadarCommand(deltaSeconds: number): void {
-  const commandedOrientation = radarSphereDisplay.getCommandedOrientation()
-  const smoothingBlend = 1 - Math.exp(-SHIP_FOLLOW_SMOOTHING_PER_SECOND * deltaSeconds)
-  const angleToCommandedRadians = playerShipState.orientation.angleTo(commandedOrientation)
-  if (angleToCommandedRadians > 1e-4) {
-    // eased step, but never exceed the max turn rate this frame (keeps big jumps physical)
-    const maxTurnStepRadians = playerShipBaseFlightStats.maxTurnRateRadiansPerSecond * deltaSeconds
-    const easedStepRadians = Math.min(angleToCommandedRadians * smoothingBlend, maxTurnStepRadians)
-    playerShipState.orientation.rotateTowards(commandedOrientation, easedStepRadians)
-  }
-  playerShipState.currentPitchRateRadiansPerSecond = 0
-  playerShipState.currentYawRateRadiansPerSecond = 0
-}
-
-// D53: turn the SHIP toward a world-space aim direction (the lead-ahead point of the locked enemy),
-// at the upgradeable enemyTrackTurnRateRadiansPerSecond. This is DECOUPLED from the camera: it runs
-// whenever an enemy is locked, regardless of radar drag/release, so the ship points its weapons
-// ahead of the target even while the camera is aimed elsewhere. Uses the minimal-arc rotation (no
-// roll change) toward the aim direction, capped at the tracking rate this frame.
+const scratchShipAimLeadDirection = new THREE.Vector3()
 const scratchShipAimCurrentForward = new THREE.Vector3()
 const scratchShipAimDeltaRotation = new THREE.Quaternion()
-const scratchShipAimTargetOrientation = new THREE.Quaternion()
-function rotatePlayerShipTowardAimDirection(aimDirectionWorld: THREE.Vector3, deltaSeconds: number): void {
-  if (aimDirectionWorld.lengthSq() < 1e-12) {
-    rotatePlayerShipTowardRadarCommand(deltaSeconds) // degenerate aim — fall back to camera follow
-    return
+const scratchShipRotationGoalOrientation = new THREE.Quaternion()
+function rotatePlayerShipTowardAimGoal(deltaSeconds: number): void {
+  const lockedAimTarget = currentAutoAimTarget
+  let isTrackingLockedTarget = false
+  if (lockedAimTarget !== null && !lockedAimTarget.isDestroyed) {
+    computeLeadAimDirection(
+      playerShipState.positionMeters,
+      lockedAimTarget.positionMeters,
+      lockedAimTarget.velocityMetersPerSecond,
+      playerBaseLaserStats.boltSpeedMetersPerSecond,
+      scratchShipAimLeadDirection,
+    )
+    if (scratchShipAimLeadDirection.lengthSq() > 1e-12) {
+      // GOAL = aim ahead of the locked enemy (minimal-arc rotation from the nose to the lead dir)
+      getShipForwardDirection(playerShipState, scratchShipAimCurrentForward)
+      scratchShipAimCurrentForward.normalize()
+      scratchShipAimDeltaRotation.setFromUnitVectors(scratchShipAimCurrentForward, scratchShipAimLeadDirection)
+      scratchShipRotationGoalOrientation.copy(scratchShipAimDeltaRotation).multiply(playerShipState.orientation).normalize()
+      isTrackingLockedTarget = true
+    }
   }
-  getShipForwardDirection(playerShipState, scratchShipAimCurrentForward)
-  scratchShipAimCurrentForward.normalize()
-  scratchShipAimDeltaRotation.setFromUnitVectors(scratchShipAimCurrentForward, aimDirectionWorld)
-  scratchShipAimTargetOrientation.copy(scratchShipAimDeltaRotation).multiply(playerShipState.orientation).normalize()
-  const angleToAimRadians = playerShipState.orientation.angleTo(scratchShipAimTargetOrientation)
-  if (angleToAimRadians > 1e-4) {
-    const maxStepRadians = playerShipBaseFlightStats.enemyTrackTurnRateRadiansPerSecond * deltaSeconds
-    playerShipState.orientation.rotateTowards(scratchShipAimTargetOrientation, maxStepRadians)
+  if (!isTrackingLockedTarget) {
+    // GOAL = the camera (commanded/radar) heading
+    scratchShipRotationGoalOrientation.copy(radarSphereDisplay.getCommandedOrientation())
+  }
+
+  const angleToGoalRadians = playerShipState.orientation.angleTo(scratchShipRotationGoalOrientation)
+  if (angleToGoalRadians > 1e-4) {
+    const maxTurnStepRadians = playerShipBaseFlightStats.maxTurnRateRadiansPerSecond * deltaSeconds
+    const stepRadians = isTrackingLockedTarget
+      ? playerShipBaseFlightStats.enemyTrackTurnRateRadiansPerSecond * deltaSeconds
+      : Math.min(angleToGoalRadians * (1 - Math.exp(-SHIP_FOLLOW_SMOOTHING_PER_SECOND * deltaSeconds)), maxTurnStepRadians)
+    playerShipState.orientation.rotateTowards(scratchShipRotationGoalOrientation, stepRadians)
   }
   playerShipState.currentPitchRateRadiansPerSecond = 0
   playerShipState.currentYawRateRadiansPerSecond = 0
 }
 
-const scratchShipAimLeadDirection = new THREE.Vector3()
 const scratchShipWeaponBoreForward = new THREE.Vector3()
 const scratchShipWeaponBoreWorldPoint = new THREE.Vector3()
 
 function updatePlayerMovement(deltaSeconds: number): void {
   const flightControlInput = flightControls.readFlightControlInput()
 
-  // D47: the COMMANDED orientation is the single heading target (camera follows it). Radar drag
-  // steers it inside the radar module; keyboard + idle aim-assist steer it here. We do NOT snap it
-  // back to the ship — that caused the camera to jump on drag release. The ship eases toward it.
+  // Camera/commanded heading: steered by radar drag (in the radar module) + keyboard here. The
+  // camera is purely player-controlled — it is NOT auto-aimed at the lock. We do NOT snap it back to
+  // the ship (that caused a camera jump on drag release).
   const commandedOrientation = radarSphereDisplay.getCommandedOrientation()
   const radarIsSteeringDrag = radarSphereDisplay.isSteeringDrag()
-  // camera/commanded heading: radar drag (in the radar module) + keyboard here. The camera is NOT
-  // auto-aimed at the lock — per D53 the SHIP does the aiming (below), decoupled from the camera.
   if (!radarIsSteeringDrag) {
     applyPitchYawToCommandedHeading(
       commandedOrientation,
@@ -912,23 +911,8 @@ function updatePlayerMovement(deltaSeconds: number): void {
     )
   }
 
-  // D53: whenever an enemy is locked (in the reticle), the SHIP's rotation target becomes the
-  // aim-ahead (lead) point — regardless of whether the radar is being dragged or released. The ship
-  // turns to point its weapons ahead of the enemy while the camera stays on the commanded heading.
-  // With no lock, the ship eases toward the commanded (camera/radar) heading as before.
-  const lockedAimTarget = currentAutoAimTarget
-  if (lockedAimTarget !== null && !lockedAimTarget.isDestroyed) {
-    computeLeadAimDirection(
-      playerShipState.positionMeters,
-      lockedAimTarget.positionMeters,
-      lockedAimTarget.velocityMetersPerSecond,
-      playerBaseLaserStats.boltSpeedMetersPerSecond,
-      scratchShipAimLeadDirection,
-    )
-    rotatePlayerShipTowardAimDirection(scratchShipAimLeadDirection, deltaSeconds)
-  } else {
-    rotatePlayerShipTowardRadarCommand(deltaSeconds)
-  }
+  // The ship's rotation goal is the camera heading, or the lead-aim point when an enemy is locked.
+  rotatePlayerShipTowardAimGoal(deltaSeconds)
 
   if (tractorPullIsActive && activeCoverAsteroid) {
     // D14 escape routes: move the throttle (it was zeroed on tap) or tap another asteroid

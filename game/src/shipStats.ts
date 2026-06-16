@@ -5,14 +5,8 @@ export type ShipFlightStats = {
   maxThrustNewtons: number
   maxTurnRateRadiansPerSecond: number
   maxForwardSpeedMetersPerSecond: number
-  /**
-   * D22: weak idle aim-assist. When the player is NOT actively steering, the ship gently
-   * turns toward the currently locked target at up to this rate (much smaller than
-   * maxTurnRateRadiansPerSecond so it only fine-tunes, never wrests control). Upgradeable
-   * later (a "targeting computer" upgrade raises it); 0 disables the assist entirely.
-   */
-  aimAssistMaxTurnRateRadiansPerSecond: number
-  // D52: camera enemy-tracking turn rate (how fast the camera/reticle swings to look straight at a LOCKED enemy) — separate from maxTurnRateRadiansPerSecond (the ship's own turn rate); upgradeable.
+  // D52/D53: how fast the SHIP turns to aim ahead of a LOCKED enemy (lead-aim tracking), separate
+  // from maxTurnRateRadiansPerSecond (the ship's own commanded-heading turn rate); upgradeable (R17).
   enemyTrackTurnRateRadiansPerSecond: number
 }
 
@@ -21,8 +15,7 @@ export const playerShipBaseFlightStats: ShipFlightStats = {
   maxThrustNewtons: 60_000, // 60 m/s^2 peak acceleration
   maxTurnRateRadiansPerSecond: 1.6,
   maxForwardSpeedMetersPerSecond: 80,
-  aimAssistMaxTurnRateRadiansPerSecond: 0.5, // ~1/3 of manual turn rate — a nudge, not autopilot
-  enemyTrackTurnRateRadiansPerSecond: 1.2, // D52: a bit slower than the ship's 1.6 turn rate so the camera can't fully keep up with a close, fast-crossing enemy
+  enemyTrackTurnRateRadiansPerSecond: 1.2, // D52: a bit slower than the ship's 1.6 turn rate so it can't fully keep up with a close, fast-crossing enemy
 }
 
 export type TractorBeamStats = {
