@@ -53,7 +53,7 @@ import { applyWeaponDamageToEnemyShip } from './enemies/enemyShipDamage'
 import { createEnemyConditionBarsDisplay } from './enemies/enemyConditionBarsDisplay'
 import { createPlayerShipCondition } from './player/playerShipCondition'
 import { createPlayerConditionDisplay } from './hud/playerConditionDisplay'
-import { createRadarSignatureTracker } from './radar/radarSignatureTracker'
+import { createRadarSignatureTracker, RADAR_DETECTION_RANGE_METERS } from './radar/radarSignatureTracker'
 import { createRadarSphereDisplay } from './radar/radarSphereDisplay'
 import { createTouchFlightControls } from './hud/touchFlightControls'
 import { createPlayerCameraRig } from './hud/cameraChaseAndCockpit'
@@ -578,6 +578,7 @@ function updatePlayerWeaponsFire(): void {
     scratchCommandedForward,
     gameWorld.enemyShips,
     gameWorld.asteroids,
+    RADAR_DETECTION_RANGE_METERS,
   )
 
   // D47: weapons are ALWAYS ON — auto-fire at the locked (visible) target, gated only by cooldown.
@@ -909,10 +910,10 @@ function runFrameLoop(currentFrameTimestampMs: number): void {
   }
 
   syncRenderObjectsFromSimulation(frameDeltaSeconds)
-  // D55-fix: rigid chase rig — the camera adopts the commanded (radar) orientation and sits at a fixed
-  // offset, so the ship is pinned in front of and slightly below it at a constant distance.
+  // D56-fix: pin the camera to the SMOOTHED mesh position (the one actually rendered), so the ship
+  // never jitters or swims closer/farther relative to the rigid rig as it moves/rotates.
   playerCameraRig.updateCameraFollowingShip(
-    playerShipState,
+    playerShipMesh.position,
     radarSphereDisplay.getCommandedOrientation(),
   )
 

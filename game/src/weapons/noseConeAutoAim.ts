@@ -18,6 +18,7 @@ export function selectAutoAimTargetInNoseCone(
   playerForwardDirection: THREE.Vector3,
   enemyShips: readonly EnemyShip[],
   asteroids: readonly AsteroidBody[],
+  maxLockDistanceMeters: number,
 ): EnemyShip | null {
   // STEP 1: scan every live enemy, keeping the closest one whose bearing fits the cone
   let closestEnemyInCone: EnemyShip | null = null
@@ -29,6 +30,8 @@ export function selectAutoAimTargetInNoseCone(
     scratchEnemyBearingDirection.copy(enemyShip.positionMeters).sub(playerPositionMeters)
     const enemyDistanceMeters = scratchEnemyBearingDirection.length()
     if (enemyDistanceMeters <= 0 || enemyDistanceMeters >= closestEnemyDistanceMeters) continue
+    // D56: never lock/fire/track beyond the detection (red-ring) range — same range the rings use
+    if (enemyDistanceMeters > maxLockDistanceMeters) continue
 
     // STEP 2: bearing off the nose = angle between the forward axis and the enemy direction
     scratchEnemyBearingDirection.divideScalar(enemyDistanceMeters)

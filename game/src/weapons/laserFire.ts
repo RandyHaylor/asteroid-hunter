@@ -40,7 +40,7 @@ type ActiveLaserBolt = {
   firedAtSeconds: number
 }
 
-const ENEMY_SHIP_HIT_RADIUS_METERS = 4
+const ENEMY_SHIP_HIT_RADIUS_METERS = 12 // D56: 3× to match the enlarged enemy model
 const PLAYER_SHIP_HIT_RADIUS_METERS = 3
 
 // bolt visual: small elongated emissive box, long axis along the flight direction

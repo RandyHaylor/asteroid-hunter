@@ -7,6 +7,9 @@ import * as THREE from 'three'
 const ALIEN_HULL_COLOR = 0x3a2a3a
 const ALIEN_TOXIC_GLOW_COLOR = 0x66ff44
 
+// D56: enemy models are 3× the ~5 m base build so they're clearly visible against the player dart.
+export const ENEMY_SHIP_MODEL_SCALE = 3
+
 export function createEnemyShipMesh(): THREE.Group {
   const enemyShipGroup = new THREE.Group()
 
@@ -51,6 +54,10 @@ export function createEnemyShipMesh(): THREE.Group {
   dorsalBladeFin.position.set(0, 0.8, 0.9)
   dorsalBladeFin.rotation.x = -0.35
   enemyShipGroup.add(dorsalBladeFin)
+
+  // D56: enemies are ~3× the player ship so they read clearly (they were often too small to see).
+  // The combat hit radius is scaled to match (ENEMY_SHIP_HIT_RADIUS_METERS in laserFire/missileFire).
+  enemyShipGroup.scale.setScalar(ENEMY_SHIP_MODEL_SCALE)
 
   return enemyShipGroup
 }

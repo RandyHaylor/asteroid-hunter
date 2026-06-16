@@ -57,7 +57,7 @@ type ActiveExplosionFireball = {
   maxRadiusMeters: number
 }
 
-const ENEMY_SHIP_HIT_RADIUS_METERS = 4
+const ENEMY_SHIP_HIT_RADIUS_METERS = 12 // D56: 3× to match the enlarged enemy model
 const PLAYER_SHIP_HIT_RADIUS_METERS = 3
 /** R9: no hard range cap, but stray missiles eventually clean themselves up */
 const MISSILE_LIFETIME_SECONDS = 25

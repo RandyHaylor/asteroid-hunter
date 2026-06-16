@@ -31,11 +31,29 @@ const playerAtOrigin = new THREE.Vector3(0, 0, 0)
 const playerFacingNegativeZ = new THREE.Vector3(0, 0, -1)
 const noAsteroids: readonly AsteroidBody[] = []
 
-function selectTarget(enemyShips: EnemyShip[], asteroids: readonly AsteroidBody[] = noAsteroids): EnemyShip | null {
-  return selectAutoAimTargetInNoseCone(playerAtOrigin, playerFacingNegativeZ, enemyShips, asteroids)
+function selectTarget(
+  enemyShips: EnemyShip[],
+  asteroids: readonly AsteroidBody[] = noAsteroids,
+  maxLockDistanceMeters = 1e9,
+): EnemyShip | null {
+  return selectAutoAimTargetInNoseCone(
+    playerAtOrigin,
+    playerFacingNegativeZ,
+    enemyShips,
+    asteroids,
+    maxLockDistanceMeters,
+  )
 }
 
 describe('selectAutoAimTargetInNoseCone (D6)', () => {
+  it('D56: does NOT lock an in-cone enemy beyond the max lock distance', () => {
+    const enemyDeadAheadFar = makeTestEnemyShipAt(new THREE.Vector3(0, 0, -1500))
+    expect(selectTarget([enemyDeadAheadFar], noAsteroids, 1200)).toBeNull()
+    // the same enemy within range locks normally
+    const enemyDeadAheadNear = makeTestEnemyShipAt(new THREE.Vector3(0, 0, -800))
+    expect(selectTarget([enemyDeadAheadNear], noAsteroids, 1200)).toBe(enemyDeadAheadNear)
+  })
+
   it('selects an enemy inside the nose cone', () => {
     const enemyOffsetMeters = 100 * Math.tan(THREE.MathUtils.degToRad(5))
     const enemyInsideCone = makeTestEnemyShipAt(new THREE.Vector3(enemyOffsetMeters, 0, -100))

@@ -13,21 +13,38 @@ import {
 const BAR_WIDTH_METERS = 7
 const BAR_HEIGHT_METERS = 0.55
 const BAR_VERTICAL_GAP_METERS = 0.3
-const BARS_OFFSET_ABOVE_SHIP_METERS = 6
+const BARS_OFFSET_ABOVE_SHIP_METERS = 9 // D56: clear the now-3×-larger enemy model
 // D46: keep the bars a CONSTANT on-screen size regardless of distance — world size is scaled by
 // distanceToCamera / this reference, so a far enemy's bars stay just as large as a near one's.
 const BARS_REFERENCE_DISTANCE_METERS = 90
 const BARS_MIN_DISTANCE_SCALE = 0.35
 
 const sharedUnitBarGeometry = new THREE.PlaneGeometry(1, 1)
+// D56: draw the bars ON TOP without depth testing/writing so the shield/hull fills never z-fight the
+// background plane or the enemy hull (that flicker made them unreadable). Layering is by renderOrder.
 const sharedBarBackgroundMaterial = new THREE.MeshBasicMaterial({
   color: 0x101820,
   transparent: true,
   opacity: 0.6,
   side: THREE.DoubleSide,
+  depthTest: false,
+  depthWrite: false,
 })
-const sharedShieldFillMaterial = new THREE.MeshBasicMaterial({ color: 0x44aaff, side: THREE.DoubleSide })
-const sharedHullFillMaterial = new THREE.MeshBasicMaterial({ color: 0xff4444, side: THREE.DoubleSide })
+const sharedShieldFillMaterial = new THREE.MeshBasicMaterial({
+  color: 0x44aaff,
+  side: THREE.DoubleSide,
+  depthTest: false,
+  depthWrite: false,
+})
+const sharedHullFillMaterial = new THREE.MeshBasicMaterial({
+  color: 0xff4444,
+  side: THREE.DoubleSide,
+  depthTest: false,
+  depthWrite: false,
+})
+
+const BAR_BACKGROUND_RENDER_ORDER = 20
+const BAR_FILL_RENDER_ORDER = 21
 
 type EnemyConditionBarGroup = {
   barsGroup: THREE.Group
@@ -51,21 +68,25 @@ function buildEnemyConditionBarGroup(): EnemyConditionBarGroup {
   const shieldBackgroundMesh = new THREE.Mesh(sharedUnitBarGeometry, sharedBarBackgroundMaterial)
   shieldBackgroundMesh.scale.set(BAR_WIDTH_METERS, BAR_HEIGHT_METERS, 1)
   shieldBackgroundMesh.position.y = shieldRowY
+  shieldBackgroundMesh.renderOrder = BAR_BACKGROUND_RENDER_ORDER
   barsGroup.add(shieldBackgroundMesh)
 
   const hullBackgroundMesh = new THREE.Mesh(sharedUnitBarGeometry, sharedBarBackgroundMaterial)
   hullBackgroundMesh.scale.set(BAR_WIDTH_METERS, BAR_HEIGHT_METERS, 1)
   hullBackgroundMesh.position.y = hullRowY
+  hullBackgroundMesh.renderOrder = BAR_BACKGROUND_RENDER_ORDER
   barsGroup.add(hullBackgroundMesh)
 
   const shieldFillMesh = new THREE.Mesh(sharedUnitBarGeometry, sharedShieldFillMaterial)
   shieldFillMesh.scale.set(BAR_WIDTH_METERS, BAR_HEIGHT_METERS * 0.7, 1)
   shieldFillMesh.position.set(0, shieldRowY, 0.01)
+  shieldFillMesh.renderOrder = BAR_FILL_RENDER_ORDER
   barsGroup.add(shieldFillMesh)
 
   const hullFillMesh = new THREE.Mesh(sharedUnitBarGeometry, sharedHullFillMaterial)
   hullFillMesh.scale.set(BAR_WIDTH_METERS, BAR_HEIGHT_METERS * 0.7, 1)
   hullFillMesh.position.set(0, hullRowY, 0.01)
+  hullFillMesh.renderOrder = BAR_FILL_RENDER_ORDER
   barsGroup.add(hullFillMesh)
 
   return { barsGroup, shieldFillMesh, hullFillMesh }
