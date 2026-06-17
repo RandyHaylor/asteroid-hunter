@@ -206,17 +206,62 @@ const playerShipState = createShipRigidBodyStateAtRest()
 const playerShipMesh = createPlayerShipMesh()
 gameScene.add(playerShipMesh)
 
-// D62: visible tractor beam from the ship to the asteroid it is currently orbiting
-const tractorBeamLineGeometry = new THREE.BufferGeometry().setFromPoints([
-  new THREE.Vector3(),
-  new THREE.Vector3(),
-])
-const tractorBeamLine = new THREE.Line(
-  tractorBeamLineGeometry,
-  new THREE.LineBasicMaterial({ color: 0x66ddff, transparent: true, opacity: 0.85 }),
+// D64: a fuzzy glowing ring texture (transparent centre, soft bright band, faded edge)
+function createFuzzyRingTexture(): THREE.CanvasTexture {
+  const textureSizePixels = 128
+  const ringCanvas = document.createElement('canvas')
+  ringCanvas.width = textureSizePixels
+  ringCanvas.height = textureSizePixels
+  const drawContext = ringCanvas.getContext('2d') as CanvasRenderingContext2D
+  const centerPixels = textureSizePixels / 2
+  const radialGradient = drawContext.createRadialGradient(
+    centerPixels,
+    centerPixels,
+    textureSizePixels * 0.3,
+    centerPixels,
+    centerPixels,
+    textureSizePixels * 0.5,
+  )
+  radialGradient.addColorStop(0, 'rgba(120, 224, 255, 0)')
+  radialGradient.addColorStop(0.55, 'rgba(120, 224, 255, 0.85)')
+  radialGradient.addColorStop(0.8, 'rgba(170, 238, 255, 0.35)')
+  radialGradient.addColorStop(1, 'rgba(120, 224, 255, 0)')
+  drawContext.fillStyle = radialGradient
+  drawContext.fillRect(0, 0, textureSizePixels, textureSizePixels)
+  return new THREE.CanvasTexture(ringCanvas)
+}
+
+// D63/D64: a thick (cylinder) tractor beam from the ship to the orbited asteroid, plus a fuzzy ring
+// around that asteroid. Both shown only while latched.
+const TRACTOR_BEAM_RADIUS_METERS = 1.6
+const CYLINDER_LOCAL_UP_AXIS = new THREE.Vector3(0, 1, 0)
+const tractorBeamMesh = new THREE.Mesh(
+  new THREE.CylinderGeometry(1, 1, 1, 10, 1, true),
+  new THREE.MeshBasicMaterial({
+    color: 0x66ddff,
+    transparent: true,
+    opacity: 0.8,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  }),
 )
-tractorBeamLine.visible = false
-gameScene.add(tractorBeamLine)
+tractorBeamMesh.visible = false
+gameScene.add(tractorBeamMesh)
+
+const orbitTargetFuzzyRing = new THREE.Sprite(
+  new THREE.SpriteMaterial({
+    map: createFuzzyRingTexture(),
+    color: 0x88e0ff,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  }),
+)
+orbitTargetFuzzyRing.visible = false
+gameScene.add(orbitTargetFuzzyRing)
+
+const scratchTractorBeamDelta = new THREE.Vector3()
+const scratchTractorBeamDirection = new THREE.Vector3()
 
 const playerShipCondition = createPlayerShipCondition()
 // D35/D37: interactive controls go in two flex clusters inside the margin overlay (left + right);
@@ -285,14 +330,13 @@ window.addEventListener('keydown', (keyboardEvent) => {
   if (keyboardEvent.code === 'KeyM') toggleGameSound()
 })
 
-let gameAudioResumedAfterGesture = false
-function resumeGameAudioOnFirstGesture(): void {
-  if (gameAudioResumedAfterGesture) return
-  gameAudioResumedAfterGesture = true
-  gameAudioSystem.resumeAfterFirstUserGesture()
+// D64: resume on EVERY gesture (not once) — iOS re-suspends the context, so a single resume left the
+// game silent "fairly often". resumeAudioContextOnUserGesture is cheap + idempotent for music start.
+function resumeGameAudioOnUserGesture(): void {
+  gameAudioSystem.resumeAudioContextOnUserGesture()
 }
-window.addEventListener('pointerdown', resumeGameAudioOnFirstGesture)
-window.addEventListener('keydown', resumeGameAudioOnFirstGesture)
+window.addEventListener('pointerdown', resumeGameAudioOnUserGesture)
+window.addEventListener('keydown', resumeGameAudioOnUserGesture)
 
 // D54: simple start screen — shown at boot; the simulation is frozen until the player dismisses it.
 // Dismissing also satisfies the audio autoplay gesture requirement.
@@ -317,7 +361,7 @@ function beginGameFromStartScreen(): void {
   if (gameHasStarted) return
   gameHasStarted = true
   startScreenOverlay.classList.add('startScreenOverlayHidden')
-  resumeGameAudioOnFirstGesture()
+  resumeGameAudioOnUserGesture()
 }
 startScreenOverlay.addEventListener('pointerdown', (pointerEvent) => {
   pointerEvent.stopPropagation()
@@ -993,21 +1037,25 @@ function syncRenderObjectsFromSimulation(): void {
     radarSphereDisplay.getCommandedOrientation(),
     grappleOrbitController.getLatchedAsteroidId(),
   )
-  // D62: tractor beam line from the ship to the orbited asteroid; + show that asteroid on the radar
+  // D63/D64: thick tractor beam (cylinder) ship→asteroid + fuzzy ring around it; + radar marker
   const orbitedAsteroid = grappleOrbitController.getLatchedAsteroid()
   if (orbitedAsteroid) {
-    const beamPositions = tractorBeamLineGeometry.getAttribute('position') as THREE.BufferAttribute
-    beamPositions.setXYZ(0, playerShipMesh.position.x, playerShipMesh.position.y, playerShipMesh.position.z)
-    beamPositions.setXYZ(
-      1,
-      orbitedAsteroid.positionMeters.x,
-      orbitedAsteroid.positionMeters.y,
-      orbitedAsteroid.positionMeters.z,
-    )
-    beamPositions.needsUpdate = true
-    tractorBeamLine.visible = true
+    scratchTractorBeamDelta.subVectors(orbitedAsteroid.positionMeters, playerShipMesh.position)
+    const beamLengthMeters = scratchTractorBeamDelta.length()
+    if (beamLengthMeters > 1e-3) {
+      tractorBeamMesh.position.copy(playerShipMesh.position).addScaledVector(scratchTractorBeamDelta, 0.5)
+      tractorBeamMesh.scale.set(TRACTOR_BEAM_RADIUS_METERS, beamLengthMeters, TRACTOR_BEAM_RADIUS_METERS)
+      scratchTractorBeamDirection.copy(scratchTractorBeamDelta).divideScalar(beamLengthMeters)
+      tractorBeamMesh.quaternion.setFromUnitVectors(CYLINDER_LOCAL_UP_AXIS, scratchTractorBeamDirection)
+      tractorBeamMesh.visible = true
+    }
+    orbitTargetFuzzyRing.position.copy(orbitedAsteroid.positionMeters)
+    const ringDiameterMeters = orbitedAsteroid.currentRadiusMeters * 3
+    orbitTargetFuzzyRing.scale.set(ringDiameterMeters, ringDiameterMeters, 1)
+    orbitTargetFuzzyRing.visible = true
   } else {
-    tractorBeamLine.visible = false
+    tractorBeamMesh.visible = false
+    orbitTargetFuzzyRing.visible = false
   }
   radarSphereDisplay.setOrbitTargetMarker(orbitedAsteroid ? orbitedAsteroid.positionMeters : null, playerShipState)
 

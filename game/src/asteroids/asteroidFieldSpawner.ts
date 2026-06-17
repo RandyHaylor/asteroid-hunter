@@ -23,8 +23,9 @@ const FIELD_SCATTER_RADIUS_FRACTION = 0.85
  *  D62: enlarged to clear the now-bigger large asteroids (up to ~72 m radius) from the spawn point */
 const PLAYER_SPAWN_CLEAR_BUBBLE_RADIUS_METERS = 180
 /** per-vertex radial jitter fraction for irregular rock silhouettes (A1: procedural low-poly art).
- *  D62: more jitter → more varied, jagged shapes */
-const ROCK_VERTEX_RADIAL_JITTER_FRACTION = 0.38
+ *  D64: pulled back from 0.38 — too much jitter made big rocks read as a disconnected cloud of
+ *  triangles; this keeps them varied but cohesive/surface-like */
+const ROCK_VERTEX_RADIAL_JITTER_FRACTION = 0.22
 /** max random drift speed for medium/small asteroids (R10) */
 const MAX_DRIFT_SPEED_METERS_PER_SECOND = 2
 /** slow tumble so the field feels alive without affecting physics */
@@ -62,8 +63,9 @@ function randomPointInsideSphere(sphereRadiusMeters: number, outPoint: Vector3):
 }
 
 function createJaggedRockMesh(rockRadiusMeters: number): Mesh {
-  // D62: vary the base tessellation (0 = sharp/chunky, 2 = rounder) so silhouettes differ rock to rock
-  const subdivisionDetail = Math.random() < 0.45 ? 0 : Math.random() < 0.7 ? 1 : 2
+  // D64: bigger rocks get more tessellation so their surface stays cohesive (not a triangle cloud);
+  // small rocks can be chunkier. Higher detail = rounder/denser surface.
+  const subdivisionDetail = rockRadiusMeters > 20 ? 3 : rockRadiusMeters > 8 ? 2 : Math.random() < 0.5 ? 1 : 2
   const rockGeometry = new IcosahedronGeometry(rockRadiusMeters, subdivisionDetail)
   const vertexPositions = rockGeometry.getAttribute('position') as BufferAttribute
   const jitteredVertex = new Vector3()
@@ -86,11 +88,12 @@ function createJaggedRockMesh(rockRadiusMeters: number): Mesh {
 
   const rockMesh = new Mesh(rockGeometry, rockMaterial)
   rockMesh.rotation.set(Math.random() * Math.PI * 2, Math.random() * Math.PI * 2, Math.random() * Math.PI * 2)
-  // D62: modest per-axis stretch so rocks read as oblong/irregular, not all spheres (shape variety)
+  // D62/D64: gentle per-axis stretch so rocks read as oblong/irregular, not all spheres (kept modest
+  // so the surface stays cohesive)
   rockMesh.scale.set(
-    randomNumberBetween(0.8, 1.25),
-    randomNumberBetween(0.8, 1.25),
-    randomNumberBetween(0.8, 1.25),
+    randomNumberBetween(0.85, 1.18),
+    randomNumberBetween(0.85, 1.18),
+    randomNumberBetween(0.85, 1.18),
   )
   return rockMesh
 }

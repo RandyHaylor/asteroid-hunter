@@ -96,6 +96,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 
 | D63 | **Grapple polish + denser/bigger/varied asteroids.** (1) **Visible tractor beam** (`main.ts`): a cyan line from the ship to the asteroid it's orbiting, shown only while latched. (2) **Orbited asteroid shown on the radar** — `radarSphereDisplay.setOrbitTargetMarker` places a bright cyan marker on the sphere at the asteroid's bearing while latched. (3) **Thrust disengages the orbit** — holding thrust calls `releaseLatch()` (keeps the tangential velocity → slingshot, then thrust steers). (4) **Asteroids** denser + bigger + more varied: counts 22/40/60 → **46/85/130**, radii widened (large 24–72 m, etc.), vertex jitter 0.18 → **0.38**, randomized tessellation detail (0–2) and per-axis stretch for varied shapes; spawn clear-bubble 80 → 180 m so big rocks don't cover the start. |
 
+| D64 | **Sound dropout fix + grapple/asteroid visuals.** (1) **Sound**: the audio context is now resumed on **every** user gesture whenever it isn't `running` (iOS re-suspends on interruption/tab-switch; the old once-only resume left it silent "fairly often"), plus a one-time iOS silent-buffer unlock — `resumeAudioContextOnUserGesture`. (2) **Thicker tractor beam**: replaced the 1-px line with a cyan additive **cylinder** (radius 1.6 m) ship→asteroid. (3) **Fuzzy ring**: an additive sprite (soft ring texture) around the orbited asteroid while latched. (4) **Cohesive asteroids**: vertex jitter 0.38 → **0.22**, bigger rocks get higher tessellation (detail by radius, up to 3) and the per-axis stretch is tightened, so they read as solid surfaces, not a triangle cloud. |
+
 ## Requirements from the design doc
 
 ### Rendering & physics

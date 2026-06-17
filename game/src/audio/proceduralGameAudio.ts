@@ -26,8 +26,8 @@ const SCHEDULER_TICK_MILLISECONDS = 25
 const SCHEDULE_AHEAD_SECONDS = 0.12
 
 export type GameAudioSystem = {
-  /** Call from the first pointerdown/keydown — resumes the suspended context and starts the loop. */
-  resumeAfterFirstUserGesture(): void
+  /** Call on EVERY pointerdown/keydown — resumes the context if it isn't running and starts the loop. */
+  resumeAudioContextOnUserGesture(): void
   /** Toggle master mute; returns the new muted state (for updating the HUD button label). */
   toggleMuted(): boolean
   isMuted(): boolean
@@ -45,7 +45,7 @@ export type GameAudioSystem = {
 /** A no-op audio system used when the Web Audio API is unavailable (keeps callers branch-free). */
 function createSilentAudioSystem(): GameAudioSystem {
   return {
-    resumeAfterFirstUserGesture() {},
+    resumeAudioContextOnUserGesture() {},
     toggleMuted() {
       return false
     },
@@ -297,10 +297,22 @@ export function createGameAudioSystem(): GameAudioSystem {
   // ===== public state + SFX =====
 
   let muted = false
+  let audioContextUnlocked = false
 
   return {
-    resumeAfterFirstUserGesture(): void {
-      if (audioContext.state === 'suspended') void audioContext.resume()
+    resumeAudioContextOnUserGesture(): void {
+      // D64: iOS/Safari re-suspends the context (tab switch, ringer, interruptions). Resume on EVERY
+      // gesture whenever it isn't running — not just the first — or the game goes silent "fairly often".
+      if (audioContext.state !== 'running') void audioContext.resume()
+      if (!audioContextUnlocked) {
+        audioContextUnlocked = true
+        // iOS unlock: play a 1-sample silent buffer inside the gesture; resume() alone can be ignored
+        const silentUnlockBuffer = audioContext.createBuffer(1, 1, 22050)
+        const silentUnlockSource = audioContext.createBufferSource()
+        silentUnlockSource.buffer = silentUnlockBuffer
+        silentUnlockSource.connect(audioContext.destination)
+        silentUnlockSource.start(0)
+      }
       startBackgroundMusicIfStopped() // D39: .ogg playlist (falls back to the synth loop if absent)
     },
     toggleMuted(): boolean {
