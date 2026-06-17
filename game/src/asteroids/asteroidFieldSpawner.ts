@@ -13,11 +13,12 @@ import type { AsteroidBody, AsteroidSizeClass } from '../gameSimulation/gameWorl
 // R6: only 'large' asteroids are cover-eligible — the spawner tags size classes for that.
 // R10: medium/small asteroids carry drift velocity and proportionate mass so they physically react.
 
-export const PLAY_AREA_RADIUS_METERS = 800
+// D61: much larger field so asteroids are spread far apart (was 800)
+export const PLAY_AREA_RADIUS_METERS = 2000
 
-/** asteroids scatter inside this fraction of the play radius, clear of the soft edge.
- *  D19: tightened from 0.9 to pack the field closer together (~3x denser) */
-const FIELD_SCATTER_RADIUS_FRACTION = 0.62
+/** asteroids scatter inside this fraction of the play radius.
+ *  D61: widened (was 0.62) so the same rocks spread across the bigger field */
+const FIELD_SCATTER_RADIUS_FRACTION = 0.85
 /** keep an empty bubble around the origin so the player spawns in open space */
 const PLAYER_SPAWN_CLEAR_BUBBLE_RADIUS_METERS = 80
 /** per-vertex radial jitter fraction for irregular rock silhouettes (A1: procedural low-poly art) */

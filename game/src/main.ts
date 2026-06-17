@@ -12,7 +12,7 @@ import {
   type EnemyShipBehaviorTier,
   type GameWorld,
 } from './gameSimulation/gameWorldTypes'
-import { applySoftBoundaryPushback } from './gameSimulation/boundedPlayAreaSoftEdge'
+import { easeShipIntoFieldEdgeOrbit } from './gameSimulation/boundedPlayAreaSoftEdge'
 import { spawnAsteroidFieldInBoundedSphere, updateDriftingAsteroids } from './asteroids/asteroidFieldSpawner'
 import {
   applyWeaponDamageToAsteroid,
@@ -872,7 +872,7 @@ function updatePlayerMovement(deltaSeconds: number): void {
       deltaSeconds,
     )
   }
-  applySoftBoundaryPushback(playerShipState.positionMeters, playerShipState.velocityMetersPerSecond, deltaSeconds)
+  easeShipIntoFieldEdgeOrbit(playerShipState.positionMeters, playerShipState.velocityMetersPerSecond)
 }
 
 // ===== STEP 9: fixed-timestep simulation loop =====
