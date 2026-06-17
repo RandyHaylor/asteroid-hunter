@@ -1,0 +1,25 @@
+/* D60: rim icons for slingshot-able asteroids, overlaid on the circular radar scope */
+.asteroidOrbitIconLayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none; /* the layer is transparent to input; each icon re-enables it */
+  z-index: 3;
+}
+
+.asteroidOrbitIcon {
+  position: absolute;
+  width: clamp(14px, 5vmin, 22px);
+  height: clamp(14px, 5vmin, 22px);
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+  cursor: pointer;
+  touch-action: none;
+  will-change: left, top;
+}
+
+.asteroidOrbitIconLatched {
+  box-shadow: 0 0 10px 3px rgba(120, 200, 255, 0.9);
+  border-color: #bfe6ff;
+}

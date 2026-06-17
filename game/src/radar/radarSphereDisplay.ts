@@ -50,6 +50,8 @@ export type RadarSphereDisplay = {
   getCommandedOrientation(): Quaternion
   /** D42: keep the radar mirroring the ship while the player isn't dragging */
   syncCommandedOrientationToShip(shipOrientation: Quaternion): void
+  /** D60: the circular scope element — the asteroid-orbit rim icons mount inside it */
+  getControlZoneElement(): HTMLElement
 }
 
 // scratch reused every frame — no per-frame allocations in the display path
@@ -324,5 +326,6 @@ export function createRadarSphereDisplay(controlClusterElement: HTMLElement): Ra
     syncCommandedOrientationToShip: (shipOrientation: Quaternion) => {
       radarCommandedOrientation.copy(shipOrientation)
     },
+    getControlZoneElement: () => radarControlZone,
   }
 }

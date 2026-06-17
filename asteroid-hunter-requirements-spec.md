@@ -88,6 +88,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 
 | D59 | **Combat-feel tuning.** (1) **Ship turn rate is capped, not instant** — unlocked, the ship now slews toward the camera heading at the upgradeable `maxTurnRateRadiansPerSecond` (SHIP HANDLING power-up) instead of snapping inline, so a fast radar drag leaves the ship visibly catching up. (2) **Auto-track capped lower** — `enemyTrackTurnRateRadiansPerSecond` 1.2 → **0.7**, so fast/close/crossing enemies can outrun the lock and break tracking (upgradeable via AUTO-AIM TRACKING). (3) **Missile homing weaker** — player missile `homingTurnRateRadiansPerSecond` 0.7 → **0.35** so it isn't overpowered to start (upgradeable via MISSILE TRACKING). |
 
+| D60 | **Grapple/slingshot — Phase 2: radar asteroid-orbit icons + latch/orbit.** (1) **Rim icons** (`radar/asteroidOrbitIcons.ts`): DOM icons around the radar scope for in-range **large** asteroids, placed at the asteroid's bearing (projected into the commanded/camera frame, snapped to the rim), colored **yellow→orange→red** by closeness (closer = tighter/stronger slingshot); **black + untappable** when too close (<14 m surface); **hidden** beyond 600 m. (2) **Kinematic-arc orbit** (`grappleOrbit/computeOrbitStep.ts`, pure, unit-tested): while latched the ship is carried along a fixed-radius circle around the asteroid at constant cruise speed, in the orbit plane frozen at latch (axis = radius×velocity); releasing keeps the tangential velocity → straight-line slingshot. **Ship facing/camera are unaffected** by orbiting. (3) **Latch state machine** (`grappleOrbit/grappleOrbitController.ts`): tap = latch/orbit (committed); tap again = release; tap-and-hold >1 s then lift = orbit-while-held; tapping another icon switches instantly. Wired into `updatePlayerMovement` (orbit overrides the momentum step while latched). `debugLatchNearestAsteroid` DEV hook. |
+
 ## Requirements from the design doc
 
 ### Rendering & physics
@@ -149,7 +151,11 @@ src/
     enemyAlienShipBehavior.ts      — patrol / orbit-strafe / cover-hunter states (D8)
   radar/
     radarSignatureTracker.ts       — contact signatures, last-seen fade, active count (R13–R16) [unit-tested]
-    radarSphereDisplay.ts          — HUD sphere rendering, rotates with ship
+    radarSphereDisplay.ts          — HUD sphere rendering, rotates with ship; drag-to-steer; exposes the scope element
+    asteroidOrbitIcons.ts          — D60 rim icons for in-range large asteroids (bearing + proximity color), tap to latch
+  grappleOrbit/
+    computeOrbitStep.ts            — D60 pure kinematic-arc orbit step (fixed radius, constant speed) [unit-tested]
+    grappleOrbitController.ts      — D60 latch state machine (tap/hold/switch) + orbit drive
   player/
     playerShipCondition.ts         — hull HP + regen shield, death/restart (D7)
   hud/

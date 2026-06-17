@@ -1,6 +1,6 @@
 # Asteroid Hunter
 
-A 3D touch-first space combat prototype: momentum-based flight (you always carry forward momentum — hold thrust to curve your heading), destructible asteroids, a spherical 3D radar with last-seen contact tracking, staged enemy waves, and a procedural 8-bit techno soundtrack + synth SFX (no audio files — all generated at runtime via Web Audio). Built with Three.js + TypeScript + Vite. *(Asteroid slingshot/grapple is being added in phases — see the decision log.)*
+A 3D touch-first space combat prototype: momentum-based flight (you always carry forward momentum — hold thrust to curve your heading), destructible asteroids, a spherical 3D radar with last-seen contact tracking, staged enemy waves, and a procedural 8-bit techno soundtrack + synth SFX (no audio files — all generated at runtime via Web Audio). Built with Three.js + TypeScript + Vite. *(Asteroid slingshot/grapple is being added in phases — player slingshot is in; escalating enemy grapple tiers are next.)*
 
 ## ▶ Play it now
 
@@ -14,6 +14,7 @@ Works in desktop and mobile browsers.
 |---|---|---|
 | Aim / rotate ship | **drag the radar sphere** (right half of the view in landscape, under the view in portrait) | WASD / arrow keys |
 | Thrust (curves your momentum toward the facing) | **hold the THRUST button** (bottom-left, by the radar) | hold Shift or Space |
+| Slingshot around an asteroid | **tap its icon** around the radar rim (color = how close/strong; black = too close) — tap again to release, hold for a momentary orbit | (tap icon) |
 | Fire lasers / missiles | **automatic** — always on, fires at any locked, visible enemy | (automatic) |
 | Toggle chase/cockpit camera | VIEW button | C |
 | Mute / unmute sound | SOUND button (top-right) | M |

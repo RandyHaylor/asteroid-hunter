@@ -55,6 +55,8 @@ import { createPlayerShipCondition } from './player/playerShipCondition'
 import { createPlayerConditionDisplay } from './hud/playerConditionDisplay'
 import { createRadarSignatureTracker, RADAR_DETECTION_RANGE_METERS } from './radar/radarSignatureTracker'
 import { createRadarSphereDisplay } from './radar/radarSphereDisplay'
+import { createGrappleOrbitController } from './grappleOrbit/grappleOrbitController'
+import { createAsteroidOrbitIcons } from './radar/asteroidOrbitIcons'
 import { createTouchFlightControls } from './hud/touchFlightControls'
 import { createPlayerCameraRig } from './hud/cameraChaseAndCockpit'
 import { createPlayerShipMesh, updatePlayerEngineExhaust } from './player/playerShipMesh'
@@ -228,6 +230,15 @@ const radarRegion = document.createElement('div')
 radarRegion.className = 'radarRegion'
 controlsOverlay.appendChild(radarRegion)
 const radarSphereDisplay = createRadarSphereDisplay(radarRegion)
+// D60: grapple/slingshot — latch state machine; the radar rim icons (below) drive it, and it
+// overrides the ship's position/velocity along the orbit while latched (facing/camera unaffected).
+const grappleOrbitController = createGrappleOrbitController()
+// D60: tappable rim icons for in-range asteroids; tapping one drives the latch controller
+const asteroidOrbitIcons = createAsteroidOrbitIcons(
+  radarSphereDisplay.getControlZoneElement(),
+  (asteroid) => grappleOrbitController.onAsteroidIconPressed(asteroid, playerShipState, performance.now() / 1000),
+  (asteroid) => grappleOrbitController.onAsteroidIconReleased(asteroid, performance.now() / 1000),
+)
 
 // now that the clusters + radar region exist, lay everything out and keep it in sync on resize
 layoutGameRegions()
@@ -406,6 +417,24 @@ if (import.meta.env.DEV) {
     const yawRotation = new THREE.Quaternion().setFromAxisAngle(SHIP_LOCAL_UP_AXIS, yawRadians)
     radarSphereDisplay.getCommandedOrientation().multiply(yawRotation).normalize()
     return true
+  }
+  // D60: latch (tap) the nearest asteroid to start an orbit, for slingshot verification
+  ;(window as unknown as Record<string, unknown>).debugLatchNearestAsteroid = () => {
+    let nearestAsteroid: AsteroidBody | null = null
+    let nearestDistanceMeters = Infinity
+    for (const asteroid of gameWorld.asteroids) {
+      if (asteroid.isDestroyed || asteroid.sizeClass !== 'large') continue
+      const distanceMeters = playerShipState.positionMeters.distanceTo(asteroid.positionMeters)
+      if (distanceMeters < nearestDistanceMeters) {
+        nearestDistanceMeters = distanceMeters
+        nearestAsteroid = asteroid
+      }
+    }
+    if (!nearestAsteroid) return null
+    const nowSeconds = performance.now() / 1000
+    grappleOrbitController.onAsteroidIconPressed(nearestAsteroid, playerShipState, nowSeconds)
+    grappleOrbitController.onAsteroidIconReleased(nearestAsteroid, nowSeconds) // tap → commit the orbit
+    return { asteroidId: nearestAsteroid.asteroidId, distanceMeters: nearestDistanceMeters }
   }
   // D33: force the between-wave power-up picker open (clears enemies, parks the machine)
   ;(window as unknown as Record<string, unknown>).debugForcePowerUpSelection = () => {
@@ -825,14 +854,24 @@ function updatePlayerMovement(deltaSeconds: number): void {
   // The ship's rotation goal is the camera heading, or the lead-aim point when an enemy is locked.
   rotatePlayerShipTowardAimGoal(deltaSeconds)
 
-  // D54: constant-momentum flight — rotation (facing) was already applied above; here we hold the
-  // cruise speed and, while THRUST is held, curve the velocity vector toward the facing.
-  stepShipFlightSimulation(
-    playerShipState,
-    { pitchInput: 0, yawInput: 0, thrustActive: flightControls.isThrustActive() },
-    playerShipBaseFlightStats,
-    deltaSeconds,
-  )
+  if (grappleOrbitController.isLatched()) {
+    // D60: latched — the ship is carried along the orbit (overrides thrust/momentum). On release the
+    // controller leaves the tangential velocity behind, so momentum slingshots it off in a line.
+    grappleOrbitController.stepOrbit(
+      playerShipState,
+      playerShipBaseFlightStats.cruiseSpeedMetersPerSecond,
+      deltaSeconds,
+    )
+  } else {
+    // D54: constant-momentum flight — rotation (facing) was already applied above; here we hold the
+    // cruise speed and, while THRUST is held, curve the velocity vector toward the facing.
+    stepShipFlightSimulation(
+      playerShipState,
+      { pitchInput: 0, yawInput: 0, thrustActive: flightControls.isThrustActive() },
+      playerShipBaseFlightStats,
+      deltaSeconds,
+    )
+  }
   applySoftBoundaryPushback(playerShipState.positionMeters, playerShipState.velocityMetersPerSecond, deltaSeconds)
 }
 
@@ -921,6 +960,13 @@ function syncRenderObjectsFromSimulation(): void {
     radarSignatureTracker.getRecentActiveEnemyCount(),
     radarSignatureTracker.hasUnresolvedEnemies(),
     simulationClockSeconds,
+  )
+  // D60: rim icons for in-range slingshot-able asteroids (placed by bearing, colored by proximity)
+  asteroidOrbitIcons.updateAsteroidOrbitIcons(
+    gameWorld.asteroids,
+    playerShipState,
+    radarSphereDisplay.getCommandedOrientation(),
+    grappleOrbitController.getLatchedAsteroidId(),
   )
 
   // D47: tiny on-view weapon cooldown indicators (1 = recharged/ready)
