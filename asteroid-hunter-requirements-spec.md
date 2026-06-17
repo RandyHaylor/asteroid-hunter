@@ -94,6 +94,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 
 | D62 | **Edge far-orbit corrected (no damp).** `easeShipIntoFieldEdgeOrbit` no longer damps speed; it keeps the **constant cruise speed** and gently rotates the velocity *direction* toward the orbit tangent (`EDGE_ORBIT_STEER_RATE` 0.5 rad/s) past 0.95×R, so the ship curves into a far orbit while still moving. It's **suppressed while the player drags the radar** (takes `isPlayerSteeringRadar`), resuming on release; inward motion is left alone (no turn-back). [unit-tested: constant speed, outward steered to ~0, off during drag] |
 
+| D63 | **Grapple polish + denser/bigger/varied asteroids.** (1) **Visible tractor beam** (`main.ts`): a cyan line from the ship to the asteroid it's orbiting, shown only while latched. (2) **Orbited asteroid shown on the radar** — `radarSphereDisplay.setOrbitTargetMarker` places a bright cyan marker on the sphere at the asteroid's bearing while latched. (3) **Thrust disengages the orbit** — holding thrust calls `releaseLatch()` (keeps the tangential velocity → slingshot, then thrust steers). (4) **Asteroids** denser + bigger + more varied: counts 22/40/60 → **46/85/130**, radii widened (large 24–72 m, etc.), vertex jitter 0.18 → **0.38**, randomized tessellation detail (0–2) and per-axis stretch for varied shapes; spawn clear-bubble 80 → 180 m so big rocks don't cover the start. |
+
 ## Requirements from the design doc
 
 ### Rendering & physics

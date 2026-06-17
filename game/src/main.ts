@@ -206,6 +206,18 @@ const playerShipState = createShipRigidBodyStateAtRest()
 const playerShipMesh = createPlayerShipMesh()
 gameScene.add(playerShipMesh)
 
+// D62: visible tractor beam from the ship to the asteroid it is currently orbiting
+const tractorBeamLineGeometry = new THREE.BufferGeometry().setFromPoints([
+  new THREE.Vector3(),
+  new THREE.Vector3(),
+])
+const tractorBeamLine = new THREE.Line(
+  tractorBeamLineGeometry,
+  new THREE.LineBasicMaterial({ color: 0x66ddff, transparent: true, opacity: 0.85 }),
+)
+tractorBeamLine.visible = false
+gameScene.add(tractorBeamLine)
+
 const playerShipCondition = createPlayerShipCondition()
 // D35/D37: interactive controls go in two flex clusters inside the margin overlay (left + right);
 // informational HUD goes over the square view. Flex sizing keeps controls from ever overlapping.
@@ -854,6 +866,12 @@ function updatePlayerMovement(deltaSeconds: number): void {
   // The ship's rotation goal is the camera heading, or the lead-aim point when an enemy is locked.
   rotatePlayerShipTowardAimGoal(deltaSeconds)
 
+  // D62: thrusting disengages the orbit — the controller leaves the tangential velocity behind, so
+  // the ship slingshots off and thrust then curves it toward the facing.
+  if (grappleOrbitController.isLatched() && flightControls.isThrustActive()) {
+    grappleOrbitController.releaseLatch()
+  }
+
   if (grappleOrbitController.isLatched()) {
     // D60: latched — the ship is carried along the orbit (overrides thrust/momentum). On release the
     // controller leaves the tangential velocity behind, so momentum slingshots it off in a line.
@@ -975,6 +993,23 @@ function syncRenderObjectsFromSimulation(): void {
     radarSphereDisplay.getCommandedOrientation(),
     grappleOrbitController.getLatchedAsteroidId(),
   )
+  // D62: tractor beam line from the ship to the orbited asteroid; + show that asteroid on the radar
+  const orbitedAsteroid = grappleOrbitController.getLatchedAsteroid()
+  if (orbitedAsteroid) {
+    const beamPositions = tractorBeamLineGeometry.getAttribute('position') as THREE.BufferAttribute
+    beamPositions.setXYZ(0, playerShipMesh.position.x, playerShipMesh.position.y, playerShipMesh.position.z)
+    beamPositions.setXYZ(
+      1,
+      orbitedAsteroid.positionMeters.x,
+      orbitedAsteroid.positionMeters.y,
+      orbitedAsteroid.positionMeters.z,
+    )
+    beamPositions.needsUpdate = true
+    tractorBeamLine.visible = true
+  } else {
+    tractorBeamLine.visible = false
+  }
+  radarSphereDisplay.setOrbitTargetMarker(orbitedAsteroid ? orbitedAsteroid.positionMeters : null, playerShipState)
 
   // D47: tiny on-view weapon cooldown indicators (1 = recharged/ready)
   const laserReadyFraction =

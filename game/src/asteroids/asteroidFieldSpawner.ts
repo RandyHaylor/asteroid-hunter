@@ -19,10 +19,12 @@ export const PLAY_AREA_RADIUS_METERS = 2000
 /** asteroids scatter inside this fraction of the play radius.
  *  D61: widened (was 0.62) so the same rocks spread across the bigger field */
 const FIELD_SCATTER_RADIUS_FRACTION = 0.85
-/** keep an empty bubble around the origin so the player spawns in open space */
-const PLAYER_SPAWN_CLEAR_BUBBLE_RADIUS_METERS = 80
-/** per-vertex radial jitter fraction for irregular rock silhouettes (A1: procedural low-poly art) */
-const ROCK_VERTEX_RADIAL_JITTER_FRACTION = 0.18
+/** keep an empty bubble around the origin so the player spawns in open space
+ *  D62: enlarged to clear the now-bigger large asteroids (up to ~72 m radius) from the spawn point */
+const PLAYER_SPAWN_CLEAR_BUBBLE_RADIUS_METERS = 180
+/** per-vertex radial jitter fraction for irregular rock silhouettes (A1: procedural low-poly art).
+ *  D62: more jitter → more varied, jagged shapes */
+const ROCK_VERTEX_RADIAL_JITTER_FRACTION = 0.38
 /** max random drift speed for medium/small asteroids (R10) */
 const MAX_DRIFT_SPEED_METERS_PER_SECOND = 2
 /** slow tumble so the field feels alive without affecting physics */
@@ -36,10 +38,11 @@ type AsteroidSizeClassSpawnPlan = {
   hitPoints: number
 }
 
+// D62: bigger, denser, and a much wider size range per class so the field varies a lot in size
 const asteroidFieldSpawnPlans: AsteroidSizeClassSpawnPlan[] = [
-  { sizeClass: 'large', spawnCount: 22, minRadiusMeters: 16, maxRadiusMeters: 30, hitPoints: 300 },
-  { sizeClass: 'medium', spawnCount: 40, minRadiusMeters: 6, maxRadiusMeters: 12, hitPoints: 120 },
-  { sizeClass: 'small', spawnCount: 60, minRadiusMeters: 2.5, maxRadiusMeters: 5, hitPoints: 50 },
+  { sizeClass: 'large', spawnCount: 46, minRadiusMeters: 24, maxRadiusMeters: 72, hitPoints: 380 },
+  { sizeClass: 'medium', spawnCount: 85, minRadiusMeters: 9, maxRadiusMeters: 26, hitPoints: 140 },
+  { sizeClass: 'small', spawnCount: 130, minRadiusMeters: 3.5, maxRadiusMeters: 10, hitPoints: 55 },
 ]
 
 /** large rocks are effectively immovable anchors for cover; mass scales with radius */
@@ -59,8 +62,9 @@ function randomPointInsideSphere(sphereRadiusMeters: number, outPoint: Vector3):
 }
 
 function createJaggedRockMesh(rockRadiusMeters: number): Mesh {
-  // IcosahedronGeometry(radius, 1) gives a chunky low-poly ball; radial vertex jitter makes each rock unique
-  const rockGeometry = new IcosahedronGeometry(rockRadiusMeters, 1)
+  // D62: vary the base tessellation (0 = sharp/chunky, 2 = rounder) so silhouettes differ rock to rock
+  const subdivisionDetail = Math.random() < 0.45 ? 0 : Math.random() < 0.7 ? 1 : 2
+  const rockGeometry = new IcosahedronGeometry(rockRadiusMeters, subdivisionDetail)
   const vertexPositions = rockGeometry.getAttribute('position') as BufferAttribute
   const jitteredVertex = new Vector3()
   for (let vertexIndex = 0; vertexIndex < vertexPositions.count; vertexIndex += 1) {
@@ -82,6 +86,12 @@ function createJaggedRockMesh(rockRadiusMeters: number): Mesh {
 
   const rockMesh = new Mesh(rockGeometry, rockMaterial)
   rockMesh.rotation.set(Math.random() * Math.PI * 2, Math.random() * Math.PI * 2, Math.random() * Math.PI * 2)
+  // D62: modest per-axis stretch so rocks read as oblong/irregular, not all spheres (shape variety)
+  rockMesh.scale.set(
+    randomNumberBetween(0.8, 1.25),
+    randomNumberBetween(0.8, 1.25),
+    randomNumberBetween(0.8, 1.25),
+  )
   return rockMesh
 }
 

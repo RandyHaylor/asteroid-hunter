@@ -24,6 +24,8 @@ export type GrappleOrbitController = {
   onAsteroidIconReleased(asteroid: AsteroidBody, nowSeconds: number): void
   isLatched(): boolean
   getLatchedAsteroidId(): number | null
+  /** the asteroid currently orbited (for the tractor beam line + radar marker), or null */
+  getLatchedAsteroid(): AsteroidBody | null
   /** drive the ship along the orbit this frame (call only when isLatched()) */
   stepOrbit(shipState: ShipRigidBodyState, cruiseSpeedMetersPerSecond: number, deltaSeconds: number): void
   releaseLatch(): void
@@ -88,6 +90,9 @@ export function createGrappleOrbitController(): GrappleOrbitController {
     },
     getLatchedAsteroidId(): number | null {
       return latchedAsteroid ? latchedAsteroid.asteroidId : null
+    },
+    getLatchedAsteroid(): AsteroidBody | null {
+      return latchedAsteroid
     },
     stepOrbit(shipState, cruiseSpeedMetersPerSecond, deltaSeconds): void {
       if (latchedAsteroid === null) return

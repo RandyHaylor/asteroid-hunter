@@ -52,6 +52,8 @@ export type RadarSphereDisplay = {
   syncCommandedOrientationToShip(shipOrientation: Quaternion): void
   /** D60: the circular scope element — the asteroid-orbit rim icons mount inside it */
   getControlZoneElement(): HTMLElement
+  /** D62: show the orbited asteroid as a marker on the radar sphere (null hides it) */
+  setOrbitTargetMarker(asteroidPositionMeters: Vector3 | null, playerShipState: ShipRigidBodyState): void
 }
 
 // scratch reused every frame — no per-frame allocations in the display path
@@ -177,6 +179,15 @@ export function createRadarSphereDisplay(controlClusterElement: HTMLElement): Ra
   forwardDirectionTick.position.set(0, 0, -1)
   forwardDirectionTick.scale.set(0.7, 0.7, 3)
   radarScene.add(forwardDirectionTick)
+
+  // D62: a bright cyan marker showing the asteroid the player is currently orbiting (set per frame)
+  const orbitTargetMarker = new Mesh(
+    new SphereGeometry(0.09, 12, 8),
+    new MeshBasicMaterial({ color: 0x66ddff, transparent: true, opacity: 0.95, depthTest: false }),
+  )
+  orbitTargetMarker.renderOrder = 5
+  orbitTargetMarker.visible = false
+  radarScene.add(orbitTargetMarker)
 
   // pooled contact dots + their vertical stem cylinders (created on demand, hidden when unused)
   const sharedContactDotGeometry = new SphereGeometry(0.045, 8, 6)
@@ -327,5 +338,19 @@ export function createRadarSphereDisplay(controlClusterElement: HTMLElement): Ra
       radarCommandedOrientation.copy(shipOrientation)
     },
     getControlZoneElement: () => radarControlZone,
+    setOrbitTargetMarker: (asteroidPositionMeters, playerShipState) => {
+      if (!asteroidPositionMeters) {
+        orbitTargetMarker.visible = false
+        return
+      }
+      scratchInverseCommandedOrientation.copy(radarCommandedOrientation).invert()
+      orbitTargetMarker.position
+        .copy(asteroidPositionMeters)
+        .sub(playerShipState.positionMeters)
+        .applyQuaternion(scratchInverseCommandedOrientation)
+        .multiplyScalar(1 / RADAR_DETECTION_RANGE_METERS)
+      if (orbitTargetMarker.position.lengthSq() > 1) orbitTargetMarker.position.normalize()
+      orbitTargetMarker.visible = true
+    },
   }
 }
