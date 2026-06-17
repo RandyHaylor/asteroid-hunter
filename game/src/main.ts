@@ -763,8 +763,12 @@ function rotatePlayerShipTowardAimGoal(deltaSeconds: number): void {
     }
   }
 
-  // no lock: facing = the camera heading, exactly (the ship aims where you're looking)
-  playerShipState.orientation.copy(commandedOrientation)
+  // no lock: the ship slews toward the camera heading at its (upgradeable) max turn rate — a fast
+  // radar drag leaves the ship visibly catching up rather than snapping instantly inline (D59).
+  if (playerShipState.orientation.angleTo(commandedOrientation) > 1e-5) {
+    const maxTurnStepRadians = playerShipBaseFlightStats.maxTurnRateRadiansPerSecond * deltaSeconds
+    playerShipState.orientation.rotateTowards(commandedOrientation, maxTurnStepRadians)
+  }
   playerShipState.currentPitchRateRadiansPerSecond = 0
   playerShipState.currentYawRateRadiansPerSecond = 0
 }

@@ -16,7 +16,7 @@ export const playerShipBaseFlightStats: ShipFlightStats = {
   cruiseSpeedMetersPerSecond: 80,
   maxTurnRateRadiansPerSecond: 1.6,
   thrustTurnRateRadiansPerSecond: 0.6, // D54: ~⅓ of the facing turn rate — gently curves momentum toward the nose
-  enemyTrackTurnRateRadiansPerSecond: 1.2, // D52: a bit slower than the ship's 1.6 turn rate so it can't fully keep up with a close, fast-crossing enemy
+  enemyTrackTurnRateRadiansPerSecond: 0.7, // D59: capped low to start so fast/close/crossing enemies outrun the lock (loses tracking) — upgradeable via AUTO-AIM TRACKING
 }
 
 export type TractorBeamStats = {

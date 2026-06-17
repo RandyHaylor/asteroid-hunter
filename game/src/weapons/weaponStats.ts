@@ -38,7 +38,7 @@ export const playerBaseMissileStats: MissileWeaponStats = {
   missileSpeedMetersPerSecond: 140,
   explosionRadiusMeters: 18,
   explosionDamage: 45,
-  homingTurnRateRadiansPerSecond: 0.7,
+  homingTurnRateRadiansPerSecond: 0.35, // D59: weaker homing to start (not overpowered) — upgradeable via MISSILE TRACKING
 }
 
 // D11: enemies fire the same weapon classes, tuned slightly weaker than the player's.

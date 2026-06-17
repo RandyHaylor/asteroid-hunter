@@ -86,6 +86,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 
 | D58 | **Ship jitter fixed via fixed-timestep render interpolation.** The player ship mesh is now rendered by interpolating between the pose snapshot taken before the last fixed sim step and the current sim pose, by the leftover-accumulator fraction (`playerShipRenderInterpolationAlpha`) — replacing the old lag-lerp-toward-latest, which moved non-uniformly (random stutter) because the number of fixed steps per render frame varies. The camera follows this interpolated mesh pose, so the ship stays pinned and moves smoothly. (Separately confirmed by measurement that the D57 camera-follows-mesh change already makes camera↔ship distance exactly constant through rotation — the earlier "far/close 180° apart" is gone.) |
 
+| D59 | **Combat-feel tuning.** (1) **Ship turn rate is capped, not instant** — unlocked, the ship now slews toward the camera heading at the upgradeable `maxTurnRateRadiansPerSecond` (SHIP HANDLING power-up) instead of snapping inline, so a fast radar drag leaves the ship visibly catching up. (2) **Auto-track capped lower** — `enemyTrackTurnRateRadiansPerSecond` 1.2 → **0.7**, so fast/close/crossing enemies can outrun the lock and break tracking (upgradeable via AUTO-AIM TRACKING). (3) **Missile homing weaker** — player missile `homingTurnRateRadiansPerSecond` 0.7 → **0.35** so it isn't overpowered to start (upgradeable via MISSILE TRACKING). |
+
 ## Requirements from the design doc
 
 ### Rendering & physics
