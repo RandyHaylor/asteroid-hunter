@@ -116,11 +116,12 @@ export const ALL_POWER_UP_DEFINITIONS: readonly PowerUpDefinition[] = [
   {
     powerUpId: 'shipTurnRate',
     displayName: 'SHIP HANDLING',
-    description: '+25% ship turn rate',
+    description: '+25% turn rate & turn power',
     // rotation / curved arrows
     iconSvgMarkup: iconSvg('<path d="M4 12a8 8 0 0 1 13-6"/><path d="M17 3v4h-4"/><path d="M20 12a8 8 0 0 1-13 6"/><path d="M7 21v-4h4"/>'),
     applyToPlayerStats(): void {
       playerShipBaseFlightStats.maxTurnRateRadiansPerSecond *= 1.25
+      playerShipBaseFlightStats.turnAccelerationRadiansPerSecondSquared *= 1.25 // D65: also boost the turn "power"
     },
   },
 ]

@@ -11,6 +11,7 @@ import type { ShipFlightStats } from '../shipStats'
 const testFlightStats: ShipFlightStats = {
   cruiseSpeedMetersPerSecond: 80,
   maxTurnRateRadiansPerSecond: 1.6,
+  turnAccelerationRadiansPerSecondSquared: 2.5,
   thrustTurnRateRadiansPerSecond: 0.6,
   enemyTrackTurnRateRadiansPerSecond: 1.2,
 }

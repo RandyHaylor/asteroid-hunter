@@ -819,6 +819,9 @@ const scratchShipAimLeadDirection = new THREE.Vector3()
 const scratchShipAimCurrentForward = new THREE.Vector3()
 const scratchShipAimDeltaRotation = new THREE.Quaternion()
 const scratchShipRotationGoalOrientation = new THREE.Quaternion()
+// D65: the ship's facing turn has angular momentum — this is the live turn rate that accelerates up
+// to maxTurnRate and brakes back to 0 (a "turn power"), instead of snapping to a fixed rate.
+let playerFacingTurnRateRadiansPerSecond = 0
 function rotatePlayerShipTowardAimGoal(deltaSeconds: number): void {
   // D55-fix: the ship points exactly where the CAMERA looks (commanded heading) — UNLESS an enemy is
   // locked in the reticle, in which case the ship's facing slews to the fire-ahead (lead) position.
@@ -848,11 +851,26 @@ function rotatePlayerShipTowardAimGoal(deltaSeconds: number): void {
     }
   }
 
-  // no lock: the ship slews toward the camera heading at its (upgradeable) max turn rate — a fast
-  // radar drag leaves the ship visibly catching up rather than snapping instantly inline (D59).
-  if (playerShipState.orientation.angleTo(commandedOrientation) > 1e-5) {
-    const maxTurnStepRadians = playerShipBaseFlightStats.maxTurnRateRadiansPerSecond * deltaSeconds
-    playerShipState.orientation.rotateTowards(commandedOrientation, maxTurnStepRadians)
+  // D65: no lock — turn the ship toward the camera heading with angular ACCELERATION (a "turn power").
+  // The turn rate ramps up toward maxTurnRate and brakes back down so it arrives smoothly at the
+  // heading (no hard snap to a fixed rate, and no overshoot).
+  const angleToGoalRadians = playerShipState.orientation.angleTo(commandedOrientation)
+  if (angleToGoalRadians > 1e-5) {
+    const turnAcceleration = playerShipBaseFlightStats.turnAccelerationRadiansPerSecondSquared
+    const maxTurnRate = playerShipBaseFlightStats.maxTurnRateRadiansPerSecond
+    // fastest rate from which we can still decelerate to 0 exactly at the goal (v = sqrt(2·a·Δθ))
+    const brakingLimitedTurnRate = Math.sqrt(2 * turnAcceleration * angleToGoalRadians)
+    const targetTurnRate = Math.min(maxTurnRate, brakingLimitedTurnRate)
+    const maxRateChangeThisFrame = turnAcceleration * deltaSeconds
+    playerFacingTurnRateRadiansPerSecond += THREE.MathUtils.clamp(
+      targetTurnRate - playerFacingTurnRateRadiansPerSecond,
+      -maxRateChangeThisFrame,
+      maxRateChangeThisFrame,
+    )
+    const stepRadians = Math.min(playerFacingTurnRateRadiansPerSecond * deltaSeconds, angleToGoalRadians)
+    playerShipState.orientation.rotateTowards(commandedOrientation, stepRadians)
+  } else {
+    playerFacingTurnRateRadiansPerSecond = 0
   }
   playerShipState.currentPitchRateRadiansPerSecond = 0
   playerShipState.currentYawRateRadiansPerSecond = 0

@@ -3,8 +3,11 @@
 export type ShipFlightStats = {
   /** D54: the constant speed the ship always travels at (momentum never changes magnitude) */
   cruiseSpeedMetersPerSecond: number
-  /** how fast the ship's facing rotates (radar drag-steer / keyboard) */
+  /** the TOP speed the ship's facing can rotate at (radar drag-steer / keyboard) */
   maxTurnRateRadiansPerSecond: number
+  /** D65: angular "turn power" — how fast the facing turn rate accelerates/decelerates (rad/s²), so the
+   *  ship builds up and eases out of turns rather than snapping to a fixed rate; upgradeable */
+  turnAccelerationRadiansPerSecondSquared: number
   /** D54: how fast holding thrust rotates the velocity VECTOR toward the facing (slow; upgradeable) */
   thrustTurnRateRadiansPerSecond: number
   // D52/D53: how fast the SHIP turns to aim ahead of a LOCKED enemy (lead-aim tracking), separate
@@ -15,6 +18,7 @@ export type ShipFlightStats = {
 export const playerShipBaseFlightStats: ShipFlightStats = {
   cruiseSpeedMetersPerSecond: 80,
   maxTurnRateRadiansPerSecond: 1.6,
+  turnAccelerationRadiansPerSecondSquared: 2.5, // D65: ramps the facing turn up to max in ~0.6 s, eases out on arrival
   thrustTurnRateRadiansPerSecond: 0.6, // D54: ~⅓ of the facing turn rate — gently curves momentum toward the nose
   enemyTrackTurnRateRadiansPerSecond: 0.7, // D59: capped low to start so fast/close/crossing enemies outrun the lock (loses tracking) — upgradeable via AUTO-AIM TRACKING
 }

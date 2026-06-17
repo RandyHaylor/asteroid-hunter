@@ -98,6 +98,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 
 | D64 | **Sound dropout fix + grapple/asteroid visuals.** (1) **Sound**: the audio context is now resumed on **every** user gesture whenever it isn't `running` (iOS re-suspends on interruption/tab-switch; the old once-only resume left it silent "fairly often"), plus a one-time iOS silent-buffer unlock — `resumeAudioContextOnUserGesture`. (2) **Thicker tractor beam**: replaced the 1-px line with a cyan additive **cylinder** (radius 1.6 m) ship→asteroid. (3) **Fuzzy ring**: an additive sprite (soft ring texture) around the orbited asteroid while latched. (4) **Cohesive asteroids**: vertex jitter 0.38 → **0.22**, bigger rocks get higher tessellation (detail by radius, up to 3) and the per-axis stretch is tightened, so they read as solid surfaces, not a triangle cloud. |
 
+| D65 | **Acceleration-based ship turning.** The unlocked facing turn (toward the camera heading) is no longer a fixed-rate `rotateTowards` that snaps on/off — it now has angular momentum: a live turn rate that accelerates up to `maxTurnRateRadiansPerSecond` and brakes back to 0 via a new `turnAccelerationRadiansPerSecondSquared` "turn power" stat (base 2.5 rad/s²), using a braking-limited target (`v=√(2·a·Δθ)`) so it arrives smoothly with no overshoot. SHIP HANDLING power-up now boosts both turn rate and turn power. (Locked auto-aim tracking still uses `enemyTrackTurnRate`.) |
+
 ## Requirements from the design doc
 
 ### Rendering & physics
