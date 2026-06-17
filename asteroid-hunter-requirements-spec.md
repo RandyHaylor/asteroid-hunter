@@ -92,6 +92,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 
 | D61 | **Bigger spread field + edge far-orbit (removed the boundary turn-back).** (1) Field enlarged: `PLAY_AREA_RADIUS_METERS` 800 → **2000**, scatter fraction 0.62 → **0.85** — the same rocks are spread far apart across a much larger field. (2) The old `applySoftBoundaryPushback` (which shoved the ship back toward centre — an unwanted turn-around) is **replaced by `easeShipIntoFieldEdgeOrbit`**: near the boundary it damps only the *outward* radial velocity and clamps the ship onto the boundary sphere, so it eases into a tangential **far orbit** around the field with NO inward push — the player keeps control and can thrust back inward [unit-tested]. |
 
+| D62 | **Edge far-orbit corrected (no damp).** `easeShipIntoFieldEdgeOrbit` no longer damps speed; it keeps the **constant cruise speed** and gently rotates the velocity *direction* toward the orbit tangent (`EDGE_ORBIT_STEER_RATE` 0.5 rad/s) past 0.95×R, so the ship curves into a far orbit while still moving. It's **suppressed while the player drags the radar** (takes `isPlayerSteeringRadar`), resuming on release; inward motion is left alone (no turn-back). [unit-tested: constant speed, outward steered to ~0, off during drag] |
+
 ## Requirements from the design doc
 
 ### Rendering & physics

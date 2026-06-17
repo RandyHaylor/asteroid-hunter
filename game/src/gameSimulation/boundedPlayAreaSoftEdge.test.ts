@@ -3,32 +3,55 @@ import { describe, expect, it } from 'vitest'
 import { PLAY_AREA_RADIUS_METERS } from '../asteroids/asteroidFieldSpawner'
 import { easeShipIntoFieldEdgeOrbit } from './boundedPlayAreaSoftEdge'
 
-// D61: bounded sphere with a FAR-ORBIT edge — free flight inside; near the boundary the outward
-// radial velocity is damped and the ship is clamped onto the sphere (a tangential glide), with NO
-// inward push (no turn-back). The player keeps control and can thrust back inward.
+// D62: field edge gently steers the velocity DIRECTION into a far orbit at CONSTANT speed (no shove,
+// no damp), and only when the radar isn't being actively dragged.
+
+const NOT_DRAGGING = false
+const IS_DRAGGING = true
+const STEP_SECONDS = 1 / 60
 
 describe('easeShipIntoFieldEdgeOrbit', () => {
   it('leaves the ship untouched well inside the field', () => {
-    const positionMeters = new Vector3(100, 0, 0)
-    const velocityMetersPerSecond = new Vector3(80, 0, 0)
-    easeShipIntoFieldEdgeOrbit(positionMeters, velocityMetersPerSecond)
-    expect(positionMeters.x).toBe(100)
-    expect(velocityMetersPerSecond.x).toBe(80)
+    const position = new Vector3(100, 0, 0)
+    const velocity = new Vector3(80, 0, 0)
+    easeShipIntoFieldEdgeOrbit(position, velocity, STEP_SECONDS, NOT_DRAGGING)
+    expect(velocity.x).toBe(80)
   })
 
-  it('past the boundary moving outward: clamps to the boundary and removes the OUTWARD radial velocity, keeping tangential motion', () => {
-    const positionMeters = new Vector3(PLAY_AREA_RADIUS_METERS + 50, 0, 0)
-    const velocityMetersPerSecond = new Vector3(60, 0, 60) // +x outward (radial), +z tangential
-    easeShipIntoFieldEdgeOrbit(positionMeters, velocityMetersPerSecond)
-    expect(positionMeters.length()).toBeCloseTo(PLAY_AREA_RADIUS_METERS, 3)
-    expect(velocityMetersPerSecond.x).toBeCloseTo(0, 5) // no more leaving the field
-    expect(velocityMetersPerSecond.z).toBeCloseTo(60, 5) // tangential far-orbit glide preserved
+  it('past the edge moving outward: keeps the SAME speed but steers the outward velocity toward the tangent', () => {
+    const position = new Vector3(PLAY_AREA_RADIUS_METERS * 0.98, 0, 0)
+    const velocity = new Vector3(60, 0, 60) // +x outward (radial), +z tangential
+    const speedBefore = velocity.length()
+    const outwardSpeedBefore = velocity.x
+    easeShipIntoFieldEdgeOrbit(position, velocity, STEP_SECONDS, NOT_DRAGGING)
+    expect(velocity.length()).toBeCloseTo(speedBefore, 5) // constant speed (no damp)
+    expect(velocity.x).toBeLessThan(outwardSpeedBefore) // outward component reduced (curving into orbit)
+    expect(velocity.x).toBeGreaterThan(0) // gentle — not snapped
   })
 
-  it('never shoves the ship inward (no turn-back): inward velocity is left untouched', () => {
-    const positionMeters = new Vector3(PLAY_AREA_RADIUS_METERS + 10, 0, 0)
-    const velocityMetersPerSecond = new Vector3(-50, 0, 0) // already heading back inward
-    easeShipIntoFieldEdgeOrbit(positionMeters, velocityMetersPerSecond)
-    expect(velocityMetersPerSecond.x).toBe(-50)
+  it('does NOT steer while the player is dragging the radar', () => {
+    const position = new Vector3(PLAY_AREA_RADIUS_METERS * 0.98, 0, 0)
+    const velocity = new Vector3(60, 0, 60)
+    easeShipIntoFieldEdgeOrbit(position, velocity, STEP_SECONDS, IS_DRAGGING)
+    expect(velocity.x).toBe(60)
+    expect(velocity.z).toBe(60)
+  })
+
+  it('does nothing when already heading inward (no turn-back, lets the player fly back in)', () => {
+    const position = new Vector3(PLAY_AREA_RADIUS_METERS * 0.98, 0, 0)
+    const velocity = new Vector3(-50, 0, 0)
+    easeShipIntoFieldEdgeOrbit(position, velocity, STEP_SECONDS, NOT_DRAGGING)
+    expect(velocity.x).toBe(-50)
+  })
+
+  it('repeated steps drive the outward velocity to ~0 (settled into a far orbit) at constant speed', () => {
+    const position = new Vector3(PLAY_AREA_RADIUS_METERS * 0.98, 0, 0)
+    const velocity = new Vector3(60, 0, 60)
+    const speedBefore = velocity.length()
+    for (let stepIndex = 0; stepIndex < 600; stepIndex++) {
+      easeShipIntoFieldEdgeOrbit(position, velocity, STEP_SECONDS, NOT_DRAGGING)
+    }
+    expect(velocity.length()).toBeCloseTo(speedBefore, 4) // speed never changed
+    expect(Math.abs(velocity.x)).toBeLessThan(0.5) // outward (radial) motion steered away → orbiting
   })
 })

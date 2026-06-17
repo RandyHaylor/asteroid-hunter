@@ -871,8 +871,15 @@ function updatePlayerMovement(deltaSeconds: number): void {
       playerShipBaseFlightStats,
       deltaSeconds,
     )
+    // D62: at the field edge, gently steer the velocity into a far orbit (constant speed, no shove) —
+    // but only when the player isn't actively dragging the radar to steer.
+    easeShipIntoFieldEdgeOrbit(
+      playerShipState.positionMeters,
+      playerShipState.velocityMetersPerSecond,
+      deltaSeconds,
+      radarIsSteeringDrag,
+    )
   }
-  easeShipIntoFieldEdgeOrbit(playerShipState.positionMeters, playerShipState.velocityMetersPerSecond)
 }
 
 // ===== STEP 9: fixed-timestep simulation loop =====
