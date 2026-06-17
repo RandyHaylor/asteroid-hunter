@@ -19,7 +19,7 @@ export const playerShipBaseFlightStats: ShipFlightStats = {
   cruiseSpeedMetersPerSecond: 80,
   maxTurnRateRadiansPerSecond: 1.6,
   turnAccelerationRadiansPerSecondSquared: 2.5, // D65: ramps the facing turn up to max in ~0.6 s, eases out on arrival
-  thrustTurnRateRadiansPerSecond: 0.6, // D54: ~⅓ of the facing turn rate — gently curves momentum toward the nose
+  thrustTurnRateRadiansPerSecond: 0.2, // D54/D66: weak — momentum is meant to be preserved (thrust only slowly nudges it)
   enemyTrackTurnRateRadiansPerSecond: 0.7, // D59: capped low to start so fast/close/crossing enemies outrun the lock (loses tracking) — upgradeable via AUTO-AIM TRACKING
 }
 

@@ -9,7 +9,7 @@ import './asteroidOrbitIcons.css'
 // to orbit → black + untappable; too far → hidden. Tapping an icon drives the grapple controller.
 
 const MIN_ORBIT_SURFACE_DISTANCE_METERS = 14 // closer than this is too tight to orbit (black, untappable)
-const MAX_ORBIT_RANGE_METERS = 600 // farther than this surface distance → not shown
+const MAX_ORBIT_RANGE_METERS = 1200 // D66: doubled (was 600) — orbit from twice as far to start
 const RIM_OFFSET_PERCENT = 46 // icon sits this far from the scope center toward the rim
 
 export type AsteroidOrbitIcons = {

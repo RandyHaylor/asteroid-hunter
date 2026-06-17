@@ -36,11 +36,11 @@ export const ALL_POWER_UP_DEFINITIONS: readonly PowerUpDefinition[] = [
   {
     powerUpId: 'speedBoost',
     displayName: 'SPEED BOOST',
-    description: '+18% cruise speed',
+    description: '+8% cruise speed',
     // double chevron (fast-forward)
     iconSvgMarkup: iconSvg('<path d="M4 5l7 7-7 7"/><path d="M13 5l7 7-7 7"/>'),
     applyToPlayerStats(): void {
-      playerShipBaseFlightStats.cruiseSpeedMetersPerSecond *= 1.18
+      playerShipBaseFlightStats.cruiseSpeedMetersPerSecond *= 1.08 // D66: nerfed (was 1.18) — too generous
     },
   },
   {
@@ -116,12 +116,13 @@ export const ALL_POWER_UP_DEFINITIONS: readonly PowerUpDefinition[] = [
   {
     powerUpId: 'shipTurnRate',
     displayName: 'SHIP HANDLING',
-    description: '+25% turn rate & turn power',
+    description: '+12% turn rate & turn power',
     // rotation / curved arrows
     iconSvgMarkup: iconSvg('<path d="M4 12a8 8 0 0 1 13-6"/><path d="M17 3v4h-4"/><path d="M20 12a8 8 0 0 1-13 6"/><path d="M7 21v-4h4"/>'),
     applyToPlayerStats(): void {
-      playerShipBaseFlightStats.maxTurnRateRadiansPerSecond *= 1.25
-      playerShipBaseFlightStats.turnAccelerationRadiansPerSecondSquared *= 1.25 // D65: also boost the turn "power"
+      // D66: nerfed (was 1.25) — movement upgrades were too generous
+      playerShipBaseFlightStats.maxTurnRateRadiansPerSecond *= 1.12
+      playerShipBaseFlightStats.turnAccelerationRadiansPerSecondSquared *= 1.12
     },
   },
 ]

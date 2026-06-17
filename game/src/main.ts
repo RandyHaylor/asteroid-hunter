@@ -41,7 +41,7 @@ import {
 import { computeLeadAimDirection } from './weapons/targetLeadPrediction'
 import { createLaserVolleySystem } from './weapons/laserFire'
 import { createMissileVolleySystem } from './weapons/missileFire'
-import { createWeaponCooldownIndicators } from './hud/weaponCooldownIndicators'
+import { createViewEdgeStatusIndicators } from './hud/viewEdgeStatusIndicators'
 import { createCockpitFrameOverlay } from './hud/cockpitFrameOverlay'
 import {
   createEnemyFireIntent,
@@ -233,7 +233,7 @@ function createFuzzyRingTexture(): THREE.CanvasTexture {
 
 // D63/D64: a thick (cylinder) tractor beam from the ship to the orbited asteroid, plus a fuzzy ring
 // around that asteroid. Both shown only while latched.
-const TRACTOR_BEAM_RADIUS_METERS = 1.6
+const TRACTOR_BEAM_RADIUS_METERS = 0.8 // D66: halved
 const CYLINDER_LOCAL_UP_AXIS = new THREE.Vector3(0, 1, 0)
 const tractorBeamMesh = new THREE.Mesh(
   new THREE.CylinderGeometry(1, 1, 1, 10, 1, true),
@@ -263,6 +263,43 @@ gameScene.add(orbitTargetFuzzyRing)
 const scratchTractorBeamDelta = new THREE.Vector3()
 const scratchTractorBeamDirection = new THREE.Vector3()
 
+// D66: a much THINNER fuzzy ring that always glows around the player ship (same idea as the asteroid
+// ring, tighter band).
+function createThinFuzzyRingTexture(): THREE.CanvasTexture {
+  const textureSizePixels = 128
+  const ringCanvas = document.createElement('canvas')
+  ringCanvas.width = textureSizePixels
+  ringCanvas.height = textureSizePixels
+  const drawContext = ringCanvas.getContext('2d') as CanvasRenderingContext2D
+  const centerPixels = textureSizePixels / 2
+  const radialGradient = drawContext.createRadialGradient(
+    centerPixels,
+    centerPixels,
+    textureSizePixels * 0.42,
+    centerPixels,
+    centerPixels,
+    textureSizePixels * 0.5,
+  )
+  radialGradient.addColorStop(0, 'rgba(159, 220, 255, 0)')
+  radialGradient.addColorStop(0.5, 'rgba(159, 220, 255, 0.8)')
+  radialGradient.addColorStop(1, 'rgba(159, 220, 255, 0)')
+  drawContext.fillStyle = radialGradient
+  drawContext.fillRect(0, 0, textureSizePixels, textureSizePixels)
+  return new THREE.CanvasTexture(ringCanvas)
+}
+const SHIP_FUZZY_RING_DIAMETER_METERS = 11
+const shipFuzzyRing = new THREE.Sprite(
+  new THREE.SpriteMaterial({
+    map: createThinFuzzyRingTexture(),
+    color: 0x9fdcff,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  }),
+)
+shipFuzzyRing.scale.set(SHIP_FUZZY_RING_DIAMETER_METERS, SHIP_FUZZY_RING_DIAMETER_METERS, 1)
+gameScene.add(shipFuzzyRing)
+
 const playerShipCondition = createPlayerShipCondition()
 // D35/D37: interactive controls go in two flex clusters inside the margin overlay (left + right);
 // informational HUD goes over the square view. Flex sizing keeps controls from ever overlapping.
@@ -274,8 +311,12 @@ rightControlCluster.className = 'controlClusterRight'
 controlsOverlay.appendChild(rightControlCluster)
 
 const flightControls = createTouchFlightControls(leftControlCluster)
-// D47: weapons are always on (no fire buttons) — tiny on-view cooldown indicators replace them
-const weaponCooldownIndicators = createWeaponCooldownIndicators(viewHudOverlay)
+// D47/D66: weapons are always on (no fire buttons). Left-edge status: a vertical speed-upgrade level
+// bar plus a bottom-left missile charge meter (laser bar removed in D66).
+const viewEdgeStatusIndicators = createViewEdgeStatusIndicators(viewHudOverlay)
+// D66: full-scale cruise speed the left-edge speed bar fills toward (base is 80 m/s; SPEED BOOST
+// power-ups raise the live cruise speed up toward this). Tunable — purely the bar's reference max.
+const SPEED_LEVEL_FULL_SCALE_METERS_PER_SECOND = 200
 // D48: cockpit canopy frame overlay (shown only in cockpit view)
 const cockpitFrameOverlay = createCockpitFrameOverlay(viewHudOverlay)
 const playerCameraRig = createPlayerCameraRig(playerViewCamera)
@@ -1029,6 +1070,9 @@ function syncRenderObjectsFromSimulation(): void {
     .copy(playerShipPreviousSimOrientation)
     .slerp(playerShipState.orientation, playerShipRenderInterpolationAlpha)
 
+  // D66: the always-on thin fuzzy ring tracks the ship (a sprite, so it auto-faces the camera)
+  shipFuzzyRing.position.copy(playerShipMesh.position)
+
   // D54: thrust plume shows while THRUST is held (momentum steering), color cycling red→yellow
   updatePlayerEngineExhaust(flightControls.isThrustActive() ? 1 : 0, simulationClockSeconds)
 
@@ -1077,12 +1121,13 @@ function syncRenderObjectsFromSimulation(): void {
   }
   radarSphereDisplay.setOrbitTargetMarker(orbitedAsteroid ? orbitedAsteroid.positionMeters : null, playerShipState)
 
-  // D47: tiny on-view weapon cooldown indicators (1 = recharged/ready)
-  const laserReadyFraction =
-    1 - (playerNextLaserFireTimeSeconds - simulationClockSeconds) / playerBaseLaserStats.fireCooldownSeconds
+  // D66: left-edge status — speed-upgrade level (current cruise speed over the full-scale reference)
+  // and the missile charge meter (1 = recharged/ready). Laser bar was removed in D66.
+  const speedLevelFraction =
+    playerShipBaseFlightStats.cruiseSpeedMetersPerSecond / SPEED_LEVEL_FULL_SCALE_METERS_PER_SECOND
   const missileReadyFraction =
     1 - (playerNextMissileFireTimeSeconds - simulationClockSeconds) / playerBaseMissileStats.fireCooldownSeconds
-  weaponCooldownIndicators.updateWeaponCooldownIndicators(laserReadyFraction, missileReadyFraction)
+  viewEdgeStatusIndicators.updateViewEdgeStatusIndicators(speedLevelFraction, missileReadyFraction)
 }
 
 function runFrameLoop(currentFrameTimestampMs: number): void {
