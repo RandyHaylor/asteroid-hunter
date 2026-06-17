@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { ALL_POWER_UP_DEFINITIONS, selectTwoDistinctPowerUps } from './powerUpDefinitions'
+import { ALL_POWER_UP_DEFINITIONS, selectDistinctPowerUps } from './powerUpDefinitions'
 
 describe('ALL_POWER_UP_DEFINITIONS', () => {
-  it('contains the eight requested power-ups with unique ids', () => {
-    expect(ALL_POWER_UP_DEFINITIONS).toHaveLength(9)
+  it('contains the requested power-ups with unique ids', () => {
+    expect(ALL_POWER_UP_DEFINITIONS).toHaveLength(10) // D67: added RADAR+WEAPON RANGE
     const uniqueIds = new Set(ALL_POWER_UP_DEFINITIONS.map((p) => p.powerUpId))
-    expect(uniqueIds.size).toBe(9)
+    expect(uniqueIds.size).toBe(10)
   })
 
   it('every definition has a name, description, a unique-looking SVG icon, and an apply fn', () => {
@@ -17,28 +17,30 @@ describe('ALL_POWER_UP_DEFINITIONS', () => {
       expect(typeof powerUp.applyToPlayerStats).toBe('function')
       iconMarkups.add(powerUp.iconSvgMarkup)
     }
-    expect(iconMarkups.size).toBe(9) // each icon is distinct
+    expect(iconMarkups.size).toBe(10) // each icon is distinct
   })
 })
 
-describe('selectTwoDistinctPowerUps', () => {
-  it('returns two DISTINCT power-ups', () => {
-    // deterministic injected randomness: 0 then 0 picks index 0 twice from a shrinking list,
-    // which must still yield two different definitions (the first is removed before the second pick)
-    const [first, second] = selectTwoDistinctPowerUps(ALL_POWER_UP_DEFINITIONS, () => 0)
-    expect(first.powerUpId).not.toBe(second.powerUpId)
+describe('selectDistinctPowerUps', () => {
+  it('returns the requested count of DISTINCT power-ups', () => {
+    // deterministic injected randomness: 0 each call picks index 0 from a shrinking list,
+    // which must still yield distinct definitions (each pick is removed before the next)
+    const offered = selectDistinctPowerUps(ALL_POWER_UP_DEFINITIONS, 3, () => 0)
+    expect(offered).toHaveLength(3)
+    const uniqueIds = new Set(offered.map((p) => p.powerUpId))
+    expect(uniqueIds.size).toBe(3)
   })
 
   it('honors the injected random function to choose specific indices', () => {
-    // first pick: 0.5 * 8 = index 4; after removal second pick: 0 -> index 0
+    // first pick: 0.5 * 10 = index 5; after removal second pick: 0 -> index 0
     const sequence = [0.5, 0]
     let callIndex = 0
-    const [first, second] = selectTwoDistinctPowerUps(ALL_POWER_UP_DEFINITIONS, () => sequence[callIndex++])
-    expect(first.powerUpId).toBe(ALL_POWER_UP_DEFINITIONS[4].powerUpId)
+    const [first, second] = selectDistinctPowerUps(ALL_POWER_UP_DEFINITIONS, 2, () => sequence[callIndex++])
+    expect(first.powerUpId).toBe(ALL_POWER_UP_DEFINITIONS[5].powerUpId)
     expect(second.powerUpId).toBe(ALL_POWER_UP_DEFINITIONS[0].powerUpId)
   })
 
-  it('throws if given fewer than two power-ups', () => {
-    expect(() => selectTwoDistinctPowerUps([ALL_POWER_UP_DEFINITIONS[0]], () => 0)).toThrow()
+  it('throws if given fewer power-ups than requested', () => {
+    expect(() => selectDistinctPowerUps([ALL_POWER_UP_DEFINITIONS[0]], 2, () => 0)).toThrow()
   })
 })

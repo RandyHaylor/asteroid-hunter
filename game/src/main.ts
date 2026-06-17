@@ -1,6 +1,6 @@
 import './style.css'
 import * as THREE from 'three'
-import { playerShipBaseFlightStats } from './shipStats'
+import { playerShipBaseFlightStats, playerEngagementRange } from './shipStats'
 import {
   createShipRigidBodyStateAtRest,
   getShipForwardDirection,
@@ -35,13 +35,14 @@ import { createProceduralSpaceNebulaTexture } from './scene/proceduralSpaceSkybo
 import { createPowerUpSelectionOverlay } from './hud/powerUpSelectionOverlay'
 import {
   ALL_POWER_UP_DEFINITIONS,
-  selectTwoDistinctPowerUps,
+  selectDistinctPowerUps,
   type PowerUpDefinition,
 } from './upgrades/powerUpDefinitions'
 import { computeLeadAimDirection } from './weapons/targetLeadPrediction'
 import { createLaserVolleySystem } from './weapons/laserFire'
 import { createMissileVolleySystem } from './weapons/missileFire'
 import { createViewEdgeStatusIndicators } from './hud/viewEdgeStatusIndicators'
+import { createLockedEnemyPreview } from './hud/lockedEnemyPreview'
 import { createCockpitFrameOverlay } from './hud/cockpitFrameOverlay'
 import {
   createEnemyFireIntent,
@@ -53,7 +54,7 @@ import { applyWeaponDamageToEnemyShip } from './enemies/enemyShipDamage'
 import { createEnemyConditionBarsDisplay } from './enemies/enemyConditionBarsDisplay'
 import { createPlayerShipCondition } from './player/playerShipCondition'
 import { createPlayerConditionDisplay } from './hud/playerConditionDisplay'
-import { createRadarSignatureTracker, RADAR_DETECTION_RANGE_METERS } from './radar/radarSignatureTracker'
+import { createRadarSignatureTracker } from './radar/radarSignatureTracker'
 import { createRadarSphereDisplay } from './radar/radarSphereDisplay'
 import { createGrappleOrbitController } from './grappleOrbit/grappleOrbitController'
 import { createAsteroidOrbitIcons } from './radar/asteroidOrbitIcons'
@@ -298,6 +299,7 @@ const shipFuzzyRing = new THREE.Sprite(
   }),
 )
 shipFuzzyRing.scale.set(SHIP_FUZZY_RING_DIAMETER_METERS, SHIP_FUZZY_RING_DIAMETER_METERS, 1)
+shipFuzzyRing.visible = false // D67: shown only while orbiting (toggled in the tractor-beam block)
 gameScene.add(shipFuzzyRing)
 
 const playerShipCondition = createPlayerShipCondition()
@@ -317,6 +319,8 @@ const viewEdgeStatusIndicators = createViewEdgeStatusIndicators(viewHudOverlay)
 // D66: full-scale cruise speed the left-edge speed bar fills toward (base is 80 m/s; SPEED BOOST
 // power-ups raise the live cruise speed up toward this). Tunable — purely the bar's reference max.
 const SPEED_LEVEL_FULL_SCALE_METERS_PER_SECOND = 200
+// D67: live 3D preview of the locked enemy (with its shield/hull) sits under the THRUST button
+const lockedEnemyPreview = createLockedEnemyPreview(leftControlCluster)
 // D48: cockpit canopy frame overlay (shown only in cockpit view)
 const cockpitFrameOverlay = createCockpitFrameOverlay(viewHudOverlay)
 const playerCameraRig = createPlayerCameraRig(playerViewCamera)
@@ -615,10 +619,15 @@ function resetPlayerShipForWaveRestart(): void {
   playerShipCondition.restoreForWaveRestart()
 }
 
-// D33: offer two random distinct power-ups; the picker waits for the player's tap
+// D33/D67: offer three random distinct power-ups; the picker waits for the player's tap
+const BETWEEN_WAVE_POWER_UP_CHOICE_COUNT = 3 // D67: was 2
 function presentBetweenWavePowerUpChoice(): void {
   hideWaveBanner()
-  const offeredPowerUps = selectTwoDistinctPowerUps(ALL_POWER_UP_DEFINITIONS, Math.random)
+  const offeredPowerUps = selectDistinctPowerUps(
+    ALL_POWER_UP_DEFINITIONS,
+    BETWEEN_WAVE_POWER_UP_CHOICE_COUNT,
+    Math.random,
+  )
   powerUpSelectionOverlay.showPowerUpChoices(offeredPowerUps, onBetweenWavePowerUpChosen)
 }
 
@@ -724,7 +733,7 @@ function updatePlayerWeaponsFire(): void {
     scratchCommandedForward,
     gameWorld.enemyShips,
     gameWorld.asteroids,
-    RADAR_DETECTION_RANGE_METERS,
+    playerEngagementRange.combinedRadarWeaponRangeMeters, // D67: lock only within the combined range
   )
 
   // D47: weapons are ALWAYS ON — auto-fire at the locked (visible) target, gated only by cooldown.
@@ -782,6 +791,9 @@ function updatePlayerWeaponsFire(): void {
 }
 
 function updateEnemyShipsAndFire(deltaSeconds: number): void {
+  // D67: the asteroid the player is currently orbiting — enemies that keep missing the orbiting player
+  // will switch to destroying it (computed once per tick, shared by all enemies)
+  const playerOrbitedAsteroid = grappleOrbitController.getLatchedAsteroid()
   for (const enemyShip of gameWorld.enemyShips) {
     if (enemyShip.isDestroyed) continue
     const combatTimers = enemyCombatTimersByShip.get(enemyShip)
@@ -793,6 +805,7 @@ function updateEnemyShipsAndFire(deltaSeconds: number): void {
       playerShipState.positionMeters,
       deltaSeconds,
       combatTimers.fireIntent,
+      playerOrbitedAsteroid,
     )
 
     scratchEnemyProjectileOrigin
@@ -1077,10 +1090,17 @@ function syncRenderObjectsFromSimulation(): void {
   updatePlayerEngineExhaust(flightControls.isThrustActive() ? 1 : 0, simulationClockSeconds)
 
   // D21: blue shield / red hull bars over damaged enemies, billboarded to the player camera
-  enemyConditionBarsDisplay.updateEnemyConditionBars(gameWorld.enemyShips, playerViewCamera)
+  enemyConditionBarsDisplay.updateEnemyConditionBars(
+    gameWorld.enemyShips,
+    playerViewCamera,
+    playerShipState.positionMeters,
+    playerEngagementRange.combinedRadarWeaponRangeMeters,
+  )
 
   // D51: the center aim reticle turns red while actively locked onto a (visible) enemy
   aimingReticle.setEngaged(currentAutoAimTarget !== null)
+  // D67: live preview of the locked enemy's model + its shield/hull under the THRUST button
+  lockedEnemyPreview.updateLockedEnemyPreview(currentAutoAimTarget, simulationClockSeconds)
   playerConditionDisplay.updatePlayerConditionDisplay(
     playerShipCondition.getShieldPointsFraction(),
     playerShipCondition.getHullPointsFraction(),
@@ -1115,9 +1135,11 @@ function syncRenderObjectsFromSimulation(): void {
     const ringDiameterMeters = orbitedAsteroid.currentRadiusMeters * 3
     orbitTargetFuzzyRing.scale.set(ringDiameterMeters, ringDiameterMeters, 1)
     orbitTargetFuzzyRing.visible = true
+    shipFuzzyRing.visible = true // D67: ship ring shows ONLY while the tractor beam is engaged (orbiting)
   } else {
     tractorBeamMesh.visible = false
     orbitTargetFuzzyRing.visible = false
+    shipFuzzyRing.visible = false // D67: hidden when not orbiting (was always-on in D66)
   }
   radarSphereDisplay.setOrbitTargetMarker(orbitedAsteroid ? orbitedAsteroid.positionMeters : null, playerShipState)
 
@@ -1169,9 +1191,12 @@ function runFrameLoop(currentFrameTimestampMs: number): void {
     currentShipViewWidthPixels,
     currentShipViewHeightPixels,
   )
-  // D50: driven by radar readings so the visible(red)/last-seen(yellow) mechanic is preserved
+  // D67: every live enemy gets a ring; in-range = full rotating (locked spins faster + pulses),
+  // out-of-range = tiny static red circle. Gated on the combined radar+weapon engagement range.
   enemyTargetRings.updateEnemyTargetRings(
-    radarSignatureTracker.getContactReadings(),
+    gameWorld.enemyShips,
+    playerShipState.positionMeters,
+    playerEngagementRange.combinedRadarWeaponRangeMeters,
     playerViewCamera,
     currentShipViewWidthPixels,
     currentShipViewHeightPixels,

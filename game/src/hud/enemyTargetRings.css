@@ -8,9 +8,12 @@
   color: rgba(255, 64, 64, 0.9); /* SVG strokes use currentColor — red = visible (D50) */
 }
 
-/* D50: last-seen (obscured/fading) contact — same ring, yellow */
-.enemyTargetRingLastSeen {
-  color: rgba(255, 204, 51, 0.95);
+/* D67: out-of-range enemy — dimmer red, and the spinner is frozen (no rotation) */
+.enemyTargetRingOutOfRange {
+  color: rgba(255, 80, 80, 0.7);
+}
+.enemyTargetRingOutOfRange .enemyTargetRingSpinner {
+  animation: none;
 }
 
 .enemyTargetRingSpinner {
@@ -25,9 +28,12 @@
   height: 100%;
 }
 
-/* locked enemy → glow only (keeps the red/yellow state color) */
+/* D67: locked enemy → glow + a faster spin (size also pulses via JS) */
 .enemyTargetRingLocked {
-  filter: drop-shadow(0 0 5px currentColor);
+  filter: drop-shadow(0 0 6px currentColor);
+}
+.enemyTargetRingLocked .enemyTargetRingSpinner {
+  animation-duration: 1.4s;
 }
 
 @keyframes enemyTargetRingSpin {

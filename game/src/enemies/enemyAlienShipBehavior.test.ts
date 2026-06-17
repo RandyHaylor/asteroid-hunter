@@ -118,14 +118,16 @@ describe('coverHunter tier', () => {
 
   it('flies to its hide point so the chosen asteroid blocks the player line of sight', () => {
     const gameScene = new Scene()
-    const hunterEnemy = createEnemyShip('coverHunter', new Vector3(300, 50, 0), gameScene)
+    // start near the hide point so it settles within the window below (D67 lowered the first-peek
+    // interval to >=2.5 s, so the settle window must stay under that or a peek pulls it off-point)
+    const hunterEnemy = createEnemyShip('coverHunter', new Vector3(275, 25, 0), gameScene)
     const playerPosition = new Vector3(0, 0, 0)
     const coverAsteroid = makeTestAsteroid(new Vector3(200, 0, 0), 40)
     const asteroids = [coverAsteroid]
     const fireIntent = createEnemyFireIntent()
 
-    // 4 simulated seconds: long enough to settle on the hide point, shorter than the first peek (>=5 s)
-    for (let stepIndex = 0; stepIndex < 240; stepIndex++) {
+    // 2 simulated seconds: long enough to settle on the hide point, shorter than the first peek (>=2.5 s)
+    for (let stepIndex = 0; stepIndex < 120; stepIndex++) {
       updateEnemyShipBehavior(hunterEnemy, asteroids, playerPosition, FIXED_TIMESTEP_SECONDS, fireIntent)
     }
 

@@ -1,4 +1,5 @@
 import { weaponEngagementRanges } from '../gameSimulation/gameWorldTypes'
+import { playerEngagementRange } from '../shipStats'
 
 // R17/R18: weapon behavior is fully data-driven so upgrades (fire rate, explosion
 // radius, laser count and spread, etc.) plug in later by swapping/mutating stat blocks.
@@ -30,7 +31,9 @@ export const playerBaseLaserStats: LaserWeaponStats = {
   boltDamage: 8,
   simultaneousBoltCount: 1,
   spreadAngleRadians: 0,
-  maxRangeMeters: weaponEngagementRanges.laserShortRangeMeters,
+  // D67: player laser reaches the combined radar+weapon engagement range (so locked targets up to that
+  // range are actually hit). The combined RADAR+WEAPON RANGE upgrade keeps these two in sync.
+  maxRangeMeters: playerEngagementRange.combinedRadarWeaponRangeMeters,
 }
 
 export const playerBaseMissileStats: MissileWeaponStats = {

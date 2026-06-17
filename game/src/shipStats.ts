@@ -37,3 +37,14 @@ export const playerShipBaseTractorBeamStats: TractorBeamStats = {
   arrivalDampingPerSecond: 4,
   tractorGrabMaxRangeMeters: 525, // D19: extended 50% from the original 350
 }
+
+// D67: a single combined "Radar + Weapon" engagement range. Within it the player can lock,
+// auto-fire, and sees a full rotating target ring + condition bars on an enemy; beyond it an enemy
+// is still always shown (a small static red ring) but cannot be locked/fired-on. Upgradeable via
+// the combined RADAR+WEAPON RANGE power-up (mutates this live singleton, like all other stats).
+export type PlayerEngagementRange = {
+  combinedRadarWeaponRangeMeters: number
+}
+export const playerEngagementRange: PlayerEngagementRange = {
+  combinedRadarWeaponRangeMeters: 600, // D67: base (chosen mid-value between old radar 1200 & laser 280)
+}

@@ -52,13 +52,25 @@ const MISSILE_MAXIMUM_RANGE_METERS = 900
 // ---- coverHunter tuning (D8, D11) ----
 const COVER_HIDE_STANDOFF_METERS = 12
 const COVER_CRUISE_SPEED_METERS_PER_SECOND = 50
-const COVER_PEEK_INTERVAL_MIN_SECONDS = 5
-const COVER_PEEK_INTERVAL_MAX_SECONDS = 8
+// D67: peek more often so a cover hunter keeps ATTACKING intermittently instead of hiding-and-waiting
+const COVER_PEEK_INTERVAL_MIN_SECONDS = 2.5
+const COVER_PEEK_INTERVAL_MAX_SECONDS = 4.5
 const COVER_PEEK_DURATION_SECONDS = 2
 /** lateral clearance past the asteroid rim when peeking out */
 const COVER_PEEK_RIM_CLEARANCE_METERS = 20
 /** D11: chipped cover shrinking below this fraction of its chosen radius forces relocation */
 const COVER_REPICK_SHRINK_FRACTION = 0.6
+// D67: a cover hunter periodically advances — re-picking cover that is closer to the player, but only
+// among rocks within one "step" of its current spot, so it ladders inward across the field over time.
+const COVER_ADVANCE_RECONSIDER_SECONDS = 6
+const COVER_ADVANCE_MAX_STEP_METERS = 700
+
+// ---- D67: attack-the-orbited-asteroid behavior ----
+// If an enemy keeps shooting at the player while the player ORBITS an asteroid (shots that can't
+// connect), after this many continuous seconds it switches to blasting that asteroid instead.
+const ASTEROID_ATTACK_MISS_THRESHOLD_SECONDS = 3
+// It keeps attacking the rock while the player orbits, and for this long after the player stops.
+const ASTEROID_ATTACK_PERSIST_AFTER_ORBIT_SECONDS = 3
 
 type EnemyBehaviorInternalState = {
   patrolWaypointMeters: Vector3
@@ -70,6 +82,12 @@ type EnemyBehaviorInternalState = {
   secondsUntilNextPeek: number
   peekSecondsRemaining: number
   isPeeking: boolean
+  // D67: cover hunters periodically advance toward the player by re-picking closer cover
+  secondsUntilCoverAdvance: number
+  // D67: attack-the-orbited-asteroid tracking
+  secondsShootingWhilePlayerOrbiting: number
+  asteroidAttackTarget: AsteroidBody | null
+  asteroidAttackPersistSecondsRemaining: number
 }
 
 // per-enemy internal state lives outside the shared EnemyShip contract, keyed by the ship object
@@ -88,6 +106,10 @@ function getOrCreateInternalState(enemyShip: EnemyShip): EnemyBehaviorInternalSt
       secondsUntilNextPeek: 0,
       peekSecondsRemaining: 0,
       isPeeking: false,
+      secondsUntilCoverAdvance: COVER_ADVANCE_RECONSIDER_SECONDS,
+      secondsShootingWhilePlayerOrbiting: 0,
+      asteroidAttackTarget: null,
+      asteroidAttackPersistSecondsRemaining: 0,
     }
     enemyShipInternalStates.set(enemyShip, internalState)
   }
@@ -142,6 +164,7 @@ const WORLD_ORIGIN = new Vector3(0, 0, 0)
 
 // scratch objects reused every update to avoid per-frame allocations in the hot AI path
 const scratchVectorToPlayer = new Vector3()
+const scratchVectorToAsteroidTarget = new Vector3() // D67: aim toward the orbited asteroid under attack
 const scratchNoseFacingDirection = new Vector3()
 const scratchGoalPoint = new Vector3()
 const scratchDesiredVelocity = new Vector3()
@@ -159,6 +182,9 @@ export function updateEnemyShipBehavior(
   playerPositionMeters: Vector3,
   deltaSeconds: number,
   outFireIntent: EnemyFireIntent,
+  // D67: the asteroid the player is currently orbiting (null if not orbiting), so enemies can switch
+  // to destroying it after repeatedly failing to hit the orbiting player.
+  playerOrbitedAsteroid: AsteroidBody | null = null,
 ): void {
   // STEP 1: reset intent; destroyed enemies do nothing (the caller marks isDestroyed)
   outFireIntent.wantsToFireLaser = false
@@ -202,6 +228,10 @@ export function updateEnemyShipBehavior(
       break
   }
 
+  // STEP 3.5 (D67): switch to blasting the asteroid the player is orbiting, once this enemy has spent
+  // long enough shooting at the (un-hittable) orbiting player. This OVERRIDES the tier's player aim.
+  updateAsteroidAttackOverride(enemyShip, internalState, playerOrbitedAsteroid, deltaSeconds, outFireIntent)
+
   // STEP 4: steer by target velocity toward the goal, thrust-limited like the player physics (R3/D12)
   steerEnemyTowardGoalPoint(enemyShip, scratchGoalPoint, cruiseSpeedMetersPerSecond, deltaSeconds)
 
@@ -219,6 +249,74 @@ export function updateEnemyShipBehavior(
   // STEP 6: sync the render object with the simulated rigid body
   enemyShip.renderObject.position.copy(enemyShip.positionMeters)
   enemyShip.renderObject.quaternion.copy(enemyShip.orientation)
+}
+
+// ---- D67: attack-the-orbited-asteroid override ----
+
+/**
+ * Tracks how long this enemy has been shooting at the player while the player orbits an asteroid; once
+ * past the threshold it latches onto that asteroid and overrides the fire intent to destroy it. The
+ * attack persists while the player keeps orbiting it, and for a few seconds after (or until the rock
+ * is gone). On entry `outFireIntent` already targets the player (tier logic); on a latched attack we
+ * re-point the aim + fire flags at the asteroid.
+ */
+function updateAsteroidAttackOverride(
+  enemyShip: EnemyShip,
+  internalState: EnemyBehaviorInternalState,
+  playerOrbitedAsteroid: AsteroidBody | null,
+  deltaSeconds: number,
+  outFireIntent: EnemyFireIntent,
+): void {
+  const isShootingAtPlayerNow = outFireIntent.wantsToFireLaser || outFireIntent.wantsToFireMissile
+
+  // accumulate CONTINUOUS "shooting while the player orbits" time — resets the instant either stops
+  if (playerOrbitedAsteroid && !playerOrbitedAsteroid.isDestroyed && isShootingAtPlayerNow) {
+    internalState.secondsShootingWhilePlayerOrbiting += deltaSeconds
+  } else if (internalState.asteroidAttackTarget === null) {
+    internalState.secondsShootingWhilePlayerOrbiting = 0
+  }
+
+  // cross the threshold → latch the orbited asteroid as the attack target
+  if (
+    internalState.asteroidAttackTarget === null &&
+    playerOrbitedAsteroid &&
+    !playerOrbitedAsteroid.isDestroyed &&
+    internalState.secondsShootingWhilePlayerOrbiting >= ASTEROID_ATTACK_MISS_THRESHOLD_SECONDS
+  ) {
+    internalState.asteroidAttackTarget = playerOrbitedAsteroid
+    internalState.asteroidAttackPersistSecondsRemaining = ASTEROID_ATTACK_PERSIST_AFTER_ORBIT_SECONDS
+  }
+
+  const attackTarget = internalState.asteroidAttackTarget
+  if (attackTarget === null) return
+
+  // stop attacking when the rock is destroyed, or the persist window (after the player leaves) runs out
+  if (attackTarget.isDestroyed) {
+    internalState.asteroidAttackTarget = null
+    internalState.secondsShootingWhilePlayerOrbiting = 0
+    return
+  }
+  if (playerOrbitedAsteroid === attackTarget) {
+    internalState.asteroidAttackPersistSecondsRemaining = ASTEROID_ATTACK_PERSIST_AFTER_ORBIT_SECONDS
+  } else {
+    internalState.asteroidAttackPersistSecondsRemaining -= deltaSeconds
+    if (internalState.asteroidAttackPersistSecondsRemaining <= 0) {
+      internalState.asteroidAttackTarget = null
+      internalState.secondsShootingWhilePlayerOrbiting = 0
+      return
+    }
+  }
+
+  // override: aim at the asteroid and fire on it (laser short range, missile in the long envelope)
+  scratchVectorToAsteroidTarget.copy(attackTarget.positionMeters).sub(enemyShip.positionMeters)
+  const distanceToAsteroidMeters = scratchVectorToAsteroidTarget.length()
+  if (distanceToAsteroidMeters > 1e-6) {
+    outFireIntent.aimDirectionWorld.copy(scratchVectorToAsteroidTarget).divideScalar(distanceToAsteroidMeters)
+  }
+  outFireIntent.wantsToFireLaser = distanceToAsteroidMeters <= weaponEngagementRanges.laserShortRangeMeters
+  outFireIntent.wantsToFireMissile =
+    distanceToAsteroidMeters >= MISSILE_MINIMUM_RANGE_METERS &&
+    distanceToAsteroidMeters <= MISSILE_MAXIMUM_RANGE_METERS
 }
 
 // ---- shared movement ----
@@ -345,26 +443,40 @@ function pickNewCoverAsteroid(
   asteroids: readonly AsteroidBody[],
   playerPositionMeters: Vector3,
 ): void {
-  // nearest alive LARGE asteroid (R6: only large asteroids make viable cover)
+  // D67 "approach": among alive LARGE asteroids within one advance STEP of the enemy (R6: only large
+  // rocks make viable cover), prefer the one CLOSEST TO THE PLAYER, so the hunter ladders inward over
+  // successive picks. If none are within a step, fall back to the nearest large asteroid (no advance).
+  let advanceCoverAsteroid: AsteroidBody | null = null
+  let advanceBestDistanceToPlayerSquared = Infinity
   let nearestLargeAsteroid: AsteroidBody | null = null
-  let nearestDistanceSquared = Infinity
+  let nearestDistanceToEnemySquared = Infinity
+  const advanceStepSquared = COVER_ADVANCE_MAX_STEP_METERS * COVER_ADVANCE_MAX_STEP_METERS
   for (const asteroid of asteroids) {
     if (asteroid.isDestroyed || asteroid.sizeClass !== 'large') continue
-    const distanceSquared = asteroid.positionMeters.distanceToSquared(enemyShip.positionMeters)
-    if (distanceSquared < nearestDistanceSquared) {
-      nearestDistanceSquared = distanceSquared
+    const distanceToEnemySquared = asteroid.positionMeters.distanceToSquared(enemyShip.positionMeters)
+    if (distanceToEnemySquared < nearestDistanceToEnemySquared) {
+      nearestDistanceToEnemySquared = distanceToEnemySquared
       nearestLargeAsteroid = asteroid
+    }
+    if (distanceToEnemySquared <= advanceStepSquared) {
+      const distanceToPlayerSquared = asteroid.positionMeters.distanceToSquared(playerPositionMeters)
+      if (distanceToPlayerSquared < advanceBestDistanceToPlayerSquared) {
+        advanceBestDistanceToPlayerSquared = distanceToPlayerSquared
+        advanceCoverAsteroid = asteroid
+      }
     }
   }
 
-  internalState.coverAsteroid = nearestLargeAsteroid
+  const chosenCoverAsteroid = advanceCoverAsteroid ?? nearestLargeAsteroid
+  internalState.coverAsteroid = chosenCoverAsteroid
+  internalState.secondsUntilCoverAdvance = COVER_ADVANCE_RECONSIDER_SECONDS
   internalState.isPeeking = false
   internalState.secondsUntilNextPeek =
     COVER_PEEK_INTERVAL_MIN_SECONDS +
     Math.random() * (COVER_PEEK_INTERVAL_MAX_SECONDS - COVER_PEEK_INTERVAL_MIN_SECONDS)
-  if (nearestLargeAsteroid) {
-    internalState.coverAsteroidRadiusWhenChosenMeters = nearestLargeAsteroid.currentRadiusMeters
-    computeCoverHidePointBehindAsteroid(nearestLargeAsteroid, playerPositionMeters, internalState.hidePointMeters)
+  if (chosenCoverAsteroid) {
+    internalState.coverAsteroidRadiusWhenChosenMeters = chosenCoverAsteroid.currentRadiusMeters
+    computeCoverHidePointBehindAsteroid(chosenCoverAsteroid, playerPositionMeters, internalState.hidePointMeters)
   }
 }
 
@@ -409,7 +521,11 @@ function updateCoverHunterTier(
     currentCover.currentRadiusMeters <
       COVER_REPICK_SHRINK_FRACTION * internalState.coverAsteroidRadiusWhenChosenMeters ||
     !isLineOfSightBlockedByAsteroids(playerPositionMeters, internalState.hidePointMeters, asteroids)
-  if (isCoverLost) {
+  // D67: even when current cover is still valid, periodically re-pick to ADVANCE toward the player
+  // (pickNewCoverAsteroid biases toward player-closer rocks within a step) — but don't relocate mid-peek
+  internalState.secondsUntilCoverAdvance -= deltaSeconds
+  const shouldAdvanceCover = !internalState.isPeeking && internalState.secondsUntilCoverAdvance <= 0
+  if (isCoverLost || shouldAdvanceCover) {
     pickNewCoverAsteroid(internalState, enemyShip, asteroids, playerPositionMeters)
   }
 

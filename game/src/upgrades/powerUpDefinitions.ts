@@ -1,4 +1,4 @@
-import { playerShipBaseFlightStats, playerShipBaseTractorBeamStats } from '../shipStats'
+import { playerShipBaseFlightStats, playerShipBaseTractorBeamStats, playerEngagementRange } from '../shipStats'
 import { playerBaseLaserStats, playerBaseMissileStats } from '../weapons/weaponStats'
 
 // D33: between-wave power-ups (finally implements R17/R18). Each definition mutates one of the
@@ -16,6 +16,7 @@ export type PowerUpId =
   | 'missileFireRate'
   | 'missileTrackingTurn'
   | 'shipTurnRate'
+  | 'radarWeaponRange'
 
 export type PowerUpDefinition = {
   powerUpId: PowerUpId
@@ -125,23 +126,39 @@ export const ALL_POWER_UP_DEFINITIONS: readonly PowerUpDefinition[] = [
       playerShipBaseFlightStats.turnAccelerationRadiansPerSecondSquared *= 1.12
     },
   },
+  {
+    // D67: a SINGLE combined upgrade for both radar (lock/ring) AND weapon (laser reach) range — they
+    // are one engagement range now. Keeps the laser bolt despawn distance in sync with the lock range.
+    powerUpId: 'radarWeaponRange',
+    displayName: 'RADAR+WEAPON RANGE',
+    description: '+25% radar & weapon range',
+    // concentric range arcs + center dot (a radar/range sweep)
+    iconSvgMarkup: iconSvg('<circle cx="12" cy="12" r="2"/><path d="M12 6a6 6 0 0 1 6 6"/><path d="M12 2a10 10 0 0 1 10 10"/>'),
+    applyToPlayerStats(): void {
+      playerEngagementRange.combinedRadarWeaponRangeMeters *= 1.25
+      playerBaseLaserStats.maxRangeMeters *= 1.25 // keep laser reach == engagement range
+    },
+  },
 ]
 
 /**
- * Pick two DISTINCT power-ups to offer. randomUnitFractionFn returns [0,1) (injected so this is
- * deterministic and unit-testable; main.ts passes Math.random).
+ * D67: pick `offeredCount` DISTINCT power-ups to offer (was fixed at two). randomUnitFractionFn
+ * returns [0,1) (injected so this is deterministic and unit-testable; main.ts passes Math.random).
  */
-export function selectTwoDistinctPowerUps(
+export function selectDistinctPowerUps(
   allPowerUps: readonly PowerUpDefinition[],
+  offeredCount: number,
   randomUnitFractionFn: () => number,
-): [PowerUpDefinition, PowerUpDefinition] {
-  if (allPowerUps.length < 2) {
-    throw new Error('selectTwoDistinctPowerUps requires at least two power-ups to choose from')
+): PowerUpDefinition[] {
+  if (allPowerUps.length < offeredCount) {
+    throw new Error(`selectDistinctPowerUps requires at least ${offeredCount} power-ups to choose from`)
   }
   const remainingPowerUps = allPowerUps.slice()
-  const firstIndex = Math.floor(randomUnitFractionFn() * remainingPowerUps.length)
-  const [firstPowerUp] = remainingPowerUps.splice(firstIndex, 1)
-  const secondIndex = Math.floor(randomUnitFractionFn() * remainingPowerUps.length)
-  const [secondPowerUp] = remainingPowerUps.splice(secondIndex, 1)
-  return [firstPowerUp, secondPowerUp]
+  const chosenPowerUps: PowerUpDefinition[] = []
+  for (let pickIndex = 0; pickIndex < offeredCount; pickIndex++) {
+    const remainingIndex = Math.floor(randomUnitFractionFn() * remainingPowerUps.length)
+    const [pickedPowerUp] = remainingPowerUps.splice(remainingIndex, 1)
+    chosenPowerUps.push(pickedPowerUp)
+  }
+  return chosenPowerUps
 }

@@ -10,9 +10,9 @@ import {
 // make distant enemies easier to find). The bars billboard to the player's camera every frame,
 // so "above" is always screen-up.
 
-const BAR_WIDTH_METERS = 7
-const BAR_HEIGHT_METERS = 0.55
-const BAR_VERTICAL_GAP_METERS = 0.3
+const BAR_WIDTH_METERS = 11 // D67: bigger (was 7) — easier to read
+const BAR_HEIGHT_METERS = 0.9 // D67: bigger (was 0.55)
+const BAR_VERTICAL_GAP_METERS = 0.4 // D67: bigger gap to match (was 0.3)
 const BARS_OFFSET_ABOVE_SHIP_METERS = 9 // D56: clear the now-3×-larger enemy model
 // D46: keep the bars a CONSTANT on-screen size regardless of distance — world size is scaled by
 // distanceToCamera / this reference, so a far enemy's bars stay just as large as a near one's.
@@ -43,8 +43,12 @@ const sharedHullFillMaterial = new THREE.MeshBasicMaterial({
   depthWrite: false,
 })
 
-const BAR_BACKGROUND_RENDER_ORDER = 20
-const BAR_FILL_RENDER_ORDER = 21
+// D67: bars render with depthTest off (so the fill never z-fights the background or the hull). To
+// stop the OTHER flicker — three.js re-sorting equal-renderOrder transparent objects by distance
+// every frame, flipping draw order between near-equal-distance bars — each enemy's bar group gets a
+// UNIQUE, STABLE renderOrder band so the painter order is deterministic and never re-sorts.
+const BARS_RENDER_ORDER_BASE = 20
+const BARS_RENDER_ORDER_STRIDE = 2 // background at band+0, fill at band+1, per enemy
 
 type EnemyConditionBarGroup = {
   barsGroup: THREE.Group
@@ -59,8 +63,10 @@ function setBarFillFraction(fillMesh: THREE.Mesh, fillFraction: number): void {
   fillMesh.position.x = -((1 - clampedFraction) * BAR_WIDTH_METERS) / 2
 }
 
-function buildEnemyConditionBarGroup(): EnemyConditionBarGroup {
+function buildEnemyConditionBarGroup(renderOrderBand: number): EnemyConditionBarGroup {
   const barsGroup = new THREE.Group()
+  const backgroundRenderOrder = renderOrderBand
+  const fillRenderOrder = renderOrderBand + 1
 
   const shieldRowY = (BAR_HEIGHT_METERS + BAR_VERTICAL_GAP_METERS) / 2
   const hullRowY = -shieldRowY
@@ -68,32 +74,37 @@ function buildEnemyConditionBarGroup(): EnemyConditionBarGroup {
   const shieldBackgroundMesh = new THREE.Mesh(sharedUnitBarGeometry, sharedBarBackgroundMaterial)
   shieldBackgroundMesh.scale.set(BAR_WIDTH_METERS, BAR_HEIGHT_METERS, 1)
   shieldBackgroundMesh.position.y = shieldRowY
-  shieldBackgroundMesh.renderOrder = BAR_BACKGROUND_RENDER_ORDER
+  shieldBackgroundMesh.renderOrder = backgroundRenderOrder
   barsGroup.add(shieldBackgroundMesh)
 
   const hullBackgroundMesh = new THREE.Mesh(sharedUnitBarGeometry, sharedBarBackgroundMaterial)
   hullBackgroundMesh.scale.set(BAR_WIDTH_METERS, BAR_HEIGHT_METERS, 1)
   hullBackgroundMesh.position.y = hullRowY
-  hullBackgroundMesh.renderOrder = BAR_BACKGROUND_RENDER_ORDER
+  hullBackgroundMesh.renderOrder = backgroundRenderOrder
   barsGroup.add(hullBackgroundMesh)
 
   const shieldFillMesh = new THREE.Mesh(sharedUnitBarGeometry, sharedShieldFillMaterial)
   shieldFillMesh.scale.set(BAR_WIDTH_METERS, BAR_HEIGHT_METERS * 0.7, 1)
   shieldFillMesh.position.set(0, shieldRowY, 0.01)
-  shieldFillMesh.renderOrder = BAR_FILL_RENDER_ORDER
+  shieldFillMesh.renderOrder = fillRenderOrder
   barsGroup.add(shieldFillMesh)
 
   const hullFillMesh = new THREE.Mesh(sharedUnitBarGeometry, sharedHullFillMaterial)
   hullFillMesh.scale.set(BAR_WIDTH_METERS, BAR_HEIGHT_METERS * 0.7, 1)
   hullFillMesh.position.set(0, hullRowY, 0.01)
-  hullFillMesh.renderOrder = BAR_FILL_RENDER_ORDER
+  hullFillMesh.renderOrder = fillRenderOrder
   barsGroup.add(hullFillMesh)
 
   return { barsGroup, shieldFillMesh, hullFillMesh }
 }
 
 export type EnemyConditionBarsDisplay = {
-  updateEnemyConditionBars(enemyShips: readonly EnemyShip[], playerViewCamera: THREE.Camera): void
+  updateEnemyConditionBars(
+    enemyShips: readonly EnemyShip[],
+    playerViewCamera: THREE.Camera,
+    playerPositionMeters: THREE.Vector3,
+    combinedRadarWeaponRangeMeters: number,
+  ): void
   /** number of enemies currently showing bars (used by dev verification) */
   getActiveBarCount(): number
 }
@@ -102,9 +113,11 @@ const scratchCameraUpDirection = new THREE.Vector3()
 
 export function createEnemyConditionBarsDisplay(gameScene: THREE.Scene): EnemyConditionBarsDisplay {
   const barGroupsByEnemyShipId = new Map<number, EnemyConditionBarGroup>()
+  // monotonic allocator for the per-enemy unique renderOrder band (D67 anti-flicker)
+  let nextRenderOrderBand = BARS_RENDER_ORDER_BASE
 
   return {
-    updateEnemyConditionBars(enemyShips: readonly EnemyShip[], playerViewCamera: THREE.Camera): void {
+    updateEnemyConditionBars(enemyShips, playerViewCamera, playerPositionMeters, combinedRadarWeaponRangeMeters): void {
       const enemyIdsWithVisibleBars = new Set<number>()
 
       // camera-up so the bars sit "above" the ship from the player's point of view
@@ -113,10 +126,13 @@ export function createEnemyConditionBarsDisplay(gameScene: THREE.Scene): EnemyCo
 
       for (const enemyShip of enemyShips) {
         if (enemyShip.isDestroyed) continue // D24: bars show for every live enemy, damaged or not
+        // D67: no bars for out-of-range enemies (they show only the tiny static target ring)
+        if (enemyShip.positionMeters.distanceTo(playerPositionMeters) > combinedRadarWeaponRangeMeters) continue
 
         let conditionBars = barGroupsByEnemyShipId.get(enemyShip.enemyShipId)
         if (!conditionBars) {
-          conditionBars = buildEnemyConditionBarGroup()
+          conditionBars = buildEnemyConditionBarGroup(nextRenderOrderBand)
+          nextRenderOrderBand += BARS_RENDER_ORDER_STRIDE
           gameScene.add(conditionBars.barsGroup)
           barGroupsByEnemyShipId.set(enemyShip.enemyShipId, conditionBars)
         }
