@@ -390,6 +390,23 @@ if (import.meta.env.DEV) {
       forward: scratchPlayerForwardDirection.toArray(),
     }
   }
+  // D57: measure the rigid-rig geometry (camera↔ship distance + ship's on-screen position)
+  ;(window as unknown as Record<string, unknown>).debugReadCameraShipMetrics = () => {
+    playerViewCamera.updateMatrixWorld()
+    const shipScreenNdc = playerShipMesh.position.clone().project(playerViewCamera)
+    return {
+      cameraToShipDistanceMeters: playerViewCamera.position.distanceTo(playerShipMesh.position),
+      shipScreenNdc: [shipScreenNdc.x, shipScreenNdc.y],
+      cameraPosition: playerViewCamera.position.toArray(),
+      shipMeshPosition: playerShipMesh.position.toArray(),
+    }
+  }
+  // D57: rotate the commanded (camera) heading by a yaw angle, to test rotation deterministically
+  ;(window as unknown as Record<string, unknown>).debugRotateCommandedYaw = (yawRadians = Math.PI / 2) => {
+    const yawRotation = new THREE.Quaternion().setFromAxisAngle(SHIP_LOCAL_UP_AXIS, yawRadians)
+    radarSphereDisplay.getCommandedOrientation().multiply(yawRotation).normalize()
+    return true
+  }
   // D33: force the between-wave power-up picker open (clears enemies, parks the machine)
   ;(window as unknown as Record<string, unknown>).debugForcePowerUpSelection = () => {
     removeAllEnemiesFromWorld()
@@ -463,9 +480,12 @@ function resetPlayerShipForWaveRestart(): void {
   playerShipState.orientation.identity()
   playerShipState.currentPitchRateRadiansPerSecond = 0
   playerShipState.currentYawRateRadiansPerSecond = 0
-  // snap the smoothed mesh to the respawn pose so it doesn't visibly fly across the field (D21)
+  // snap the mesh AND the interpolation snapshot to the respawn pose so it doesn't interpolate across
+  // the field from its old position (D21/D58)
   playerShipMesh.position.copy(playerShipState.positionMeters)
   playerShipMesh.quaternion.copy(playerShipState.orientation)
+  playerShipPreviousSimPositionMeters.copy(playerShipState.positionMeters)
+  playerShipPreviousSimOrientation.copy(playerShipState.orientation)
   playerShipCondition.restoreForWaveRestart()
 }
 
@@ -818,6 +838,14 @@ const FIXED_SIMULATION_TIMESTEP_SECONDS = 1 / 60
 let simulationTimeAccumulatorSeconds = 0
 let previousFrameTimestampMs = performance.now()
 
+// D58: fixed-timestep RENDER INTERPOLATION for the player ship. We snapshot the ship's pose before
+// the last sim step and lerp/slerp the rendered mesh between that snapshot and the current sim pose
+// by the leftover-accumulator fraction. This makes the ship move uniformly in real time regardless of
+// how many fixed steps ran this frame (the old lag-lerp toward the latest pose stuttered randomly).
+const playerShipPreviousSimPositionMeters = new THREE.Vector3()
+const playerShipPreviousSimOrientation = new THREE.Quaternion()
+let playerShipRenderInterpolationAlpha = 1
+
 function updateGameSimulation(deltaSeconds: number): void {
   // D54: hold the whole simulation until the player dismisses the start screen
   if (!gameHasStarted) return
@@ -861,13 +889,15 @@ function updateGameSimulation(deltaSeconds: number): void {
 
 // ===== STEP 10: per-frame render sync (HUD refresh, overlays, radar inset) =====
 
-/** D21: light visual smoothing buffer — filters single-frame placement thrash without visible lag */
-const PLAYER_MESH_SMOOTHING_STIFFNESS_PER_SECOND = 25
-
-function syncRenderObjectsFromSimulation(frameDeltaSeconds: number): void {
-  const meshSmoothingBlend = 1 - Math.exp(-PLAYER_MESH_SMOOTHING_STIFFNESS_PER_SECOND * frameDeltaSeconds)
-  playerShipMesh.position.lerp(playerShipState.positionMeters, meshSmoothingBlend)
-  playerShipMesh.quaternion.slerp(playerShipState.orientation, meshSmoothingBlend)
+function syncRenderObjectsFromSimulation(): void {
+  // D58: interpolate the rendered ship pose between the previous and current sim states (smooth,
+  // uniform real-time motion — no lag, no random stutter). The camera follows this same mesh pose.
+  playerShipMesh.position
+    .copy(playerShipPreviousSimPositionMeters)
+    .lerp(playerShipState.positionMeters, playerShipRenderInterpolationAlpha)
+  playerShipMesh.quaternion
+    .copy(playerShipPreviousSimOrientation)
+    .slerp(playerShipState.orientation, playerShipRenderInterpolationAlpha)
 
   // D54: thrust plume shows while THRUST is held (momentum steering), color cycling red→yellow
   updatePlayerEngineExhaust(flightControls.isThrustActive() ? 1 : 0, simulationClockSeconds)
@@ -905,11 +935,15 @@ function runFrameLoop(currentFrameTimestampMs: number): void {
 
   simulationTimeAccumulatorSeconds += frameDeltaSeconds
   while (simulationTimeAccumulatorSeconds >= FIXED_SIMULATION_TIMESTEP_SECONDS) {
+    // D58: snapshot the pose before the step so we can interpolate the render pose this frame
+    playerShipPreviousSimPositionMeters.copy(playerShipState.positionMeters)
+    playerShipPreviousSimOrientation.copy(playerShipState.orientation)
     updateGameSimulation(FIXED_SIMULATION_TIMESTEP_SECONDS)
     simulationTimeAccumulatorSeconds -= FIXED_SIMULATION_TIMESTEP_SECONDS
   }
+  playerShipRenderInterpolationAlpha = simulationTimeAccumulatorSeconds / FIXED_SIMULATION_TIMESTEP_SECONDS
 
-  syncRenderObjectsFromSimulation(frameDeltaSeconds)
+  syncRenderObjectsFromSimulation()
   // D56-fix: pin the camera to the SMOOTHED mesh position (the one actually rendered), so the ship
   // never jitters or swims closer/farther relative to the rigid rig as it moves/rotates.
   playerCameraRig.updateCameraFollowingShip(
