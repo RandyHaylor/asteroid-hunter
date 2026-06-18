@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Object3D, Scene, Vector3 } from 'three'
 import {
-  computeEnemyGrappleStrengthForWave,
+  grappleStrengthForArchetype,
   createEnemyFireIntent,
   createEnemyShip,
   updateEnemyShipBehavior,
@@ -25,21 +25,18 @@ function makeLargeAsteroid(positionMeters: Vector3, radiusMeters: number): Aster
   }
 }
 
-describe('computeEnemyGrappleStrengthForWave', () => {
-  it('escalates none → weak → strong as waves progress', () => {
-    expect(computeEnemyGrappleStrengthForWave(1)).toBe(0)
-    expect(computeEnemyGrappleStrengthForWave(3)).toBe(0)
-    expect(computeEnemyGrappleStrengthForWave(4)).toBe(0.5)
-    expect(computeEnemyGrappleStrengthForWave(6)).toBe(0.5)
-    expect(computeEnemyGrappleStrengthForWave(7)).toBe(1)
-    expect(computeEnemyGrappleStrengthForWave(12)).toBe(1)
+describe('grappleStrengthForArchetype', () => {
+  it('bundles grapple into the archetype: Drone none, Raider weak, Stalker strong', () => {
+    expect(grappleStrengthForArchetype('dumbPatrol')).toBe(0)
+    expect(grappleStrengthForArchetype('orbitStrafe')).toBe(0.5)
+    expect(grappleStrengthForArchetype('coverHunter')).toBe(1)
   })
 })
 
 describe('additive enemy grapple weave', () => {
   it('a grapple-capable enemy near a large asteroid arcs at a ~fixed radius (slingshot)', () => {
     const gameScene = new Scene()
-    const enemy = createEnemyShip('dumbPatrol', new Vector3(120, 0, 0), gameScene, 1) // strong grapple
+    const enemy = createEnemyShip('coverHunter', new Vector3(120, 0, 0), gameScene) // Stalker = strong grapple
     const asteroid = makeLargeAsteroid(new Vector3(0, 0, 0), 40) // within latch range (120 m < 240 m)
     const playerPosition = new Vector3(0, 0, 2000) // far away — doesn't interfere
     const fireIntent = createEnemyFireIntent()
@@ -61,7 +58,7 @@ describe('additive enemy grapple weave', () => {
 
   it('an enemy with zero grapple strength never locks to a fixed radius (no arc)', () => {
     const gameScene = new Scene()
-    const enemy = createEnemyShip('dumbPatrol', new Vector3(120, 0, 0), gameScene, 0) // no grapple
+    const enemy = createEnemyShip('dumbPatrol', new Vector3(120, 0, 0), gameScene) // Drone = no grapple
     const asteroid = makeLargeAsteroid(new Vector3(0, 0, 0), 40)
     const playerPosition = new Vector3(0, 0, 2000)
     const fireIntent = createEnemyFireIntent()

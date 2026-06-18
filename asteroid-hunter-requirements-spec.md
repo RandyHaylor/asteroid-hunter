@@ -108,6 +108,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 
 | D69 | **Enemies 3× bigger.** `ENEMY_SHIP_MODEL_SCALE` 3 → **9** (`enemyShipMesh.ts`). To keep combat/HUD consistent: **laser** enemy hit radius 12 → **36** (`laserFire.ts`, direct hits track the bigger hull); **condition-bar clearance** 9 → **27 m** (`enemyConditionBarsDisplay.ts`); **locked-preview camera** pulled back 3× (z 26 → 78) to frame the larger model. The **missile** proximity-detonation radius stays **12** (it must remain ≤ the 18 m explosion radius or the splash can't reach the hull). |
 
+| D70 | **Distinct enemy archetypes + visible enemy grapple.** (1) **Archetypes** (`enemyShipMesh.ts` now takes the behavior tier): three distinct looks — **Drone** (`dumbPatrol`, smallest, green, no pods/fins), **Raider** (`orbitStrafe`, sleek, twin swept pods + wing fins, amber), **Stalker** (`coverHunter`, bulky/armored, dorsal blade + plates, red). (2) **Grapple bundled into the archetype** (not the D68 per-wave scalar): `grappleStrengthForArchetype` — Drone 0, Raider 0.5, Stalker 1. Waves still escalate the archetype MIX (`composeWaveEnemyBehaviorTiers`: Drones 1–2, +Raiders 3+, +Stalkers 5+), so grapple ramps in naturally and a wave is a mix of distinct types with fixed ability combos. (3) **Visible enemy grapple** (`enemyGrappleBeamsDisplay.ts`, pooled): while an enemy is arcing, a toxic-green fuzzy ring around the enemy + a fuzzy ring around its asteroid + a connecting beam (mirrors the player's cyan grapple look); driven by `EnemyShip.grappledAsteroid` (set by the grapple weave), shown only while grappling. |
+
 ## Requirements from the design doc
 
 ### Rendering & physics

@@ -26,6 +26,7 @@ function makeEnemyShipAt(position: THREE.Vector3): EnemyShip {
     isDestroyed: false,
     renderObject: new THREE.Object3D(),
     grappleStrength: 0,
+    grappledAsteroid: null,
   }
 }
 

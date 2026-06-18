@@ -33,6 +33,9 @@ export type EnemyShip = {
   /** D68: ADDITIVE grapple ability layered on the behavior tier — 0 = cannot grapple, up to 1 = strong.
    *  Scales how often/long the enemy arcs (slingshots) off nearby asteroids during its normal behavior. */
   grappleStrength: number
+  /** D70: the asteroid this enemy is CURRENTLY grappling (null when not), so the render layer can draw
+   *  the visible grapple (fuzzy ring on the enemy + ring on the asteroid + connecting beam). */
+  grappledAsteroid: AsteroidBody | null
 }
 
 export type GameWorld = {

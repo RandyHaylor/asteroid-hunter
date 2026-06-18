@@ -121,6 +121,10 @@ describe('coverHunter tier', () => {
     // start near the hide point so it settles within the window below (D67 lowered the first-peek
     // interval to >=2.5 s, so the settle window must stay under that or a peek pulls it off-point)
     const hunterEnemy = createEnemyShip('coverHunter', new Vector3(275, 25, 0), gameScene)
+    // D70: isolate the cover-MOVEMENT logic — disable this enemy's (Stalker) grapple, which would
+    // otherwise latch the cover asteroid and arc instead of settling at the hide point. Grapple itself
+    // is covered separately in enemyGrapple.test.ts.
+    hunterEnemy.grappleStrength = 0
     const playerPosition = new Vector3(0, 0, 0)
     const coverAsteroid = makeTestAsteroid(new Vector3(200, 0, 0), 40)
     const asteroids = [coverAsteroid]

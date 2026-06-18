@@ -20,6 +20,7 @@ function makeTestEnemyShipAt(positionMeters: THREE.Vector3, isDestroyed = false)
     isDestroyed,
     renderObject: new THREE.Object3D(),
     grappleStrength: 0,
+    grappledAsteroid: null,
   }
 }
 

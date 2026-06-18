@@ -22,6 +22,7 @@ function makeTestEnemyShip(enemyShipId: number, positionMeters: Vector3): EnemyS
     isDestroyed: false,
     renderObject: new Object3D(),
     grappleStrength: 0,
+    grappledAsteroid: null,
   }
 }
 

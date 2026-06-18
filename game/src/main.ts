@@ -48,11 +48,11 @@ import {
   createEnemyFireIntent,
   createEnemyShip,
   updateEnemyShipBehavior,
-  computeEnemyGrappleStrengthForWave,
   type EnemyFireIntent,
 } from './enemies/enemyAlienShipBehavior'
 import { applyWeaponDamageToEnemyShip } from './enemies/enemyShipDamage'
 import { createEnemyConditionBarsDisplay } from './enemies/enemyConditionBarsDisplay'
+import { createEnemyGrappleBeamsDisplay } from './enemies/enemyGrappleBeamsDisplay'
 import { createPlayerShipCondition } from './player/playerShipCondition'
 import { createPlayerConditionDisplay } from './hud/playerConditionDisplay'
 import { createRadarSignatureTracker } from './radar/radarSignatureTracker'
@@ -349,6 +349,7 @@ window.addEventListener('resize', layoutGameRegions)
 const laserVolleySystem = createLaserVolleySystem(gameScene)
 const missileVolleySystem = createMissileVolleySystem(gameScene)
 const enemyConditionBarsDisplay = createEnemyConditionBarsDisplay(gameScene)
+const enemyGrappleBeamsDisplay = createEnemyGrappleBeamsDisplay(gameScene) // D70 (visible enemy grapples)
 const enemyTargetRings = createEnemyTargetRings(viewHudOverlay) // D49 (per-enemy red rotating rings)
 const aimingReticle = createAimingReticle(viewHudOverlay) // D49 (fixed center aim reticle)
 const shipWeaponCrosshair = createShipWeaponCrosshair(viewHudOverlay) // D52 (true weapon-bore marker)
@@ -589,15 +590,9 @@ type EnemyCombatTimers = {
 const enemyCombatTimersByShip = new WeakMap<EnemyShip, EnemyCombatTimers>()
 
 function spawnEnemiesForWave(waveNumber: number): void {
-  // D68: additive grapple ability escalates with the wave (layered on each enemy's behavior tier)
-  const waveGrappleStrength = computeEnemyGrappleStrengthForWave(waveNumber)
+  // D70: each archetype (behavior tier) carries its own grapple strength + look; waves escalate the MIX
   for (const behaviorTier of composeWaveEnemyBehaviorTiers(waveNumber)) {
-    const spawnedEnemy = createEnemyShip(
-      behaviorTier,
-      pickEnemySpawnPosition(scratchEnemySpawnPosition),
-      gameScene,
-      waveGrappleStrength,
-    )
+    const spawnedEnemy = createEnemyShip(behaviorTier, pickEnemySpawnPosition(scratchEnemySpawnPosition), gameScene)
     enemyCombatTimersByShip.set(spawnedEnemy, {
       nextLaserFireTimeSeconds: 0,
       nextMissileFireTimeSeconds: 0,
@@ -1104,6 +1099,8 @@ function syncRenderObjectsFromSimulation(): void {
     playerShipState.positionMeters,
     playerEngagementRange.combinedRadarWeaponRangeMeters,
   )
+  // D70: visible enemy grapples (fuzzy ring on enemy + asteroid + connecting beam, while grappling)
+  enemyGrappleBeamsDisplay.updateEnemyGrappleBeams(gameWorld.enemyShips)
 
   // D51: the center aim reticle turns red while actively locked onto a (visible) enemy
   aimingReticle.setEngaged(currentAutoAimTarget !== null)

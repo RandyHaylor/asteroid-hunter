@@ -85,14 +85,20 @@ const GRAPPLE_BASE_COOLDOWN_SECONDS = 5.0 // cooldown = base - scale*strength (s
 const GRAPPLE_COOLDOWN_SECONDS_PER_STRENGTH = 2.5
 
 /**
- * D68: escalating grapple strength by wave (a NEW axis alongside the behavior tier). Early waves have
- * no grapple; it ramps in as a weak then strong ability as waves progress. Pure + unit-tested.
+ * D70: grapple strength is now bundled into the ARCHETYPE (= behavior tier), not a per-wave scalar.
+ * Drone (dumbPatrol) never grapples; Raider (orbitStrafe) weak; Stalker (coverHunter) strong. Waves
+ * still escalate the MIX of archetypes (composeWaveEnemyBehaviorTiers), so grapple ramps in naturally.
  * @returns 0 (none), 0.5 (weak), or 1 (strong)
  */
-export function computeEnemyGrappleStrengthForWave(waveNumber: number): number {
-  if (waveNumber < 4) return 0
-  if (waveNumber < 7) return 0.5
-  return 1
+export function grappleStrengthForArchetype(behaviorTier: EnemyShipBehaviorTier): number {
+  switch (behaviorTier) {
+    case 'dumbPatrol':
+      return 0
+    case 'orbitStrafe':
+      return 0.5
+    case 'coverHunter':
+      return 1
+  }
 }
 
 type EnemyBehaviorInternalState = {
@@ -158,9 +164,9 @@ export function createEnemyShip(
   behaviorTier: EnemyShipBehaviorTier,
   spawnPositionMeters: Vector3,
   gameScene: Scene,
-  grappleStrength = 0, // D68: additive grapple ability (0 = none); set per wave by the caller
 ): EnemyShip {
-  const enemyShipMesh = createEnemyShipMesh()
+  // D70: the mesh look AND the grapple strength are both derived from the archetype (behavior tier)
+  const enemyShipMesh = createEnemyShipMesh(behaviorTier)
   enemyShipMesh.position.copy(spawnPositionMeters)
   gameScene.add(enemyShipMesh)
 
@@ -174,7 +180,8 @@ export function createEnemyShip(
     hitPointsRemaining: ENEMY_SHIP_MAX_HULL_POINTS,
     isDestroyed: false,
     renderObject: enemyShipMesh,
-    grappleStrength,
+    grappleStrength: grappleStrengthForArchetype(behaviorTier),
+    grappledAsteroid: null,
   }
 }
 
@@ -385,6 +392,7 @@ function updateEnemyGrappleWeave(
   deltaSeconds: number,
   cruiseSpeedMetersPerSecond: number,
 ): boolean {
+  enemyShip.grappledAsteroid = null // D70: cleared unless we end this frame actively arcing (set below)
   if (internalState.grappleCooldownSecondsRemaining > 0) {
     internalState.grappleCooldownSecondsRemaining -= deltaSeconds
   }
@@ -416,6 +424,7 @@ function updateEnemyGrappleWeave(
     )
     enemyShip.positionMeters.copy(scratchGrappleOutPosition)
     enemyShip.velocityMetersPerSecond.copy(scratchGrappleOutVelocity)
+    enemyShip.grappledAsteroid = grappleAsteroid // D70: drive the visible grapple beam/rings
     return true
   }
 
@@ -460,6 +469,7 @@ function updateEnemyGrappleWeave(
   )
   enemyShip.positionMeters.copy(scratchGrappleOutPosition)
   enemyShip.velocityMetersPerSecond.copy(scratchGrappleOutVelocity)
+  enemyShip.grappledAsteroid = latchAsteroid // D70: drive the visible grapple beam/rings
   return true
 }
 

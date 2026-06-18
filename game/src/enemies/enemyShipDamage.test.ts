@@ -20,6 +20,7 @@ function makeFreshEnemyShip(): EnemyShip {
     isDestroyed: false,
     renderObject: new Object3D(),
     grappleStrength: 0,
+    grappledAsteroid: null,
   }
 }
 
