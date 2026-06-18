@@ -1,10 +1,14 @@
-/* D67: locked-enemy 3D preview panel — sits under the THRUST button, hidden until an enemy is locked */
+/* D67/D68: locked-enemy 3D preview panel — pinned TOP-LEFT of the left GUI cluster, ABSOLUTELY
+   positioned so it is out of the flex flow and never reflows the THRUST button (which stays anchored
+   bottom-left). Hidden until an enemy is locked. */
 .lockedEnemyPreviewPanel {
+  position: absolute;
+  top: 0;
+  left: 0;
   display: none;
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  margin-top: 8px;
   padding: 5px 6px;
   border: 1px solid rgba(255, 70, 70, 0.5);
   border-radius: 8px;

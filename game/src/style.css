@@ -51,6 +51,12 @@ body {
   overflow: hidden;
 }
 
+/* D68: thrust button stays pinned to the BOTTOM of the left cluster (anchored bottom-left); the
+   locked-enemy preview is absolutely positioned top-left, so neither moves when a lock toggles. */
+.controlClusterLeft {
+  justify-content: flex-end;
+}
+
 /* ===== control widgets — clamp()/vmin sizing so they shrink to fit; flex never overlaps them ===== */
 
 /* D40/D54: steering is dragging the radar sphere (radarHud.css). The only flight control widget is

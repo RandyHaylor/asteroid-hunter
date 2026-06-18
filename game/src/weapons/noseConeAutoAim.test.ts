@@ -19,6 +19,7 @@ function makeTestEnemyShipAt(positionMeters: THREE.Vector3, isDestroyed = false)
     hitPointsRemaining: isDestroyed ? 0 : 30,
     isDestroyed,
     renderObject: new THREE.Object3D(),
+    grappleStrength: 0,
   }
 }
 

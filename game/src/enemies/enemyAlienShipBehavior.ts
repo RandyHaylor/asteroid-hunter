@@ -3,6 +3,7 @@ import type { Scene } from 'three'
 import type { AsteroidBody, EnemyShip, EnemyShipBehaviorTier } from '../gameSimulation/gameWorldTypes'
 import { weaponEngagementRanges } from '../gameSimulation/gameWorldTypes'
 import { isLineOfSightBlockedByAsteroids } from '../gameSimulation/lineOfSightProbe'
+import { computeOrbitStep } from '../grappleOrbit/computeOrbitStep'
 import { createEnemyShipMesh } from './enemyShipMesh'
 import { ENEMY_SHIP_MAX_HULL_POINTS, ENEMY_SHIP_MAX_SHIELD_POINTS } from './enemyShipDamage'
 
@@ -72,6 +73,28 @@ const ASTEROID_ATTACK_MISS_THRESHOLD_SECONDS = 3
 // It keeps attacking the rock while the player orbits, and for this long after the player stops.
 const ASTEROID_ATTACK_PERSIST_AFTER_ORBIT_SECONDS = 3
 
+// ---- D68: ADDITIVE enemy grapple ability (layered on every tier; never replaces tier behavior) ----
+// An enemy with grappleStrength > 0 periodically latches a nearby large asteroid and arcs (slingshots)
+// around it for a while, then releases keeping the tangential velocity — woven INTO its normal behavior
+// (it still aims/fires per its tier; facing is unaffected, like the player's grapple).
+const GRAPPLE_LATCH_MAX_CENTER_DISTANCE_METERS = 240 // must be at least this close to a large rock to latch
+const GRAPPLE_MIN_ORBIT_RADIUS_METERS = 30 // never latch tighter than this
+const GRAPPLE_BASE_ARC_SECONDS = 1.5 // arc duration = base + scale*strength (stronger = longer arcs)
+const GRAPPLE_ARC_SECONDS_PER_STRENGTH = 2.0
+const GRAPPLE_BASE_COOLDOWN_SECONDS = 5.0 // cooldown = base - scale*strength (stronger = grapples more often)
+const GRAPPLE_COOLDOWN_SECONDS_PER_STRENGTH = 2.5
+
+/**
+ * D68: escalating grapple strength by wave (a NEW axis alongside the behavior tier). Early waves have
+ * no grapple; it ramps in as a weak then strong ability as waves progress. Pure + unit-tested.
+ * @returns 0 (none), 0.5 (weak), or 1 (strong)
+ */
+export function computeEnemyGrappleStrengthForWave(waveNumber: number): number {
+  if (waveNumber < 4) return 0
+  if (waveNumber < 7) return 0.5
+  return 1
+}
+
 type EnemyBehaviorInternalState = {
   patrolWaypointMeters: Vector3
   hasPatrolWaypoint: boolean
@@ -88,6 +111,13 @@ type EnemyBehaviorInternalState = {
   secondsShootingWhilePlayerOrbiting: number
   asteroidAttackTarget: AsteroidBody | null
   asteroidAttackPersistSecondsRemaining: number
+  // D68: additive grapple-arc state (woven into the tier behavior)
+  isGrappling: boolean
+  grappleAsteroid: AsteroidBody | null
+  grappleOrbitAxisUnit: Vector3
+  grappleOrbitRadiusMeters: number
+  grappleArcSecondsRemaining: number
+  grappleCooldownSecondsRemaining: number
 }
 
 // per-enemy internal state lives outside the shared EnemyShip contract, keyed by the ship object
@@ -110,6 +140,12 @@ function getOrCreateInternalState(enemyShip: EnemyShip): EnemyBehaviorInternalSt
       secondsShootingWhilePlayerOrbiting: 0,
       asteroidAttackTarget: null,
       asteroidAttackPersistSecondsRemaining: 0,
+      isGrappling: false,
+      grappleAsteroid: null,
+      grappleOrbitAxisUnit: new Vector3(0, 1, 0),
+      grappleOrbitRadiusMeters: 0,
+      grappleArcSecondsRemaining: 0,
+      grappleCooldownSecondsRemaining: 0,
     }
     enemyShipInternalStates.set(enemyShip, internalState)
   }
@@ -122,6 +158,7 @@ export function createEnemyShip(
   behaviorTier: EnemyShipBehaviorTier,
   spawnPositionMeters: Vector3,
   gameScene: Scene,
+  grappleStrength = 0, // D68: additive grapple ability (0 = none); set per wave by the caller
 ): EnemyShip {
   const enemyShipMesh = createEnemyShipMesh()
   enemyShipMesh.position.copy(spawnPositionMeters)
@@ -137,6 +174,7 @@ export function createEnemyShip(
     hitPointsRemaining: ENEMY_SHIP_MAX_HULL_POINTS,
     isDestroyed: false,
     renderObject: enemyShipMesh,
+    grappleStrength,
   }
 }
 
@@ -166,6 +204,11 @@ const WORLD_ORIGIN = new Vector3(0, 0, 0)
 const scratchVectorToPlayer = new Vector3()
 const scratchVectorToAsteroidTarget = new Vector3() // D67: aim toward the orbited asteroid under attack
 const scratchNoseFacingDirection = new Vector3()
+// D68: grapple-weave scratch (latch geometry + orbit-step outputs)
+const scratchGrappleRadiusVector = new Vector3()
+const scratchGrappleAxis = new Vector3()
+const scratchGrappleOutPosition = new Vector3()
+const scratchGrappleOutVelocity = new Vector3()
 const scratchGoalPoint = new Vector3()
 const scratchDesiredVelocity = new Vector3()
 const scratchSteeringAcceleration = new Vector3()
@@ -232,8 +275,16 @@ export function updateEnemyShipBehavior(
   // long enough shooting at the (un-hittable) orbiting player. This OVERRIDES the tier's player aim.
   updateAsteroidAttackOverride(enemyShip, internalState, playerOrbitedAsteroid, deltaSeconds, outFireIntent)
 
+  // STEP 3.6 (D68): ADDITIVE grapple — if able, arc (slingshot) off a nearby asteroid woven into the
+  // tier behavior. While grappling, the arc controls position/velocity, so the normal steer is skipped.
+  const isGrapplingThisFrame = updateEnemyGrappleWeave(
+    enemyShip, internalState, asteroids, deltaSeconds, cruiseSpeedMetersPerSecond,
+  )
+
   // STEP 4: steer by target velocity toward the goal, thrust-limited like the player physics (R3/D12)
-  steerEnemyTowardGoalPoint(enemyShip, scratchGoalPoint, cruiseSpeedMetersPerSecond, deltaSeconds)
+  if (!isGrapplingThisFrame) {
+    steerEnemyTowardGoalPoint(enemyShip, scratchGoalPoint, cruiseSpeedMetersPerSecond, deltaSeconds)
+  }
 
   // STEP 5: face the player while shooting, otherwise face the travel direction
   if (outFireIntent.wantsToFireLaser || outFireIntent.wantsToFireMissile) {
@@ -317,6 +368,99 @@ function updateAsteroidAttackOverride(
   outFireIntent.wantsToFireMissile =
     distanceToAsteroidMeters >= MISSILE_MINIMUM_RANGE_METERS &&
     distanceToAsteroidMeters <= MISSILE_MAXIMUM_RANGE_METERS
+}
+
+// ---- D68: additive grapple weave ----
+
+/**
+ * If the enemy can grapple (grappleStrength > 0), periodically latch the nearest in-range large
+ * asteroid and arc around it (constant-speed kinematic circle via computeOrbitStep), then release
+ * keeping the tangential velocity. Returns true on a frame where the arc moved the ship (so the caller
+ * skips the normal steer step). Tier aim/fire and facing are unaffected — grapple is purely additive.
+ */
+function updateEnemyGrappleWeave(
+  enemyShip: EnemyShip,
+  internalState: EnemyBehaviorInternalState,
+  asteroids: readonly AsteroidBody[],
+  deltaSeconds: number,
+  cruiseSpeedMetersPerSecond: number,
+): boolean {
+  if (internalState.grappleCooldownSecondsRemaining > 0) {
+    internalState.grappleCooldownSecondsRemaining -= deltaSeconds
+  }
+  if (enemyShip.grappleStrength <= 0) {
+    internalState.isGrappling = false
+    return false
+  }
+
+  // already arcing — advance along the fixed circle, or release when done/lost
+  if (internalState.isGrappling) {
+    const grappleAsteroid = internalState.grappleAsteroid
+    internalState.grappleArcSecondsRemaining -= deltaSeconds
+    if (!grappleAsteroid || grappleAsteroid.isDestroyed || internalState.grappleArcSecondsRemaining <= 0) {
+      internalState.isGrappling = false
+      internalState.grappleAsteroid = null
+      internalState.grappleCooldownSecondsRemaining =
+        GRAPPLE_BASE_COOLDOWN_SECONDS - GRAPPLE_COOLDOWN_SECONDS_PER_STRENGTH * enemyShip.grappleStrength
+      return false // released — keep the (tangential) velocity; normal steer resumes next frame
+    }
+    computeOrbitStep(
+      enemyShip.positionMeters,
+      grappleAsteroid.positionMeters,
+      internalState.grappleOrbitAxisUnit,
+      internalState.grappleOrbitRadiusMeters,
+      cruiseSpeedMetersPerSecond,
+      deltaSeconds,
+      scratchGrappleOutPosition,
+      scratchGrappleOutVelocity,
+    )
+    enemyShip.positionMeters.copy(scratchGrappleOutPosition)
+    enemyShip.velocityMetersPerSecond.copy(scratchGrappleOutVelocity)
+    return true
+  }
+
+  // not arcing — try to latch the nearest live large asteroid within range (if off cooldown)
+  if (internalState.grappleCooldownSecondsRemaining > 0) return false
+  let latchAsteroid: AsteroidBody | null = null
+  let nearestDistanceMeters = Infinity
+  for (const asteroid of asteroids) {
+    if (asteroid.isDestroyed || asteroid.sizeClass !== 'large') continue
+    const distanceMeters = asteroid.positionMeters.distanceTo(enemyShip.positionMeters)
+    if (distanceMeters < nearestDistanceMeters) {
+      nearestDistanceMeters = distanceMeters
+      latchAsteroid = asteroid
+    }
+  }
+  if (!latchAsteroid || nearestDistanceMeters > GRAPPLE_LATCH_MAX_CENTER_DISTANCE_METERS) return false
+
+  // orbit axis = radius × velocity (perpendicular to radius → clean circle); fall back if degenerate
+  scratchGrappleRadiusVector.copy(enemyShip.positionMeters).sub(latchAsteroid.positionMeters)
+  scratchGrappleAxis.crossVectors(scratchGrappleRadiusVector, enemyShip.velocityMetersPerSecond)
+  if (scratchGrappleAxis.lengthSq() < 1e-9) scratchGrappleAxis.crossVectors(scratchGrappleRadiusVector, WORLD_UP_AXIS)
+  if (scratchGrappleAxis.lengthSq() < 1e-9) scratchGrappleAxis.crossVectors(scratchGrappleRadiusVector, WORLD_RIGHT_AXIS)
+  if (scratchGrappleAxis.lengthSq() < 1e-9) return false
+
+  internalState.grappleOrbitAxisUnit.copy(scratchGrappleAxis).normalize()
+  internalState.grappleOrbitRadiusMeters = Math.max(GRAPPLE_MIN_ORBIT_RADIUS_METERS, nearestDistanceMeters)
+  internalState.grappleAsteroid = latchAsteroid
+  internalState.isGrappling = true
+  internalState.grappleArcSecondsRemaining =
+    GRAPPLE_BASE_ARC_SECONDS + GRAPPLE_ARC_SECONDS_PER_STRENGTH * enemyShip.grappleStrength
+
+  // advance one step now so the motion is continuous from the latch frame
+  computeOrbitStep(
+    enemyShip.positionMeters,
+    latchAsteroid.positionMeters,
+    internalState.grappleOrbitAxisUnit,
+    internalState.grappleOrbitRadiusMeters,
+    cruiseSpeedMetersPerSecond,
+    deltaSeconds,
+    scratchGrappleOutPosition,
+    scratchGrappleOutVelocity,
+  )
+  enemyShip.positionMeters.copy(scratchGrappleOutPosition)
+  enemyShip.velocityMetersPerSecond.copy(scratchGrappleOutVelocity)
+  return true
 }
 
 // ---- shared movement ----

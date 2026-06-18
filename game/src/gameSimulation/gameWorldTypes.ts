@@ -30,6 +30,9 @@ export type EnemyShip = {
   hitPointsRemaining: number
   isDestroyed: boolean
   renderObject: Object3D
+  /** D68: ADDITIVE grapple ability layered on the behavior tier — 0 = cannot grapple, up to 1 = strong.
+   *  Scales how often/long the enemy arcs (slingshots) off nearby asteroids during its normal behavior. */
+  grappleStrength: number
 }
 
 export type GameWorld = {

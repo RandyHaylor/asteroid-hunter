@@ -25,6 +25,7 @@ function makeEnemyShipAt(position: THREE.Vector3): EnemyShip {
     hitPointsRemaining: 60,
     isDestroyed: false,
     renderObject: new THREE.Object3D(),
+    grappleStrength: 0,
   }
 }
 

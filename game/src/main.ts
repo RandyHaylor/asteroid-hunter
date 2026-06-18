@@ -48,6 +48,7 @@ import {
   createEnemyFireIntent,
   createEnemyShip,
   updateEnemyShipBehavior,
+  computeEnemyGrappleStrengthForWave,
   type EnemyFireIntent,
 } from './enemies/enemyAlienShipBehavior'
 import { applyWeaponDamageToEnemyShip } from './enemies/enemyShipDamage'
@@ -588,8 +589,15 @@ type EnemyCombatTimers = {
 const enemyCombatTimersByShip = new WeakMap<EnemyShip, EnemyCombatTimers>()
 
 function spawnEnemiesForWave(waveNumber: number): void {
+  // D68: additive grapple ability escalates with the wave (layered on each enemy's behavior tier)
+  const waveGrappleStrength = computeEnemyGrappleStrengthForWave(waveNumber)
   for (const behaviorTier of composeWaveEnemyBehaviorTiers(waveNumber)) {
-    const spawnedEnemy = createEnemyShip(behaviorTier, pickEnemySpawnPosition(scratchEnemySpawnPosition), gameScene)
+    const spawnedEnemy = createEnemyShip(
+      behaviorTier,
+      pickEnemySpawnPosition(scratchEnemySpawnPosition),
+      gameScene,
+      waveGrappleStrength,
+    )
     enemyCombatTimersByShip.set(spawnedEnemy, {
       nextLaserFireTimeSeconds: 0,
       nextMissileFireTimeSeconds: 0,

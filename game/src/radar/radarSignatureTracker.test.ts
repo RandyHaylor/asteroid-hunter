@@ -21,6 +21,7 @@ function makeTestEnemyShip(enemyShipId: number, positionMeters: Vector3): EnemyS
     hitPointsRemaining: 10,
     isDestroyed: false,
     renderObject: new Object3D(),
+    grappleStrength: 0,
   }
 }
 

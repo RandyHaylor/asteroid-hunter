@@ -5,12 +5,11 @@ The "take cover behind an asteroid" tractor mechanic is being **replaced** by a 
 grapple/slingshot system as the game's primary movement. New feel: ships always carry forward
 momentum (turning is "expensive"); you slingshot around asteroids to change direction fast. This
 swaps the movement model, the controls (throttle lever + strafe joystick → a single hold-to-thrust
-button), adds tappable asteroid-orbit icons around the radar rim, and gives enemies three escalating
-grapple tiers.
+button), adds tappable asteroid-orbit icons around the radar rim, and gives enemies an escalating
+grapple **ability** (an ADDITIONAL ability layered on their existing behaviors — never a replacement).
 
-Note: there is **no `new-grapple-mechanic-and-changes.md`** in the repo — this plan body is the
-source of truth. The mechanic spec lives in the confirmed decisions below plus the existing ledger
-`asteroid-hunter-requirements-spec.md` (D1–D53).
+Note: the original grapple spec is `new-grapple-mechanic-and-changes.md` (repo root, ~2.3 KB) plus
+this plan body and the ledger `asteroid-hunter-requirements-spec.md` (now **D1–D67**).
 
 **Confirmed decisions (carried + this session):**
 - Orbit and ship-facing are **fully independent** — latching/orbiting only moves position/velocity;
@@ -21,9 +20,31 @@ source of truth. The mechanic spec lives in the confirmed decisions below plus t
 - **Phased build, deploy after each phase.**
 - Orbit physics model = **kinematic arc** (locked radius, advance along circle at constant speed).
 - A **simple start screen** ("ASTEROID HUNTER" title + tagline + basic control instructions) is added.
-- Grapple-based auto-avoidance (fuzzy white deflection line) is out of scope.
+- Grapple-based auto-avoidance (fuzzy white deflection line) is a **planned upcoming feature** — the
+  ship's fuzzy ring (D66/D67, shown only while orbiting) is reserved for it — not in the phases below.
 
-## Grounded facts from exploration (paths verified)
+## STATUS (updated D68)
+- **Phase 1 — DONE & deployed (D54–D58):** constant-momentum model, thrust button, throttle/strafe
+  removal, cover system fully removed (`game/src/tractorCover/` no longer exists), start screen.
+- **Phase 2 — DONE & deployed (D60–D63):** radar rim asteroid-orbit icons, latch/orbit controller,
+  `computeOrbitStep` kinematic arc + slingshot.
+- **Beyond the plan (D64–D67):** sound/visual fixes, accel-based turning, movement tuning + left-edge
+  HUD, combined radar+weapon range, all-enemy target rings, bigger condition bars, cover-hunter
+  peek/advance + attack-the-orbited-asteroid, locked-enemy 3D preview, 3 upgrade choices.
+- **Remaining:** Phase 3 (additive enemy grapple ability) + the GUI no-reflow fix (below).
+- ⚠️ The **"Grounded facts" and per-Phase sections below are HISTORICAL (pre-D54 exploration notes).**
+  Their stat names (`maxThrustNewtons`/`maxForwardSpeedMetersPerSecond`/`throttleFraction`), physics
+  pipeline, and every `main.ts:NNN` / `:line` reference are **stale** — `main.ts` grew through D67.
+  For current state, read the code + `asteroid-hunter-requirements-spec.md` (D54–D67), not the line numbers here.
+
+## GUI no-reflow requirement (D68)
+HUD elements must **not move during play**. Specifically: the **locked-enemy targeted view** (the 3D
+preview + shield/hull, D67) belongs **top-left** of the player GUI area, and the **THRUST button stays
+anchored bottom-left** regardless of lock state. (Bug being fixed: the D67 preview was appended into the
+left control cluster's flow, shoving the thrust button down when an enemy locked.) Position the preview
+as its own fixed/absolute top-left element so it never reflows the thrust control.
+
+## Grounded facts from exploration (paths verified) — HISTORICAL, pre-D54 (see STATUS above)
 - `stepShipFlightSimulation` — `game/src/gameSimulation/newtonianShipPhysics.ts:85`; current pipeline:
   rotation → throttle-target velocity → thrust accel (gain 1.5/s, deadband 0.25 m/s) → integrate.
 - `ShipFlightControlInput = { pitchInput, yawInput, throttleFraction }` — same file `:17`.
@@ -48,7 +69,7 @@ source of truth. The mechanic spec lives in the confirmed decisions below plus t
 - `EnemyShipBehaviorTier = 'dumbPatrol' | 'orbitStrafe' | 'coverHunter'` (`gameWorldTypes.ts:20`);
   behavior in `enemies/enemyAlienShipBehavior.ts`; wave mapping `composeWaveEnemyBehaviorTiers` (`main.ts:488`).
 - Debug hooks exist as `(window as unknown as Record<string, unknown>).debugX = ...` (`main.ts:392,411,432,451,472`) — reuse this pattern for new verification hooks.
-- Build/test/deploy: `cd game; npx tsc --noEmit; npx vitest run; npm run dev` (vite :5173); deploy via README's gh-pages script.
+- Build/test/deploy: `cd game; npx tsc --noEmit; npx vitest run; npm run dev` (vite :5188); deploy via README's gh-pages script.
 
 ## Movement model (the core change — player AND enemies)
 - **Constant speed.** Velocity magnitude is held at a `cruiseSpeedMetersPerSecond` stat; seed
@@ -73,7 +94,7 @@ field from the type only if it has no remaining reader. Update all 3 literal sit
 
 ---
 
-## Phase 1 — Movement model + control swap + remove cover + start screen → deploy
+## Phase 1 — Movement model + control swap + remove cover + start screen → deploy  ✅ DONE (D54–D58)
 
 **Physics** (`newtonianShipPhysics.ts`): rewrite `stepShipFlightSimulation` to the constant-speed +
 thrust-steers-velocity model; replace `ShipFlightControlInput.throttleFraction` with
@@ -107,7 +128,7 @@ existing audio resume-on-first-gesture (`main.ts:283`).
 facing; radar drag rotates facing independently; no throttle/strafe UI; no cover grids; start screen
 shows then dismisses into Wave 1.
 
-## Phase 2 — Radar asteroid-orbit icons + latch/slingshot → deploy
+## Phase 2 — Radar asteroid-orbit icons + latch/slingshot → deploy  ✅ DONE (D60–D63)
 
 **Radar rim icons** (new `game/src/radar/asteroidOrbitIcons.ts` + CSS, mounted on `radarControlZone`
 by `radarSphereDisplay.ts`): each frame, for asteroids within an outer range, place a DOM icon on the
@@ -132,22 +153,26 @@ deterministic verification.
 the ship arcs around it (facing stays drag-controlled); release flings tangentially; hold>1s releases on
 lift; tapping another switches target.
 
-## Phase 3 — Three enemy grapple tiers → deploy
+## Phase 3 — Additive enemy grapple ability → deploy  ⬜ TODO
 
-Enemies adopt the same constant-momentum model. Repurpose the existing three `EnemyShipBehaviorTier`s
-(`gameWorldTypes.ts:20`, `enemies/enemyAlienShipBehavior.ts`) into grapple tiers (rename or remap the
-three string literals; update `composeWaveEnemyBehaviorTiers` `main.ts:488` to map waves to the new tiers):
-- **Tier 1**: steers OK, **no grapple** (straight momentum + turning only).
-- **Tier 2**: steers a little + **weak grapple** (gentle asteroid arcs; hard to auto-track during grapple).
-- **Tier 3**: **fast + strong grapple, weak turning**.
+Grapple is an **ADDITIONAL ability layered on top of the existing enemy behaviors** — NOT a replacement
+for them. The existing `EnemyShipBehaviorTier`s (`dumbPatrol`/`orbitStrafe`/`coverHunter`) keep doing
+what they do (patrol, circle-strafe, hide/peek/advance, plus the D67 attack-the-orbited-asteroid
+behavior); enemies simply *gain* a grapple capability that escalates by level and is used **during**
+their normal behavior (e.g. an orbit-strafer can hook an asteroid to swing its strafe arc):
+- **Grapple level 0/none**: behaves exactly as today, no grapple.
+- **Grapple level 1 (weak)**: gentle asteroid arcs woven into its normal movement; harder to auto-track while arcing.
+- **Grapple level 2 (strong)**: fast, hard arcs/slingshots; trade-off of weaker turning while grappling.
 
-Parameterize per tier: `turnRate`, `canGrapple`/`grappleStrength`, `cruiseSpeed`. Reuse `computeOrbitStep`
-from Phase 2 for enemy grapples. Confirm player auto-aim lead/track (`rotatePlayerShipTowardAimGoal` `:857`,
-`enemyTrackTurnRateRadiansPerSecond`) still works against grappling enemies — hard, not impossible, to lock.
-Add a per-tier params unit test.
+Add per-enemy grapple params (`canGrapple`/`grappleStrength`, plus optional `turnRate`/`cruiseSpeed`
+modifiers) as a NEW axis alongside the existing tier — do **not** rename/remove the existing tier
+literals or their behaviors. Reuse `computeOrbitStep` for enemy grapples, and update the wave
+composition to assign escalating grapple levels as waves progress. Confirm player auto-aim lead/track
+still works against grappling enemies — hard, not impossible, to lock.
+Add a per-level grapple-params unit test.
 
-**Verify (deploy + playwright)**: observe the three tiers — one never grapples, one weakly arcs, one fast
-with strong arcs; confirm grappling enemies are harder to keep locked.
+**Verify (deploy + playwright)**: observe enemies retaining their normal behavior while some now arc
+off asteroids — none / weak arcs / strong arcs by level; confirm grappling enemies are harder to keep locked.
 
 ---
 
@@ -161,7 +186,7 @@ with strong arcs; confirm grappling enemies are harder to keep locked.
 ## Verification (per phase)
 - `cd game && npx tsc --noEmit` clean; `npx vitest run` green (new pure helpers covered: momentum/thrust
   step, orbit step, enemy-tier params).
-- Playwright against `npm run dev` (`:5173`); use/extend the `(window as ...).debugX` hooks to force-latch
+- Playwright against `npm run dev` (`:5188`); use/extend the `(window as ...).debugX` hooks to force-latch
   / place asteroids and verify orbit + slingshot deterministically.
 - Manual on-device feel pass after each deploy (thrust curve rate, orbit tightness, enemy difficulty) —
   all tuning constants, easy to adjust.

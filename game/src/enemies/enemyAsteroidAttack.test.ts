@@ -18,6 +18,7 @@ function makeEnemyShip(positionMeters: Vector3): EnemyShip {
     hitPointsRemaining: ENEMY_SHIP_MAX_HULL_POINTS,
     isDestroyed: false,
     renderObject: new Object3D(),
+    grappleStrength: 0,
   }
 }
 
