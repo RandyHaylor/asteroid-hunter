@@ -31,7 +31,9 @@ this plan body and the ledger `asteroid-hunter-requirements-spec.md` (now **D1�
 - **Beyond the plan (D64–D67):** sound/visual fixes, accel-based turning, movement tuning + left-edge
   HUD, combined radar+weapon range, all-enemy target rings, bigger condition bars, cover-hunter
   peek/advance + attack-the-orbited-asteroid, locked-enemy 3D preview, 3 upgrade choices.
-- **Remaining:** Phase 3 (additive enemy grapple ability) + the GUI no-reflow fix (below).
+- **Phase 3 — DONE & deployed (D68/D70):** additive enemy grapple ability + distinct archetypes (Drone/Raider/Stalker) with own looks + visible enemy grapple beams; the GUI no-reflow fix shipped (D68).
+- **Also since:** enemies 3× bigger (D69), player collision-avoidance pushback (D71).
+- **Remaining:** nothing queued — feature roadmap (Phases 1–3) complete; further work is tuning/new requests.
 - ⚠️ The **"Grounded facts" and per-Phase sections below are HISTORICAL (pre-D54 exploration notes).**
   Their stat names (`maxThrustNewtons`/`maxForwardSpeedMetersPerSecond`/`throttleFraction`), physics
   pipeline, and every `main.ts:NNN` / `:line` reference are **stale** — `main.ts` grew through D67.
@@ -153,7 +155,7 @@ deterministic verification.
 the ship arcs around it (facing stays drag-controlled); release flings tangentially; hold>1s releases on
 lift; tapping another switches target.
 
-## Phase 3 — Additive enemy grapple ability → deploy  ⬜ TODO
+## Phase 3 — Additive enemy grapple ability → deploy  ✅ DONE (D68/D70)
 
 Grapple is an **ADDITIONAL ability layered on top of the existing enemy behaviors** — NOT a replacement
 for them. The existing `EnemyShipBehaviorTier`s (`dumbPatrol`/`orbitStrafe`/`coverHunter`) keep doing

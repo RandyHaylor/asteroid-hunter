@@ -9,7 +9,6 @@ import {
 import {
   type AsteroidBody,
   type EnemyShip,
-  type EnemyShipBehaviorTier,
   type GameWorld,
 } from './gameSimulation/gameWorldTypes'
 import { easeShipIntoFieldEdgeOrbit } from './gameSimulation/boundedPlayAreaSoftEdge'
@@ -51,6 +50,7 @@ import {
   type EnemyFireIntent,
 } from './enemies/enemyAlienShipBehavior'
 import { applyWeaponDamageToEnemyShip } from './enemies/enemyShipDamage'
+import { composeWaveEnemyBehaviorTiers } from './enemies/waveEnemyComposition'
 import { createEnemyConditionBarsDisplay } from './enemies/enemyConditionBarsDisplay'
 import { createEnemyGrappleBeamsDisplay } from './enemies/enemyGrappleBeamsDisplay'
 import { createPlayerShipCondition } from './player/playerShipCondition'
@@ -611,17 +611,6 @@ let currentWaveNumber = 1
 let currentWavePhase: WavePhase = 'waveIntro'
 let wavePhaseCountdownSeconds = 2.5
 
-function composeWaveEnemyBehaviorTiers(waveNumber: number): EnemyShipBehaviorTier[] {
-  // D8: early waves are only dumb patrol; orbit-strafers then cover-hunters mix in as waves progress
-  const behaviorTiers: EnemyShipBehaviorTier[] = []
-  const dumbPatrolCount = waveNumber <= 2 ? 2 + waveNumber : 2
-  const orbitStrafeCount = waveNumber >= 3 ? Math.min(5, waveNumber - 1) : 0
-  const coverHunterCount = waveNumber >= 5 ? Math.min(5, waveNumber - 4) : 0
-  for (let count = 0; count < dumbPatrolCount; count++) behaviorTiers.push('dumbPatrol')
-  for (let count = 0; count < orbitStrafeCount; count++) behaviorTiers.push('orbitStrafe')
-  for (let count = 0; count < coverHunterCount; count++) behaviorTiers.push('coverHunter')
-  return behaviorTiers
-}
 
 const scratchEnemySpawnPosition = new THREE.Vector3()
 
