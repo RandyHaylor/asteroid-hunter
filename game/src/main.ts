@@ -58,6 +58,11 @@ import { createPlayerConditionDisplay } from './hud/playerConditionDisplay'
 import { createRadarSignatureTracker } from './radar/radarSignatureTracker'
 import { createRadarSphereDisplay } from './radar/radarSphereDisplay'
 import { createGrappleOrbitController } from './grappleOrbit/grappleOrbitController'
+import {
+  findNearestAvoidanceAsteroid,
+  computeAvoidanceProximityFraction,
+  applyAvoidancePushback,
+} from './grappleOrbit/playerAsteroidAvoidance'
 import { createAsteroidOrbitIcons } from './radar/asteroidOrbitIcons'
 import { createTouchFlightControls } from './hud/touchFlightControls'
 import { createPlayerCameraRig } from './hud/cameraChaseAndCockpit'
@@ -300,8 +305,58 @@ const shipFuzzyRing = new THREE.Sprite(
   }),
 )
 shipFuzzyRing.scale.set(SHIP_FUZZY_RING_DIAMETER_METERS, SHIP_FUZZY_RING_DIAMETER_METERS, 1)
-shipFuzzyRing.visible = false // D67: shown only while orbiting (toggled in the tractor-beam block)
+shipFuzzyRing.visible = false // D67: shown while orbiting; D71: also while avoidance is engaged
 gameScene.add(shipFuzzyRing)
+
+// D71: collision-avoidance deflection visuals — a fuzzy WHITE ring on the approaching asteroid + a
+// white beam to the player ring, both fading in by proximity. Distinct white (vs the cyan orbit grapple).
+function createWhiteFuzzyRingTexture(): THREE.CanvasTexture {
+  const textureSizePixels = 128
+  const ringCanvas = document.createElement('canvas')
+  ringCanvas.width = textureSizePixels
+  ringCanvas.height = textureSizePixels
+  const drawContext = ringCanvas.getContext('2d') as CanvasRenderingContext2D
+  const centerPixels = textureSizePixels / 2
+  const radialGradient = drawContext.createRadialGradient(
+    centerPixels, centerPixels, textureSizePixels * 0.4,
+    centerPixels, centerPixels, textureSizePixels * 0.5,
+  )
+  radialGradient.addColorStop(0, 'rgba(255, 255, 255, 0)')
+  radialGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.9)')
+  radialGradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
+  drawContext.fillStyle = radialGradient
+  drawContext.fillRect(0, 0, textureSizePixels, textureSizePixels)
+  return new THREE.CanvasTexture(ringCanvas)
+}
+const avoidanceDeflectionRing = new THREE.Sprite(
+  new THREE.SpriteMaterial({
+    map: createWhiteFuzzyRingTexture(),
+    color: 0xffffff,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  }),
+)
+avoidanceDeflectionRing.visible = false
+gameScene.add(avoidanceDeflectionRing)
+const avoidanceDeflectionBeam = new THREE.Mesh(
+  new THREE.CylinderGeometry(1, 1, 1, 8, 1, true),
+  new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.6,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  }),
+)
+avoidanceDeflectionBeam.visible = false
+gameScene.add(avoidanceDeflectionBeam)
+const AVOIDANCE_DEFLECTION_BEAM_RADIUS_METERS = 0.8
+const scratchAvoidanceBeamDelta = new THREE.Vector3()
+const scratchAvoidanceBeamDirection = new THREE.Vector3()
+// D71: render state set each sim step by updatePlayerMovement, consumed by the render sync
+let avoidanceTargetAsteroid: import('./gameSimulation/gameWorldTypes').AsteroidBody | null = null
+let avoidanceProximityFraction = 0
 
 const playerShipCondition = createPlayerShipCondition()
 // D35/D37: interactive controls go in two flex clusters inside the margin overlay (left + right);
@@ -1017,6 +1072,32 @@ function updatePlayerMovement(deltaSeconds: number): void {
       radarIsSteeringDrag,
     )
   }
+
+  // D71: distance-based collision avoidance. Find the nearest close asteroid (excluding the one being
+  // orbited), ramp by proximity. In FREE FLIGHT, steer the velocity outward (constant speed) — stronger
+  // the closer it is. While ORBITING, the orbit controls motion, so we only record the state for the
+  // deflection visuals. The render state below drives the white deflection ring + beam + player ring.
+  const orbitedAsteroidForAvoidance = grappleOrbitController.getLatchedAsteroid()
+  const nearestAvoidance = findNearestAvoidanceAsteroid(
+    playerShipState.positionMeters,
+    gameWorld.asteroids,
+    orbitedAsteroidForAvoidance,
+  )
+  if (nearestAvoidance) {
+    avoidanceTargetAsteroid = nearestAvoidance.asteroid
+    avoidanceProximityFraction = computeAvoidanceProximityFraction(nearestAvoidance.surfaceDistanceMeters)
+    if (!grappleOrbitController.isLatched() && avoidanceProximityFraction > 0) {
+      applyAvoidancePushback(
+        playerShipState.positionMeters,
+        avoidanceTargetAsteroid.positionMeters,
+        avoidanceProximityFraction,
+        deltaSeconds,
+      )
+    }
+  } else {
+    avoidanceTargetAsteroid = null
+    avoidanceProximityFraction = 0
+  }
 }
 
 // ===== STEP 9: fixed-timestep simulation loop =====
@@ -1140,13 +1221,48 @@ function syncRenderObjectsFromSimulation(): void {
     const ringDiameterMeters = orbitedAsteroid.currentRadiusMeters * 3
     orbitTargetFuzzyRing.scale.set(ringDiameterMeters, ringDiameterMeters, 1)
     orbitTargetFuzzyRing.visible = true
-    shipFuzzyRing.visible = true // D67: ship ring shows ONLY while the tractor beam is engaged (orbiting)
+    shipFuzzyRing.visible = true // D67: ship ring shows while the tractor beam is engaged (orbiting)
+    shipFuzzyRing.material.opacity = 1
   } else {
     tractorBeamMesh.visible = false
     orbitTargetFuzzyRing.visible = false
-    shipFuzzyRing.visible = false // D67: hidden when not orbiting (was always-on in D66)
+    shipFuzzyRing.visible = false // D67: hidden when not orbiting (D71 may re-show it faded for avoidance below)
   }
   radarSphereDisplay.setOrbitTargetMarker(orbitedAsteroid ? orbitedAsteroid.positionMeters : null, playerShipState)
+
+  // D71: collision-avoidance deflection visuals — white fuzzy ring on the approaching asteroid + a white
+  // beam to the player ring, fading in by proximity. When NOT orbiting, also fade the player ring in.
+  if (avoidanceTargetAsteroid && avoidanceProximityFraction > 0 && !avoidanceTargetAsteroid.isDestroyed) {
+    const deflectionFade = avoidanceProximityFraction
+    const deflectionRingDiameterMeters = avoidanceTargetAsteroid.currentRadiusMeters * 3
+    avoidanceDeflectionRing.position.copy(avoidanceTargetAsteroid.positionMeters)
+    avoidanceDeflectionRing.scale.set(deflectionRingDiameterMeters, deflectionRingDiameterMeters, 1)
+    avoidanceDeflectionRing.material.opacity = deflectionFade
+    avoidanceDeflectionRing.visible = true
+
+    scratchAvoidanceBeamDelta.subVectors(avoidanceTargetAsteroid.positionMeters, playerShipMesh.position)
+    const avoidanceBeamLengthMeters = scratchAvoidanceBeamDelta.length()
+    if (avoidanceBeamLengthMeters > 1e-3) {
+      avoidanceDeflectionBeam.position.copy(playerShipMesh.position).addScaledVector(scratchAvoidanceBeamDelta, 0.5)
+      avoidanceDeflectionBeam.scale.set(
+        AVOIDANCE_DEFLECTION_BEAM_RADIUS_METERS,
+        avoidanceBeamLengthMeters,
+        AVOIDANCE_DEFLECTION_BEAM_RADIUS_METERS,
+      )
+      scratchAvoidanceBeamDirection.copy(scratchAvoidanceBeamDelta).divideScalar(avoidanceBeamLengthMeters)
+      avoidanceDeflectionBeam.quaternion.setFromUnitVectors(CYLINDER_LOCAL_UP_AXIS, scratchAvoidanceBeamDirection)
+      ;(avoidanceDeflectionBeam.material as THREE.MeshBasicMaterial).opacity = 0.6 * deflectionFade
+      avoidanceDeflectionBeam.visible = true
+    }
+    // show the player ring (faded) when avoidance is engaged in free flight (orbiting already shows it full)
+    if (!shipFuzzyRing.visible) {
+      shipFuzzyRing.visible = true
+      shipFuzzyRing.material.opacity = deflectionFade
+    }
+  } else {
+    avoidanceDeflectionRing.visible = false
+    avoidanceDeflectionBeam.visible = false
+  }
 
   // D66: left-edge status — speed-upgrade level (current cruise speed over the full-scale reference)
   // and the missile charge meter (1 = recharged/ready). Laser bar was removed in D66.
