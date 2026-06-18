@@ -7,8 +7,9 @@ import * as THREE from 'three'
 const ALIEN_HULL_COLOR = 0x3a2a3a
 const ALIEN_TOXIC_GLOW_COLOR = 0x66ff44
 
-// D56: enemy models are 3× the ~5 m base build so they're clearly visible against the player dart.
-export const ENEMY_SHIP_MODEL_SCALE = 3
+// D56: enemy models are scaled up from the ~5 m base build so they're clearly visible vs the player dart.
+// D69: 3× bigger again (3 → 9) per request — hit radius + bar clearance + preview framing scale to match.
+export const ENEMY_SHIP_MODEL_SCALE = 9
 
 export function createEnemyShipMesh(): THREE.Group {
   const enemyShipGroup = new THREE.Group()

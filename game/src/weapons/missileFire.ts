@@ -57,7 +57,11 @@ type ActiveExplosionFireball = {
   maxRadiusMeters: number
 }
 
-const ENEMY_SHIP_HIT_RADIUS_METERS = 12 // D56: 3× to match the enlarged enemy model
+// D69: NOT scaled with the 3×-bigger model — this is the missile's proximity-detonation distance, and
+// it must stay ≤ the explosion radius (18 m) or the missile detonates too far out for its splash to
+// reach the hull. Lasers (direct hits, no splash) use the bigger 36 m radius; missiles fly in and
+// detonate inside the now-larger hull, where the splash still damages.
+const ENEMY_SHIP_HIT_RADIUS_METERS = 12
 const PLAYER_SHIP_HIT_RADIUS_METERS = 3
 /** R9: no hard range cap, but stray missiles eventually clean themselves up */
 const MISSILE_LIFETIME_SECONDS = 25

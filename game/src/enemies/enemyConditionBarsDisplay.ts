@@ -13,7 +13,7 @@ import {
 const BAR_WIDTH_METERS = 11 // D67: bigger (was 7) — easier to read
 const BAR_HEIGHT_METERS = 0.9 // D67: bigger (was 0.55)
 const BAR_VERTICAL_GAP_METERS = 0.4 // D67: bigger gap to match (was 0.3)
-const BARS_OFFSET_ABOVE_SHIP_METERS = 9 // D56: clear the now-3×-larger enemy model
+const BARS_OFFSET_ABOVE_SHIP_METERS = 27 // D69: raised (9 → 27) to clear the now-3×-bigger enemy model
 // D46: keep the bars a CONSTANT on-screen size regardless of distance — world size is scaled by
 // distanceToCamera / this reference, so a far enemy's bars stay just as large as a near one's.
 const BARS_REFERENCE_DISTANCE_METERS = 90

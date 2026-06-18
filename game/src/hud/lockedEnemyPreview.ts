@@ -50,7 +50,7 @@ export function createLockedEnemyPreview(parentElement: HTMLElement): LockedEnem
   // tiny isolated scene: model + lights + a framing camera
   const previewScene = new THREE.Scene()
   const previewCamera = new THREE.PerspectiveCamera(40, 1, 0.1, 1000)
-  previewCamera.position.set(0, 6, 26)
+  previewCamera.position.set(0, 18, 78) // D69: pulled back 3× to frame the now-3×-bigger enemy model
   previewCamera.lookAt(0, 0, 0)
   previewScene.add(new THREE.AmbientLight(0xffffff, 0.7))
   const keyLight = new THREE.DirectionalLight(0xffffff, 1.1)
