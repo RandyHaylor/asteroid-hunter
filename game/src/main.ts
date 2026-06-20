@@ -585,7 +585,10 @@ window.addEventListener('keydown', (keyboardEvent) => {
 const cameraViewToggleButton = document.createElement('button')
 cameraViewToggleButton.className = 'cameraViewToggleButton'
 cameraViewToggleButton.textContent = 'VIEW: CHASE'
-viewHudOverlay.appendChild(cameraViewToggleButton)
+// D78: first-person (cockpit) view is PINNED for later — it isn't fully compatible with the newer
+// features yet. The button + its toggle logic + the KeyC shortcut stay in code; we just don't mount
+// the button in the UI. Re-add this appendChild to bring it back.
+// viewHudOverlay.appendChild(cameraViewToggleButton)
 
 function toggleCameraView(): void {
   const newViewMode = playerCameraRig.toggleCameraViewMode()

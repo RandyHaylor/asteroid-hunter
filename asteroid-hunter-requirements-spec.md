@@ -124,6 +124,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 
 | D77 | **AI-mode UI polish + landscape control consolidation.** (1) **Landscape layout**: ship view LEFT, radar middle, **all controls (manual + AI) in a strip on the RIGHT** (was: controls on the left). (2) **AI settings panel** now covers the **whole radar region** (`inset:0`, was a tiny 320px corner box) and sits **above** the radar rim asteroid icons (panel z-index 6 > icons 3 — icons render under it). (3) **EXIT AI PILOT** button added top-left by the "⌄" caret (blocked during the forced wave-3). (4) **Manual-controls block overlay**: while AI mode is on, a slight translucent overlay over the left control cluster blocks + dims the manual controls (still visible) whether the settings panel is shown or hidden. (5) **Selected-asteroid highlight strengthened**: orbit-target ring brighter (`0xccf6ff`), bigger (×3.4), and gently pulsing — it was hard to see. Verified in a landscape headless run (controls right, panel covers radar, exit+block present, no console errors). |
 
+| D78 | **First-person (cockpit) view button hidden — pinned for later.** The cockpit/chase camera view isn't fully compatible with the newer features yet, so the `cameraViewToggleButton` ("VIEW: CHASE/COCKPIT") is **no longer mounted in the UI** (the `appendChild` is commented out in `main.ts`). The button object, its `toggleCameraView` handler, the cockpit frame overlay, and the KeyC shortcut all **remain in code** — re-adding the one `appendChild` restores it. |
+
 ## Requirements from the design doc
 
 ### Rendering & physics
