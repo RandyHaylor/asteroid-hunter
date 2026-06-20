@@ -20,20 +20,17 @@ describe('composeWaveEnemyBehaviorTiers (D72)', () => {
     expect(countByTier(5).stalkers).toBeGreaterThan(0)
   })
 
-  it('spawns ~3× the original roster (original w5 was 2+4+1=7 → now 21)', () => {
-    // original formula: drones 2, raiders min(5,4)=4, stalkers min(5,1)=1 → 7; ×3 = 21
-    expect(countByTier(5).total).toBe(21)
+  it('keeps the swarm SMALL — counts ramp gently (D73), not the steep D72 3×', () => {
+    // gentle: ~+1 of a tier every couple of waves. w5 stays a handful (was 21 under the D72 3×).
+    expect(countByTier(5).total).toBeLessThanOrEqual(8)
+    // grows over a few waves rather than per-wave-monotonic (steps every 2 waves)
+    expect(countByTier(5).total).toBeGreaterThan(countByTier(3).total)
+    expect(countByTier(7).total).toBeGreaterThan(countByTier(5).total)
   })
 
-  it('keeps ramping with the wave (no early plateau) deep past the old min(5) cap', () => {
-    // the old roster plateaued at wave ~6 (raiders+stalkers capped at 5 each); now it keeps growing
-    expect(countByTier(9).total).toBeGreaterThan(countByTier(6).total)
-    expect(countByTier(6).total).toBeGreaterThan(countByTier(5).total)
-  })
-
-  it('caps each tier at the perf ceiling (30) at very high waves', () => {
+  it('caps each tier at the perf ceiling (8) at very high waves', () => {
     const veryHigh = countByTier(100)
-    expect(veryHigh.raiders).toBe(30)
-    expect(veryHigh.stalkers).toBe(30)
+    expect(veryHigh.raiders).toBe(8)
+    expect(veryHigh.stalkers).toBe(8)
   })
 })

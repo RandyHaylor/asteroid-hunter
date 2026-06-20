@@ -1,18 +1,24 @@
 import type { EnemyShipBehaviorTier } from '../gameSimulation/gameWorldTypes'
 
-// D8/D72: the per-wave enemy roster. Archetype MIX escalates (Drones from wave 1, Raiders from wave 3,
-// Stalkers from wave 5). D72: spawns ~3× as many enemies and KEEPS RAMPING with the wave — the old
-// min(5) plateau is lifted to a high ceiling, so difficulty keeps scaling instead of flattening out.
-const ENEMY_COUNT_PER_WAVE_MULTIPLIER = 3 // D72: 3× more enemies per wave than the original roster
-const PER_TIER_COUNT_CEILING = 30 // perf safety valve — far above the old min(5) so it ramps for many waves
+// D8/D73: the per-wave enemy roster. Difficulty is driven mainly by the harder ARCHETYPE MIX escalating
+// (Drones from wave 1, Raiders from wave 3, Stalkers from wave 5 — Raiders/Stalkers grapple and are
+// tougher). Raw COUNT grows only GENTLY per wave (D73 walked back D72's 3× spawn, which was too steep);
+// roughly +1 of a tier every couple of waves, capped, so the swarm size creeps up rather than exploding.
+const DRONE_COUNT_AFTER_EARLY_WAVES = 3
+const PER_TIER_GENTLE_RAMP_WAVES_PER_EXTRA = 2 // ~+1 enemy of a tier every 2 waves
+const PER_TIER_COUNT_CEILING = 8
 
 export function composeWaveEnemyBehaviorTiers(waveNumber: number): EnemyShipBehaviorTier[] {
   const behaviorTiers: EnemyShipBehaviorTier[] = []
-  const dumbPatrolCount = (waveNumber <= 2 ? 2 + waveNumber : 2) * ENEMY_COUNT_PER_WAVE_MULTIPLIER
+  const dumbPatrolCount = waveNumber <= 2 ? 2 + waveNumber : DRONE_COUNT_AFTER_EARLY_WAVES
   const orbitStrafeCount =
-    waveNumber >= 3 ? Math.min(PER_TIER_COUNT_CEILING, (waveNumber - 1) * ENEMY_COUNT_PER_WAVE_MULTIPLIER) : 0
+    waveNumber >= 3
+      ? Math.min(PER_TIER_COUNT_CEILING, Math.ceil((waveNumber - 2) / PER_TIER_GENTLE_RAMP_WAVES_PER_EXTRA))
+      : 0
   const coverHunterCount =
-    waveNumber >= 5 ? Math.min(PER_TIER_COUNT_CEILING, (waveNumber - 4) * ENEMY_COUNT_PER_WAVE_MULTIPLIER) : 0
+    waveNumber >= 5
+      ? Math.min(PER_TIER_COUNT_CEILING, Math.ceil((waveNumber - 4) / PER_TIER_GENTLE_RAMP_WAVES_PER_EXTRA))
+      : 0
   for (let count = 0; count < dumbPatrolCount; count++) behaviorTiers.push('dumbPatrol')
   for (let count = 0; count < orbitStrafeCount; count++) behaviorTiers.push('orbitStrafe')
   for (let count = 0; count < coverHunterCount; count++) behaviorTiers.push('coverHunter')

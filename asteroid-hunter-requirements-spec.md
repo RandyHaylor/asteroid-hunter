@@ -114,6 +114,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 
 | D72 | **3× more enemies per wave + continued ramp.** Wave roster extracted to a pure, unit-tested module `enemies/waveEnemyComposition.ts` (was an inline `main.ts` fn). `ENEMY_COUNT_PER_WAVE_MULTIPLIER = 3` (≈3× the prior roster), and the old `min(5)` per-tier plateau is lifted to `PER_TIER_COUNT_CEILING = 30` so difficulty keeps scaling with the wave instead of flattening. Archetype-mix gating unchanged (Drones w1+, Raiders w3+, Stalkers w5+). (Perf note: high waves can reach ~60 enemies — the ceiling is a tunable safety valve.) |
 
+| D73 | **Gentle enemy-count ramp (walks back D72's 3×).** D72's ×3 spawn was too steep now that archetypes are harder. `waveEnemyComposition.ts`: counts grow **gently** — Drones settle at 3, Raiders/Stalkers gain ~+1 every 2 waves (`Math.ceil((wave-2)/2)` / `(wave-4)/2`), capped at **8** per tier. Difficulty now comes mainly from the escalating **archetype mix** (Raiders w3+, Stalkers w5+ grapple + are tougher), not swarm size. (Enemy 3× SIZE, D69, is unchanged.) [unit-tested] |
+
 ## Requirements from the design doc
 
 ### Rendering & physics
