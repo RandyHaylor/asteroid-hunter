@@ -51,7 +51,17 @@ function addSliderRow(
   parent.appendChild(row)
 }
 
-export function createShipAutopilotSettingsPanel(parentElement: HTMLElement): ShipAutopilotSettingsPanel {
+export function createShipAutopilotSettingsPanel(
+  parentElement: HTMLElement,
+  onExitAiPilot: () => void,
+): ShipAutopilotSettingsPanel {
+  // EXIT AI PILOT button (top, by the caret) — leaves AI mode back to manual flight (D77)
+  const exitAiPilotButton = document.createElement('button')
+  exitAiPilotButton.className = 'aiExitPilotButton'
+  exitAiPilotButton.textContent = 'EXIT AI PILOT'
+  exitAiPilotButton.addEventListener('click', onExitAiPilot)
+  parentElement.appendChild(exitAiPilotButton)
+
   // caret toggle (top-right of the controls) — show/hide the panel while in AI mode
   const caretToggleButton = document.createElement('button')
   caretToggleButton.className = 'aiSettingsCaretToggle'
@@ -136,6 +146,7 @@ export function createShipAutopilotSettingsPanel(parentElement: HTMLElement): Sh
     const showPanel = isAiModeActive && isPanelExpanded
     panel.classList.toggle('aiSettingsPanelVisible', showPanel)
     caretToggleButton.classList.toggle('aiSettingsCaretToggleVisible', isAiModeActive)
+    exitAiPilotButton.classList.toggle('aiExitPilotButtonVisible', isAiModeActive)
     caretToggleButton.textContent = isPanelExpanded ? '⌄' : '⌃'
   }
 

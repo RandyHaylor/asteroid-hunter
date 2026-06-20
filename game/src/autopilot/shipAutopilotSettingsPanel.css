@@ -1,12 +1,33 @@
 /* D75: AI-pilot settings overlay — a semi-transparent shaded panel over the radar (radar visible
    behind), plus a caret toggle. Both only appear in AI mode. */
 
+/* D77: EXIT AI PILOT button — top-left of the controls, beside the caret. AI mode only. */
+.aiExitPilotButton {
+  display: none;
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 8;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 140, 120, 0.7);
+  background: rgba(60, 20, 14, 0.7);
+  color: rgba(255, 220, 210, 0.97);
+  font: 700 11px/1 system-ui, sans-serif;
+  letter-spacing: 1px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.aiExitPilotButtonVisible {
+  display: block;
+}
+
 .aiSettingsCaretToggle {
   display: none;
   position: absolute;
   top: 4px;
   right: 4px;
-  z-index: 3;
+  z-index: 8;
   width: 28px;
   height: 28px;
   border-radius: 6px;
@@ -24,14 +45,12 @@
 .aiSettingsPanel {
   display: none;
   position: absolute;
-  top: 0;
-  right: 0;
-  z-index: 2;
-  width: min(86%, 320px);
+  inset: 0; /* D77: cover the whole radar region (was a tiny corner box) */
+  z-index: 6; /* above the radar rim asteroid icons (z-index 3) so they sit UNDER the panel */
   max-height: 100%;
   overflow-y: auto;
   box-sizing: border-box;
-  padding: 8px 10px 10px;
+  padding: 36px 12px 12px; /* top padding clears the exit/caret buttons */
   /* shaded + translucent so the radar stays visible behind */
   background: rgba(8, 20, 14, 0.55);
   border: 1px solid rgba(120, 230, 160, 0.35);

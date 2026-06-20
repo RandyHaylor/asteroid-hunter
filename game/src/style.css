@@ -107,6 +107,21 @@ body {
   box-shadow: 0 0 16px rgba(120, 240, 160, 0.7);
 }
 
+/* D77: while AI mode is active, the manual controls are unavailable — this translucent overlay sits
+   over the left control cluster, blocking pointer input and visibly dimming the widgets (still visible). */
+.manualControlsBlockOverlay {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: rgba(8, 14, 22, 0.4);
+  pointer-events: auto;
+  cursor: not-allowed;
+}
+.manualControlsBlockOverlayActive {
+  display: block;
+}
+
 /* D76: forced-AI wave (wave 3) — full-screen red flash + bold malfunction message */
 .autopilotMalfunctionFlash {
   position: fixed;

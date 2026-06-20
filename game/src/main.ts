@@ -137,15 +137,24 @@ function layoutGameRegions(): void {
     shipViewHeightPixels = blockHeightPixels
     shipViewWidthPixels = Math.floor(blockHeightPixels * SHIP_VIEW_ASPECT_RATIO)
     const radarSidePixels = blockHeightPixels
-    const leftStripWidthPixels = viewportWidthPixels - shipViewWidthPixels - radarSidePixels
+    // D77: ship view LEFT, radar in the middle, ALL controls in a strip on the RIGHT (was: controls
+    // on the left). This keeps every control (manual + AI) on one side so the AI overlay is consistent.
+    const controlStripWidthPixels = viewportWidthPixels - shipViewWidthPixels - radarSidePixels
     const blockTopPixels = Math.floor((viewportHeightPixels - blockHeightPixels) / 2)
     for (const viewElement of [gameRenderCanvas, viewHudOverlay]) {
-      applyFixedBoxStyle(viewElement, leftStripWidthPixels, blockTopPixels, shipViewWidthPixels, shipViewHeightPixels)
+      applyFixedBoxStyle(viewElement, 0, blockTopPixels, shipViewWidthPixels, shipViewHeightPixels)
     }
-    applyFixedBoxStyle(radarRegion, leftStripWidthPixels + shipViewWidthPixels, blockTopPixels, radarSidePixels, radarSidePixels)
+    applyFixedBoxStyle(radarRegion, shipViewWidthPixels, blockTopPixels, radarSidePixels, radarSidePixels)
+    const controlStripLeftPixels = shipViewWidthPixels + radarSidePixels
     const stripSplitPixels = Math.floor(viewportHeightPixels * 0.6)
-    applyFixedBoxStyle(leftControlCluster, 0, 0, leftStripWidthPixels, stripSplitPixels)
-    applyFixedBoxStyle(rightControlCluster, 0, stripSplitPixels, leftStripWidthPixels, viewportHeightPixels - stripSplitPixels)
+    applyFixedBoxStyle(leftControlCluster, controlStripLeftPixels, 0, controlStripWidthPixels, stripSplitPixels)
+    applyFixedBoxStyle(
+      rightControlCluster,
+      controlStripLeftPixels,
+      stripSplitPixels,
+      controlStripWidthPixels,
+      viewportHeightPixels - stripSplitPixels,
+    )
   } else {
     // ship-view (4:3) on top; radar square on the right of the lower area, button column to its left
     shipViewHeightPixels = Math.min(
@@ -265,7 +274,7 @@ gameScene.add(tractorBeamMesh)
 const orbitTargetFuzzyRing = new THREE.Sprite(
   new THREE.SpriteMaterial({
     map: createFuzzyRingTexture(),
-    color: 0x88e0ff,
+    color: 0xccf6ff, // D77: brighter (was 0x88e0ff) — the selected-asteroid highlight was hard to see
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
@@ -414,8 +423,17 @@ let autopilotWasEvadingLastFrame = false
 let lastPlayerDamageAtSeconds = Number.NEGATIVE_INFINITY
 const AUTOPILOT_RECENT_DAMAGE_WINDOW_SECONDS = 1.5
 
-// D75: the AI settings overlay sits over the radar (radar visible behind), with a caret toggle
-const autopilotSettingsPanel = createShipAutopilotSettingsPanel(radarRegion)
+// D75/D77: the AI settings overlay sits over the radar (radar visible behind), with a caret toggle +
+// an EXIT AI PILOT button. Exiting is blocked during a forced-AI wave (wave 3).
+const autopilotSettingsPanel = createShipAutopilotSettingsPanel(radarRegion, () => {
+  if (autopilotIsForcedThisWave) return
+  setAutopilotModeActive(false)
+})
+// D77: while AI mode is on, the manual flight controls are unavailable — a slight translucent overlay
+// over the left control cluster blocks + visibly dims them (the widgets stay visible behind it).
+const manualControlsBlockOverlay = document.createElement('div')
+manualControlsBlockOverlay.className = 'manualControlsBlockOverlay'
+leftControlCluster.appendChild(manualControlsBlockOverlay)
 const autopilotToggleButton = document.createElement('button')
 autopilotToggleButton.className = 'autopilotToggleButton'
 autopilotToggleButton.textContent = 'AI'
@@ -427,6 +445,7 @@ function setAutopilotModeActive(active: boolean): void {
   autopilotModeActive = active
   refreshAutopilotToggleButtonAppearance()
   autopilotSettingsPanel.setAiModeActive(active) // D75: show/hide the settings overlay with the mode
+  manualControlsBlockOverlay.classList.toggle('manualControlsBlockOverlayActive', active) // D77
 }
 autopilotToggleButton.addEventListener('click', () => {
   if (autopilotIsForcedThisWave) return // can't drop out of AI during a forced-AI wave (D74 wave 3)
@@ -1346,7 +1365,9 @@ function syncRenderObjectsFromSimulation(): void {
       tractorBeamMesh.visible = true
     }
     orbitTargetFuzzyRing.position.copy(orbitedAsteroid.positionMeters)
-    const ringDiameterMeters = orbitedAsteroid.currentRadiusMeters * 3
+    // D77: bigger (×3.4) + a gentle pulse so the selected-asteroid highlight is clearly visible
+    const selectedHighlightPulse = 1 + 0.08 * Math.sin(performance.now() * 0.004)
+    const ringDiameterMeters = orbitedAsteroid.currentRadiusMeters * 3.4 * selectedHighlightPulse
     orbitTargetFuzzyRing.scale.set(ringDiameterMeters, ringDiameterMeters, 1)
     orbitTargetFuzzyRing.visible = true
     shipFuzzyRing.visible = true // D67: ship ring shows while the tractor beam is engaged (orbiting)
