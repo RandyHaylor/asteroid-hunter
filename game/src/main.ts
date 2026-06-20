@@ -1295,12 +1295,17 @@ function updatePlayerMovement(deltaSeconds: number): void {
     )
     // D62: at the field edge, gently steer the velocity into a far orbit (constant speed, no shove) —
     // but only when the player isn't actively dragging the radar to steer.
-    easeShipIntoFieldEdgeOrbit(
-      playerShipState.positionMeters,
-      playerShipState.velocityMetersPerSecond,
-      deltaSeconds,
-      radarIsSteeringDrag,
-    )
+    // D81: the edge corrective-orbit is a PLAYER-only safety net (keeps a drifting player in the level).
+    // The AUTOPILOT must NOT use it (it changes travel without thrust) — the AI steers itself back in
+    // with thrust (see computeIdleIntent). So skip it entirely while AI mode is active.
+    if (!autopilotModeActive) {
+      easeShipIntoFieldEdgeOrbit(
+        playerShipState.positionMeters,
+        playerShipState.velocityMetersPerSecond,
+        deltaSeconds,
+        radarIsSteeringDrag,
+      )
+    }
   }
 
   // D71: distance-based collision avoidance. Find the nearest close asteroid (excluding the one being

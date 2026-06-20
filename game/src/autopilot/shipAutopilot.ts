@@ -45,6 +45,13 @@ export type AutopilotContext = {
 const ISOLATION_NEIGHBOR_RADIUS_METERS = 350 // enemies within this of a candidate count as "crowding" it
 const EVASION_ORBIT_LATCH_RANGE_METERS = 600 // an asteroid within this (surface-ish) is worth orbiting to juke
 const WORLD_UP_AXIS = new Vector3(0, 1, 0)
+// D81: thrust is the ONLY way (besides orbiting) to change the travel direction — there's no air to bank
+// against. So the AI thrusts whenever its CURRENT travel isn't within this angle of the desired heading,
+// and coasts (straight line) when already aligned. It never relies on the field-edge corrective orbit.
+const THRUST_STEER_ALIGNMENT_COSINE = Math.cos((12 * Math.PI) / 180)
+// when idle (no target) and drifting past this distance from field center, head back in (under thrust)
+const AUTOPILOT_FIELD_KEEP_IN_RADIUS_METERS = 1500
+const scratchVelocityDirection = new Vector3()
 
 const scratchToTarget = new Vector3()
 const scratchPlayerFromTarget = new Vector3()
@@ -117,24 +124,44 @@ export function computeAutopilotIntent(context: AutopilotContext, outIntent: Aut
   const stillRecovering = context.wasEvadingLastFrame && context.shieldFraction < settings.reEngageShieldFraction
   const wantEvade = swarmedThreshold || shieldLow || damageFlee || stillRecovering
 
+  // each branch sets the desired HEADING + latch/state; the THRUST decision is made centrally below so
+  // every course change is thrust-driven (the only legal way to change travel besides orbiting).
   if (wantEvade) {
     computeEvadeIntent(context, outIntent)
-    return
+  } else {
+    const targetEnemy = selectAutopilotTargetEnemy(context)
+    if (targetEnemy === null) {
+      computeIdleIntent(context, outIntent)
+    } else {
+      computeEngageIntent(context, targetEnemy, outIntent)
+    }
   }
 
-  const targetEnemy = selectAutopilotTargetEnemy(context)
-  if (targetEnemy === null) {
-    // nothing to fight — coast on current heading, don't thrust, release any orbit
-    if (context.playerVelocityMetersPerSecond.lengthSq() > 1e-6) {
-      outIntent.desiredHeadingDirectionWorld.copy(context.playerVelocityMetersPerSecond).normalize()
-    }
-    outIntent.thrustActive = false
-    outIntent.latchCommand = 'release'
-    outIntent.isEvading = false
-    outIntent.engagedEnemyShipId = null
-    return
+  // D81: THRUST to steer the travel toward the desired heading; coast only when already aligned. (When
+  // the evade-orbit latch is engaged, the orbit controls motion and this thrust flag is moot.)
+  outIntent.thrustActive = shouldThrustToSteerTravel(context, outIntent.desiredHeadingDirectionWorld)
+}
+
+/** thrust whenever current travel isn't aligned with the desired heading (or we have no momentum yet) */
+function shouldThrustToSteerTravel(context: AutopilotContext, desiredHeadingWorld: Vector3): boolean {
+  const speedMetersPerSecond = context.playerVelocityMetersPerSecond.length()
+  if (speedMetersPerSecond < 1e-6) return true
+  if (desiredHeadingWorld.lengthSq() < 1e-9) return false
+  scratchVelocityDirection.copy(context.playerVelocityMetersPerSecond).divideScalar(speedMetersPerSecond)
+  return scratchVelocityDirection.dot(desiredHeadingWorld) < THRUST_STEER_ALIGNMENT_COSINE
+}
+
+/** no enemies — hold heading, but steer back toward the field if drifting out (never use the edge-orbit) */
+function computeIdleIntent(context: AutopilotContext, outIntent: AutopilotIntent): void {
+  if (context.playerPositionMeters.length() > AUTOPILOT_FIELD_KEEP_IN_RADIUS_METERS) {
+    scratchToTarget.copy(context.playerPositionMeters).multiplyScalar(-1) // head back toward field center
+    if (scratchToTarget.lengthSq() > 1e-9) outIntent.desiredHeadingDirectionWorld.copy(scratchToTarget).normalize()
+  } else if (context.playerVelocityMetersPerSecond.lengthSq() > 1e-6) {
+    outIntent.desiredHeadingDirectionWorld.copy(context.playerVelocityMetersPerSecond).normalize()
   }
-  computeEngageIntent(context, targetEnemy, outIntent)
+  outIntent.latchCommand = 'release'
+  outIntent.isEvading = false
+  outIntent.engagedEnemyShipId = null
 }
 
 function computeEvadeIntent(context: AutopilotContext, outIntent: AutopilotIntent): void {
@@ -174,7 +201,6 @@ function computeEvadeIntent(context: AutopilotContext, outIntent: AutopilotInten
     }
     outIntent.latchCommand = 'hold'
   }
-  outIntent.thrustActive = true
   outIntent.isEvading = true
   outIntent.engagedEnemyShipId = null
 }
@@ -196,12 +222,10 @@ function computeEngageIntent(context: AutopilotContext, targetEnemy: EnemyShip, 
       .addScaledVector(scratchApproachOffsetDirection, context.settings.preferredEngagementRangeMeters)
     scratchToTarget.copy(scratchApproachPoint).sub(context.playerPositionMeters)
     if (scratchToTarget.lengthSq() > 1e-9) outIntent.desiredHeadingDirectionWorld.copy(scratchToTarget).normalize()
-    outIntent.thrustActive = true // thrust to close the distance
   } else {
-    // IN FIRING RANGE: aim STRAIGHT at the enemy so it sits in the nose-cone lock and the ship auto-fires;
-    // coast (no thrust) so momentum carries a strafing pass while we keep the gun on it
+    // IN FIRING RANGE: aim STRAIGHT at the enemy so it sits in the nose-cone lock and the ship auto-fires
+    // (the central thrust logic coasts once our momentum already points at it — a strafing pass)
     if (distanceToTargetMeters > 1e-6) outIntent.desiredHeadingDirectionWorld.copy(scratchToTarget).divideScalar(distanceToTargetMeters)
-    outIntent.thrustActive = false
   }
   outIntent.latchCommand = 'release' // don't orbit while pressing an attack
   outIntent.isEvading = false
