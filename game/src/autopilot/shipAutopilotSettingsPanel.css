@@ -21,6 +21,13 @@
 .aiExitPilotButtonVisible {
   display: block;
 }
+/* D87: forced-AI wave — exit is unavailable, so the button greys out and stops reading as a live action */
+.aiExitPilotButtonDisabled {
+  border-color: rgba(150, 150, 150, 0.5);
+  background: rgba(45, 45, 48, 0.7);
+  color: rgba(190, 190, 190, 0.65);
+  cursor: not-allowed;
+}
 
 .aiSettingsCaretToggle {
   display: none;

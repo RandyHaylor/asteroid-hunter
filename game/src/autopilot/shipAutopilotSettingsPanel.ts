@@ -9,6 +9,11 @@ import { shipAutopilotSettings, type AutopilotTargetPriority } from './shipAutop
 export type ShipAutopilotSettingsPanel = {
   /** called when AI mode toggles — shows the panel (respecting the caret) in AI, hides it in manual */
   setAiModeActive(isAiModeActive: boolean): void
+  /**
+   * D87: enable/disable the EXIT AI PILOT button. During a forced-AI wave (wave 3) exiting is blocked,
+   * so the button is greyed out and non-interactive rather than appearing as a live red action.
+   */
+  setExitAiPilotAvailable(isExitAvailable: boolean): void
 }
 
 function addSliderRow(
@@ -59,7 +64,10 @@ export function createShipAutopilotSettingsPanel(
   const exitAiPilotButton = document.createElement('button')
   exitAiPilotButton.className = 'aiExitPilotButton'
   exitAiPilotButton.textContent = 'EXIT AI PILOT'
-  exitAiPilotButton.addEventListener('click', onExitAiPilot)
+  exitAiPilotButton.addEventListener('click', () => {
+    if (exitAiPilotButton.disabled) return // D87: blocked during a forced-AI wave
+    onExitAiPilot()
+  })
   parentElement.appendChild(exitAiPilotButton)
 
   // caret toggle (top-right of the controls) — show/hide the panel while in AI mode
@@ -161,6 +169,10 @@ export function createShipAutopilotSettingsPanel(
       isAiModeActive = active
       if (active) isPanelExpanded = true // default shown each time AI mode is entered
       applyVisibility()
+    },
+    setExitAiPilotAvailable(isExitAvailable: boolean): void {
+      exitAiPilotButton.disabled = !isExitAvailable
+      exitAiPilotButton.classList.toggle('aiExitPilotButtonDisabled', !isExitAvailable)
     },
   }
 }

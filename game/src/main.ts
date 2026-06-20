@@ -555,6 +555,8 @@ function applyForcedAutopilotForWave(waveNumber: number): void {
   } else if (autopilotIsForcedThisWave) {
     autopilotIsForcedThisWave = false // manual flight restored next wave (AI stays on until toggled off)
   }
+  // D87: EXIT AI PILOT is greyed out (non-interactive) while exiting is blocked on a forced-AI wave
+  autopilotSettingsPanel.setExitAiPilotAvailable(!autopilotIsForcedThisWave)
 }
 
 // D74: autopilot evasion — tap-latch the nearest large asteroid to orbit (juke + isolate pursuers)
