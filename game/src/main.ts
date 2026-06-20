@@ -64,6 +64,7 @@ import {
   applyAvoidancePushback,
 } from './grappleOrbit/playerAsteroidAvoidance'
 import { shipAutopilotSettings } from './autopilot/shipAutopilotSettings'
+import { createShipAutopilotSettingsPanel } from './autopilot/shipAutopilotSettingsPanel'
 import {
   computeAutopilotIntent,
   createAutopilotIntent,
@@ -413,6 +414,8 @@ let autopilotWasEvadingLastFrame = false
 let lastPlayerDamageAtSeconds = Number.NEGATIVE_INFINITY
 const AUTOPILOT_RECENT_DAMAGE_WINDOW_SECONDS = 1.5
 
+// D75: the AI settings overlay sits over the radar (radar visible behind), with a caret toggle
+const autopilotSettingsPanel = createShipAutopilotSettingsPanel(radarRegion)
 const autopilotToggleButton = document.createElement('button')
 autopilotToggleButton.className = 'autopilotToggleButton'
 autopilotToggleButton.textContent = 'AI'
@@ -420,12 +423,16 @@ function refreshAutopilotToggleButtonAppearance(): void {
   autopilotToggleButton.classList.toggle('autopilotToggleButtonActive', autopilotModeActive)
   autopilotToggleButton.setAttribute('aria-pressed', String(autopilotModeActive))
 }
+function setAutopilotModeActive(active: boolean): void {
+  autopilotModeActive = active
+  refreshAutopilotToggleButtonAppearance()
+  autopilotSettingsPanel.setAiModeActive(active) // D75: show/hide the settings overlay with the mode
+}
 autopilotToggleButton.addEventListener('click', () => {
   if (autopilotIsForcedThisWave) return // can't drop out of AI during a forced-AI wave (D74 wave 3)
-  autopilotModeActive = !autopilotModeActive
-  refreshAutopilotToggleButtonAppearance()
+  setAutopilotModeActive(!autopilotModeActive)
 })
-refreshAutopilotToggleButtonAppearance()
+setAutopilotModeActive(false)
 rightControlCluster.appendChild(autopilotToggleButton)
 
 // D74: autopilot evasion — tap-latch the nearest large asteroid to orbit (juke + isolate pursuers)
