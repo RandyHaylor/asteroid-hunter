@@ -16,7 +16,7 @@ export type ShipFlightStats = {
 }
 
 export const playerShipBaseFlightStats: ShipFlightStats = {
-  cruiseSpeedMetersPerSecond: 80,
+  cruiseSpeedMetersPerSecond: 120, // D85: +50% from 80 — base flight felt sluggish at game start (player & enemies both bumped)
   maxTurnRateRadiansPerSecond: 1.6,
   turnAccelerationRadiansPerSecondSquared: 2.5, // D65: ramps the facing turn up to max in ~0.6 s, eases out on arrival
   thrustTurnRateRadiansPerSecond: 0.2, // D54/D66: weak — momentum is meant to be preserved (thrust only slowly nudges it)
