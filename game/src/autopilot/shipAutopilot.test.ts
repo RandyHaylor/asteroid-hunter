@@ -49,14 +49,25 @@ function baseContext(overrides: Partial<AutopilotContext> = {}): AutopilotContex
 }
 
 describe('computeAutopilotIntent', () => {
-  it('engages a healthy lone in-range enemy (not evading)', () => {
-    const enemy = makeEnemy(new Vector3(0, 0, -300))
+  it('engages a healthy enemy: aims at it, and within firing range coasts (no thrust) to strafe', () => {
+    const enemy = makeEnemy(new Vector3(0, 0, -300)) // 300 m < preferredEngagementRange 500 → in firing range
     const intent = createAutopilotIntent()
     computeAutopilotIntent(baseContext({ enemyShips: [enemy] }), intent)
     expect(intent.isEvading).toBe(false)
     expect(intent.engagedEnemyShipId).toBe(enemy.enemyShipId)
     expect(intent.latchCommand).toBe('release')
-    expect(intent.thrustActive).toBe(true)
+    // aims straight at the enemy so it enters the nose-cone lock and auto-fires (heading ~ -Z)
+    expect(intent.desiredHeadingDirectionWorld.z).toBeLessThan(-0.9)
+    expect(intent.thrustActive).toBe(false) // in range → coast (momentum strafes past while firing)
+  })
+
+  it('thrusts to close when the target is beyond the preferred engagement range', () => {
+    const enemy = makeEnemy(new Vector3(0, 0, -560)) // beyond preferred 500 but within engagement 600
+    const intent = createAutopilotIntent()
+    computeAutopilotIntent(baseContext({ enemyShips: [enemy] }), intent)
+    expect(intent.isEvading).toBe(false)
+    expect(intent.engagedEnemyShipId).toBe(enemy.enemyShipId)
+    expect(intent.thrustActive).toBe(true) // closing the gap
   })
 
   it('evades when the shield drops below the evasion threshold', () => {

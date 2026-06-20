@@ -138,54 +138,71 @@ export function computeAutopilotIntent(context: AutopilotContext, outIntent: Aut
 }
 
 function computeEvadeIntent(context: AutopilotContext, outIntent: AutopilotIntent): void {
-  // flee AWAY from the crowd: sum of unit vectors pointing from each in-range enemy to the player
-  scratchFleeAccumulator.set(0, 0, 0)
-  for (const enemyShip of context.enemyShips) {
-    if (enemyShip.isDestroyed) continue
-    scratchEnemyDelta.copy(context.playerPositionMeters).sub(enemyShip.positionMeters)
-    const distanceMeters = scratchEnemyDelta.length()
-    if (distanceMeters > context.engagementRangeMeters || distanceMeters < 1e-6) continue
-    scratchFleeAccumulator.addScaledVector(scratchEnemyDelta, 1 / (distanceMeters * distanceMeters)) // closer = stronger
-  }
-  if (scratchFleeAccumulator.lengthSq() > 1e-9) {
-    outIntent.desiredHeadingDirectionWorld.copy(scratchFleeAccumulator).normalize()
-  } else if (context.playerVelocityMetersPerSecond.lengthSq() > 1e-6) {
-    outIntent.desiredHeadingDirectionWorld.copy(context.playerVelocityMetersPerSecond).normalize()
-  }
-
-  // juke into an asteroid orbit if one is near enough — orbiting helps shake pursuers + single them out
-  let nearestAsteroidSurfaceDistance = Infinity
+  // EVADE by j: head toward the nearest asteroid and orbit it (orbiting shakes pursuers and keeps us
+  // INSIDE the field). Only if there's genuinely no asteroid around do we flee away from the crowd —
+  // we never run to the boundary to rely on the forced far-orbit.
+  let nearestAsteroid: AsteroidBody | null = null
+  let nearestSurfaceDistanceMeters = Infinity
   for (const asteroid of context.asteroids) {
     if (asteroid.isDestroyed) continue
     const surfaceDistanceMeters =
       asteroid.positionMeters.distanceTo(context.playerPositionMeters) - asteroid.currentRadiusMeters
-    if (surfaceDistanceMeters < nearestAsteroidSurfaceDistance) nearestAsteroidSurfaceDistance = surfaceDistanceMeters
+    if (surfaceDistanceMeters < nearestSurfaceDistanceMeters) {
+      nearestSurfaceDistanceMeters = surfaceDistanceMeters
+      nearestAsteroid = asteroid
+    }
   }
-  outIntent.latchCommand =
-    nearestAsteroidSurfaceDistance <= EVASION_ORBIT_LATCH_RANGE_METERS ? 'latchNearestForEvasion' : 'hold'
+
+  if (nearestAsteroid) {
+    // steer toward the asteroid; latch to orbit it once we're close enough
+    scratchToTarget.copy(nearestAsteroid.positionMeters).sub(context.playerPositionMeters)
+    if (scratchToTarget.lengthSq() > 1e-9) outIntent.desiredHeadingDirectionWorld.copy(scratchToTarget).normalize()
+    outIntent.latchCommand =
+      nearestSurfaceDistanceMeters <= EVASION_ORBIT_LATCH_RANGE_METERS ? 'latchNearestForEvasion' : 'hold'
+  } else {
+    // no asteroid in reach — flee directly away from the crowd (closer enemies push harder)
+    scratchFleeAccumulator.set(0, 0, 0)
+    for (const enemyShip of context.enemyShips) {
+      if (enemyShip.isDestroyed) continue
+      scratchEnemyDelta.copy(context.playerPositionMeters).sub(enemyShip.positionMeters)
+      const distanceMeters = scratchEnemyDelta.length()
+      if (distanceMeters < 1e-6) continue
+      scratchFleeAccumulator.addScaledVector(scratchEnemyDelta, 1 / (distanceMeters * distanceMeters))
+    }
+    if (scratchFleeAccumulator.lengthSq() > 1e-9) {
+      outIntent.desiredHeadingDirectionWorld.copy(scratchFleeAccumulator).normalize()
+    }
+    outIntent.latchCommand = 'hold'
+  }
   outIntent.thrustActive = true
   outIntent.isEvading = true
   outIntent.engagedEnemyShipId = null
 }
 
 function computeEngageIntent(context: AutopilotContext, targetEnemy: EnemyShip, outIntent: AutopilotIntent): void {
-  // approach the target from the PREFERRED ANGLE at the PREFERRED RANGE: take the target→player
-  // direction, rotate it by the approach angle around world-up, and aim at that stand-off point.
-  scratchPlayerFromTarget.copy(context.playerPositionMeters).sub(targetEnemy.positionMeters)
-  if (scratchPlayerFromTarget.lengthSq() < 1e-9) scratchPlayerFromTarget.set(1, 0, 0)
-  scratchPlayerFromTarget.normalize()
-  scratchApproachOffsetDirection
-    .copy(scratchPlayerFromTarget)
-    .applyAxisAngle(WORLD_UP_AXIS, (context.settings.preferredApproachAngleDegrees * Math.PI) / 180)
-  scratchApproachPoint
-    .copy(targetEnemy.positionMeters)
-    .addScaledVector(scratchApproachOffsetDirection, context.settings.preferredEngagementRangeMeters)
+  scratchToTarget.copy(targetEnemy.positionMeters).sub(context.playerPositionMeters)
+  const distanceToTargetMeters = scratchToTarget.length()
 
-  scratchToTarget.copy(scratchApproachPoint).sub(context.playerPositionMeters)
-  if (scratchToTarget.lengthSq() > 1e-9) {
-    outIntent.desiredHeadingDirectionWorld.copy(scratchToTarget).normalize()
+  if (distanceToTargetMeters > context.settings.preferredEngagementRangeMeters) {
+    // CLOSING: arc in from the preferred APPROACH ANGLE (aim at a stand-off point to the target's flank)
+    scratchPlayerFromTarget.copy(context.playerPositionMeters).sub(targetEnemy.positionMeters)
+    if (scratchPlayerFromTarget.lengthSq() < 1e-9) scratchPlayerFromTarget.set(1, 0, 0)
+    scratchPlayerFromTarget.normalize()
+    scratchApproachOffsetDirection
+      .copy(scratchPlayerFromTarget)
+      .applyAxisAngle(WORLD_UP_AXIS, (context.settings.preferredApproachAngleDegrees * Math.PI) / 180)
+    scratchApproachPoint
+      .copy(targetEnemy.positionMeters)
+      .addScaledVector(scratchApproachOffsetDirection, context.settings.preferredEngagementRangeMeters)
+    scratchToTarget.copy(scratchApproachPoint).sub(context.playerPositionMeters)
+    if (scratchToTarget.lengthSq() > 1e-9) outIntent.desiredHeadingDirectionWorld.copy(scratchToTarget).normalize()
+    outIntent.thrustActive = true // thrust to close the distance
+  } else {
+    // IN FIRING RANGE: aim STRAIGHT at the enemy so it sits in the nose-cone lock and the ship auto-fires;
+    // coast (no thrust) so momentum carries a strafing pass while we keep the gun on it
+    if (distanceToTargetMeters > 1e-6) outIntent.desiredHeadingDirectionWorld.copy(scratchToTarget).divideScalar(distanceToTargetMeters)
+    outIntent.thrustActive = false
   }
-  outIntent.thrustActive = true // steer the momentum toward the approach point
   outIntent.latchCommand = 'release' // don't orbit while pressing an attack
   outIntent.isEvading = false
   outIntent.engagedEnemyShipId = targetEnemy.enemyShipId

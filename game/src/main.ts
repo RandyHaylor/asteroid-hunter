@@ -1084,22 +1084,36 @@ function applyPitchYawToCommandedHeading(
   commandedOrientation.multiply(scratchCommandedYawRotation).multiply(scratchCommandedPitchRotation).normalize()
 }
 
-// D74: rotate the commanded heading so its forward points toward a world direction, at the ship's max
-// turn rate (used by the autopilot to steer the camera/heading toward its desired direction).
-const scratchAutopilotCurrentForward = new THREE.Vector3()
-const scratchAutopilotDeltaRotation = new THREE.Quaternion()
-const scratchAutopilotTargetOrientation = new THREE.Quaternion()
-function steerCommandedHeadingTowardDirection(
+// D80: the autopilot turns USING THE PLAYER'S HEADING CONTROL — it derives pitch/yaw inputs (exactly
+// like the keyboard turn keys) toward its desired direction, which are then fed to the SAME
+// applyPitchYawToCommandedHeading the player uses. The AI therefore can only turn the way a player can
+// (bounded to maxTurnRate, two axes) — no bespoke/instant rotation, no ability the player lacks.
+const scratchAutopilotInverseCommanded = new THREE.Quaternion()
+const scratchAutopilotLocalDesiredDir = new THREE.Vector3()
+const AUTOPILOT_TURN_INPUT_GAIN = 4 // proportional → full deflection until within ~15° of the target heading
+let autopilotHeadingPitchInput = 0
+let autopilotHeadingYawInput = 0
+function computeAutopilotHeadingTurnInputs(
   commandedOrientation: THREE.Quaternion,
   desiredDirectionWorld: THREE.Vector3,
-  deltaSeconds: number,
 ): void {
-  if (desiredDirectionWorld.lengthSq() < 1e-9) return
-  scratchAutopilotCurrentForward.copy(COMMANDED_FORWARD_LOCAL).applyQuaternion(commandedOrientation)
-  scratchAutopilotDeltaRotation.setFromUnitVectors(scratchAutopilotCurrentForward, desiredDirectionWorld)
-  scratchAutopilotTargetOrientation.copy(scratchAutopilotDeltaRotation).multiply(commandedOrientation)
-  const maxStepRadians = playerShipBaseFlightStats.maxTurnRateRadiansPerSecond * deltaSeconds
-  commandedOrientation.rotateTowards(scratchAutopilotTargetOrientation, maxStepRadians)
+  if (desiredDirectionWorld.lengthSq() < 1e-9) {
+    autopilotHeadingPitchInput = 0
+    autopilotHeadingYawInput = 0
+    return
+  }
+  // desired direction in the commanded (heading) local frame: forward=-Z, right=+X, up=+Y
+  scratchAutopilotInverseCommanded.copy(commandedOrientation).invert()
+  scratchAutopilotLocalDesiredDir.copy(desiredDirectionWorld).applyQuaternion(scratchAutopilotInverseCommanded).normalize()
+  // sign matches applyPitchYawToCommandedHeading: +yawInput turns forward toward +X; +pitchInput toward +Y
+  let yawInput = scratchAutopilotLocalDesiredDir.x * AUTOPILOT_TURN_INPUT_GAIN
+  const pitchInput = scratchAutopilotLocalDesiredDir.y * AUTOPILOT_TURN_INPUT_GAIN
+  // target BEHIND (local +Z) with little sideways offset → commit to a full turn-around rather than stall
+  if (scratchAutopilotLocalDesiredDir.z > 0 && Math.abs(yawInput) < 1) {
+    yawInput = scratchAutopilotLocalDesiredDir.x >= 0 ? 1 : -1
+  }
+  autopilotHeadingYawInput = Math.max(-1, Math.min(1, yawInput))
+  autopilotHeadingPitchInput = Math.max(-1, Math.min(1, pitchInput))
 }
 
 // D43/D53: the ONE ship-rotation path. The ship's rotation GOAL is the camera (commanded/radar)
@@ -1224,9 +1238,12 @@ function updatePlayerMovement(deltaSeconds: number): void {
     }
     computeAutopilotIntent(autopilotContext, autopilotIntent)
     autopilotWasEvadingLastFrame = autopilotIntent.isEvading
-    steerCommandedHeadingTowardDirection(
+    // D80: turn via the PLAYER heading control (pitch/yaw → applyPitchYawToCommandedHeading), same as keys
+    computeAutopilotHeadingTurnInputs(commandedOrientation, autopilotIntent.desiredHeadingDirectionWorld)
+    applyPitchYawToCommandedHeading(
       commandedOrientation,
-      autopilotIntent.desiredHeadingDirectionWorld,
+      autopilotHeadingPitchInput,
+      autopilotHeadingYawInput,
       deltaSeconds,
     )
     if (autopilotIntent.latchCommand === 'latchNearestForEvasion') {
