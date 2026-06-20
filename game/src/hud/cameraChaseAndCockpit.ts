@@ -15,11 +15,18 @@ const CHASE_CAMERA_LOCAL_OFFSET = new Vector3(0, 5, 18)
 const COCKPIT_CAMERA_LOCAL_OFFSET = new Vector3(0, 0.45, -1.2)
 
 const scratchCameraPosition = new Vector3()
+const scratchEffectiveViewOrientation = new Quaternion()
 
 export type PlayerCameraRig = {
   // D56-fix: pass the RENDERED (smoothed) ship position so the camera pivots on exactly what's drawn —
   // pinning the ship perfectly (no jitter, no closer/farther). viewOrientation = the commanded heading.
-  updateCameraFollowingShip(renderedShipPositionMeters: Vector3, viewOrientation: Quaternion): void
+  // D79: freeLookOffset (optional) orbits the whole rig around the ship for AI-mode look-around — it
+  // rotates the CAMERA only; it does NOT change viewOrientation (the ship's aim/auto-aim are untouched).
+  updateCameraFollowingShip(
+    renderedShipPositionMeters: Vector3,
+    viewOrientation: Quaternion,
+    freeLookOffset?: Quaternion,
+  ): void
   toggleCameraViewMode(): PlayerCameraViewMode
   getCameraViewMode(): PlayerCameraViewMode
 }
@@ -38,10 +45,20 @@ export function createPlayerCameraRig(playerViewCamera: PerspectiveCamera): Play
   }
 
   return {
-    updateCameraFollowingShip(renderedShipPositionMeters: Vector3, viewOrientation: Quaternion): void {
+    updateCameraFollowingShip(
+      renderedShipPositionMeters: Vector3,
+      viewOrientation: Quaternion,
+      freeLookOffset?: Quaternion,
+    ): void {
       const localOffset =
         cameraViewMode === 'cockpit' ? COCKPIT_CAMERA_LOCAL_OFFSET : CHASE_CAMERA_LOCAL_OFFSET
-      placeCameraRigidly(renderedShipPositionMeters, viewOrientation, localOffset)
+      // D79: orbit the rig by the free-look offset (camera-only). Identity offset = normal chase.
+      if (freeLookOffset) {
+        scratchEffectiveViewOrientation.copy(viewOrientation).multiply(freeLookOffset)
+        placeCameraRigidly(renderedShipPositionMeters, scratchEffectiveViewOrientation, localOffset)
+      } else {
+        placeCameraRigidly(renderedShipPositionMeters, viewOrientation, localOffset)
+      }
     },
     toggleCameraViewMode(): PlayerCameraViewMode {
       cameraViewMode = cameraViewMode === 'thirdPersonChase' ? 'cockpit' : 'thirdPersonChase'

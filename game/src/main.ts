@@ -434,6 +434,63 @@ const autopilotSettingsPanel = createShipAutopilotSettingsPanel(radarRegion, () 
 const manualControlsBlockOverlay = document.createElement('div')
 manualControlsBlockOverlay.className = 'manualControlsBlockOverlay'
 leftControlCluster.appendChild(manualControlsBlockOverlay)
+
+// D79: AI-mode FREE-LOOK — drag the ship view to orbit the camera around the ship (look around). This
+// rotates the CAMERA ONLY (composed onto the commanded heading); the ship's aim/auto-aim are untouched,
+// and the aim reticle stays anchored to the real aim point (it does NOT move with this look-around).
+let autopilotFreeLookYawRadians = 0
+let autopilotFreeLookPitchRadians = 0
+const AUTOPILOT_FREE_LOOK_RADIANS_PER_PIXEL = 0.005
+const AUTOPILOT_FREE_LOOK_MAX_PITCH_RADIANS = (80 * Math.PI) / 180
+const autopilotFreeLookOffsetQuaternion = new THREE.Quaternion()
+const scratchFreeLookYawQuaternion = new THREE.Quaternion()
+const scratchFreeLookPitchQuaternion = new THREE.Quaternion()
+const FREE_LOOK_LOCAL_UP_AXIS = new THREE.Vector3(0, 1, 0)
+const FREE_LOOK_LOCAL_RIGHT_AXIS = new THREE.Vector3(1, 0, 0)
+function refreshAutopilotFreeLookOffsetQuaternion(): void {
+  scratchFreeLookYawQuaternion.setFromAxisAngle(FREE_LOOK_LOCAL_UP_AXIS, autopilotFreeLookYawRadians)
+  scratchFreeLookPitchQuaternion.setFromAxisAngle(FREE_LOOK_LOCAL_RIGHT_AXIS, autopilotFreeLookPitchRadians)
+  autopilotFreeLookOffsetQuaternion.copy(scratchFreeLookYawQuaternion).multiply(scratchFreeLookPitchQuaternion)
+}
+function resetAutopilotFreeLook(): void {
+  autopilotFreeLookYawRadians = 0
+  autopilotFreeLookPitchRadians = 0
+  refreshAutopilotFreeLookOffsetQuaternion()
+}
+let autopilotFreeLookDragPointerId = -1
+let autopilotFreeLookLastClientX = 0
+let autopilotFreeLookLastClientY = 0
+gameRenderCanvas.addEventListener('pointerdown', (event) => {
+  if (!autopilotModeActive) return // free-look drag only in AI mode (manual steering is the radar)
+  autopilotFreeLookDragPointerId = event.pointerId
+  autopilotFreeLookLastClientX = event.clientX
+  autopilotFreeLookLastClientY = event.clientY
+})
+gameRenderCanvas.addEventListener('pointermove', (event) => {
+  if (autopilotFreeLookDragPointerId !== event.pointerId) return
+  autopilotFreeLookYawRadians -= (event.clientX - autopilotFreeLookLastClientX) * AUTOPILOT_FREE_LOOK_RADIANS_PER_PIXEL
+  autopilotFreeLookPitchRadians = Math.max(
+    -AUTOPILOT_FREE_LOOK_MAX_PITCH_RADIANS,
+    Math.min(
+      AUTOPILOT_FREE_LOOK_MAX_PITCH_RADIANS,
+      autopilotFreeLookPitchRadians - (event.clientY - autopilotFreeLookLastClientY) * AUTOPILOT_FREE_LOOK_RADIANS_PER_PIXEL,
+    ),
+  )
+  autopilotFreeLookLastClientX = event.clientX
+  autopilotFreeLookLastClientY = event.clientY
+  refreshAutopilotFreeLookOffsetQuaternion()
+})
+function endAutopilotFreeLookDrag(event: PointerEvent): void {
+  if (autopilotFreeLookDragPointerId === event.pointerId) autopilotFreeLookDragPointerId = -1
+}
+gameRenderCanvas.addEventListener('pointerup', endAutopilotFreeLookDrag)
+gameRenderCanvas.addEventListener('pointercancel', endAutopilotFreeLookDrag)
+
+// D79: bottom-of-view message shown while AI mode is active
+const autopilotFreeLookMessage = document.createElement('div')
+autopilotFreeLookMessage.className = 'autopilotFreeLookMessage'
+autopilotFreeLookMessage.textContent = 'AI PILOT ACTIVE — DRAG VIEW SCREEN TO LOOK AROUND'
+viewHudOverlay.appendChild(autopilotFreeLookMessage)
 const autopilotToggleButton = document.createElement('button')
 autopilotToggleButton.className = 'autopilotToggleButton'
 autopilotToggleButton.textContent = 'AI'
@@ -446,6 +503,8 @@ function setAutopilotModeActive(active: boolean): void {
   refreshAutopilotToggleButtonAppearance()
   autopilotSettingsPanel.setAiModeActive(active) // D75: show/hide the settings overlay with the mode
   manualControlsBlockOverlay.classList.toggle('manualControlsBlockOverlayActive', active) // D77
+  resetAutopilotFreeLook() // D79: recenter the look-around when the mode toggles
+  autopilotFreeLookMessage.classList.toggle('autopilotFreeLookMessageVisible', active) // D79
 }
 autopilotToggleButton.addEventListener('click', () => {
   if (autopilotIsForcedThisWave) return // can't drop out of AI during a forced-AI wave (D74 wave 3)
@@ -1110,6 +1169,10 @@ function rotatePlayerShipTowardAimGoal(deltaSeconds: number): void {
 
 const scratchShipWeaponBoreForward = new THREE.Vector3()
 const scratchShipWeaponBoreWorldPoint = new THREE.Vector3()
+// D79: aim-reticle anchoring — project the commanded-forward (auto-aim cone center) aim point to screen
+const scratchCommandedForwardWorld = new THREE.Vector3()
+const scratchAimReticleWorldPoint = new THREE.Vector3()
+const scratchAimReticleNdc = new THREE.Vector3()
 
 // D55: ease the commanded (camera) heading to keep a locked enemy centered in the reticle, at the
 // enemy-tracking rate. Only runs when the player is NOT dragging the radar — a drag always wins
@@ -1447,6 +1510,7 @@ function runFrameLoop(currentFrameTimestampMs: number): void {
   playerCameraRig.updateCameraFollowingShip(
     playerShipMesh.position,
     radarSphereDisplay.getCommandedOrientation(),
+    autopilotModeActive ? autopilotFreeLookOffsetQuaternion : undefined, // D79: AI free-look orbit
   )
 
   // screen-space HUD must run AFTER the camera moves this frame, with fresh matrices, so projection
@@ -1464,6 +1528,20 @@ function runFrameLoop(currentFrameTimestampMs: number): void {
     currentShipViewWidthPixels,
     currentShipViewHeightPixels,
   )
+  // D79: anchor the aim reticle to the COMMANDED-FORWARD (auto-aim cone center) projected to screen, so
+  // during AI free-look it stays on the real aim point (doesn't move with the camera). In normal flight
+  // this projects to screen-center, exactly as before. Hidden if the aim point is behind the camera.
+  scratchCommandedForwardWorld.copy(COMMANDED_FORWARD_LOCAL).applyQuaternion(radarSphereDisplay.getCommandedOrientation())
+  scratchAimReticleWorldPoint.copy(playerShipState.positionMeters).addScaledVector(scratchCommandedForwardWorld, 300)
+  scratchAimReticleNdc.copy(scratchAimReticleWorldPoint).project(playerViewCamera)
+  if (scratchAimReticleNdc.z > 1 || Math.abs(scratchAimReticleNdc.x) > 1.3 || Math.abs(scratchAimReticleNdc.y) > 1.3) {
+    aimingReticle.setAimScreenPosition(null)
+  } else {
+    aimingReticle.setAimScreenPosition(
+      (scratchAimReticleNdc.x * 0.5 + 0.5) * currentShipViewWidthPixels,
+      (-scratchAimReticleNdc.y * 0.5 + 0.5) * currentShipViewHeightPixels,
+    )
+  }
   // D67: every live enemy gets a ring; in-range = full rotating (locked spins faster + pulses),
   // out-of-range = tiny static red circle. Gated on the combined radar+weapon engagement range.
   enemyTargetRings.updateEnemyTargetRings(

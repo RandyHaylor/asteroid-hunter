@@ -8,6 +8,13 @@ import './aimingReticle.css'
 export type AimingReticle = {
   /** D51: turn the reticle RED while actively locked/firing on an enemy (green when idle) */
   setEngaged(isEngaged: boolean): void
+  /**
+   * D79: anchor the reticle to a screen position (the ship's AIM point projected to screen) instead of
+   * fixed center. In normal/manual flight the aim point is screen-center; during AI free-look the camera
+   * pans away from the aim, so the reticle stays on the real aim point (it does NOT move with the camera).
+   * Pass null to hide it (aim point behind camera / off screen).
+   */
+  setAimScreenPosition(screenXPixels: number | null, screenYPixels?: number): void
 }
 
 export function createAimingReticle(viewHudOverlay: HTMLElement): AimingReticle {
@@ -18,6 +25,15 @@ export function createAimingReticle(viewHudOverlay: HTMLElement): AimingReticle 
   return {
     setEngaged(isEngaged: boolean): void {
       aimingReticleElement.classList.toggle('aimingReticleEngaged', isEngaged)
+    },
+    setAimScreenPosition(screenXPixels: number | null, screenYPixels?: number): void {
+      if (screenXPixels === null || screenYPixels === undefined) {
+        aimingReticleElement.style.display = 'none'
+        return
+      }
+      aimingReticleElement.style.display = 'block'
+      aimingReticleElement.style.left = `${screenXPixels}px`
+      aimingReticleElement.style.top = `${screenYPixels}px`
     },
   }
 }

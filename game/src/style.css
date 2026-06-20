@@ -107,6 +107,27 @@ body {
   box-shadow: 0 0 16px rgba(120, 240, 160, 0.7);
 }
 
+/* D79: bottom-of-view banner shown while AI mode is active (free-look hint) */
+.autopilotFreeLookMessage {
+  display: none;
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 5px 12px;
+  border-radius: 6px;
+  background: rgba(8, 20, 14, 0.55);
+  border: 1px solid rgba(120, 230, 160, 0.4);
+  color: rgba(170, 255, 200, 0.95);
+  font: 700 clamp(9px, 1.8vmin, 13px) / 1 system-ui, sans-serif;
+  letter-spacing: 1px;
+  pointer-events: none;
+}
+.autopilotFreeLookMessageVisible {
+  display: block;
+}
+
 /* D77: while AI mode is active, the manual controls are unavailable — this translucent overlay sits
    over the left control cluster, blocking pointer input and visibly dimming the widgets (still visible). */
 .manualControlsBlockOverlay {

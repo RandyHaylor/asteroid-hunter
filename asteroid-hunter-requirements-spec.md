@@ -126,6 +126,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 
 | D78 | **First-person (cockpit) view button hidden — pinned for later.** The cockpit/chase camera view isn't fully compatible with the newer features yet, so the `cameraViewToggleButton` ("VIEW: CHASE/COCKPIT") is **no longer mounted in the UI** (the `appendChild` is commented out in `main.ts`). The button object, its `toggleCameraView` handler, the cockpit frame overlay, and the KeyC shortcut all **remain in code** — re-adding the one `appendChild` restores it. |
 
+| D79 | **AI-mode free-look (drag ship view to look around).** While AI mode is active, dragging the ship view orbits the **camera** around the ship (`cameraChaseAndCockpit.ts` gains a `freeLookOffset` composed onto the commanded heading — camera-only). It does **NOT** change the ship's aim/auto-aim. The center aim reticle is now **anchored to the commanded-forward aim point projected to screen** (`aimingReticle.setAimScreenPosition`) — so during free-look it stays on the real aim (moves opposite the look, hides when the aim leaves view) instead of moving with the camera; in normal flight it projects to center as before. Free-look recenters when the mode toggles. A bottom-of-view banner **"AI PILOT ACTIVE — DRAG VIEW SCREEN TO LOOK AROUND"** shows while AI is active. Drag listener on `gameRenderCanvas` (gated to AI mode). Verified headless: small drag shifts the reticle off-center (stays visible), large drag hides it, banner shows in AI mode, no console errors. |
+
 ## Requirements from the design doc
 
 ### Rendering & physics
