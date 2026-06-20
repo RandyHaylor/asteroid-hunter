@@ -19,7 +19,7 @@ describe('easeShipIntoFieldEdgeOrbit', () => {
   })
 
   it('past the edge moving outward: keeps the SAME speed but steers the outward velocity toward the tangent', () => {
-    const position = new Vector3(PLAY_AREA_RADIUS_METERS * 0.98, 0, 0)
+    const position = new Vector3(PLAY_AREA_RADIUS_METERS * 1.7, 0, 0)
     const velocity = new Vector3(60, 0, 60) // +x outward (radial), +z tangential
     const speedBefore = velocity.length()
     const outwardSpeedBefore = velocity.x
@@ -30,7 +30,7 @@ describe('easeShipIntoFieldEdgeOrbit', () => {
   })
 
   it('does NOT steer while the player is dragging the radar', () => {
-    const position = new Vector3(PLAY_AREA_RADIUS_METERS * 0.98, 0, 0)
+    const position = new Vector3(PLAY_AREA_RADIUS_METERS * 1.7, 0, 0)
     const velocity = new Vector3(60, 0, 60)
     easeShipIntoFieldEdgeOrbit(position, velocity, STEP_SECONDS, IS_DRAGGING)
     expect(velocity.x).toBe(60)
@@ -38,14 +38,14 @@ describe('easeShipIntoFieldEdgeOrbit', () => {
   })
 
   it('does nothing when already heading inward (no turn-back, lets the player fly back in)', () => {
-    const position = new Vector3(PLAY_AREA_RADIUS_METERS * 0.98, 0, 0)
+    const position = new Vector3(PLAY_AREA_RADIUS_METERS * 1.7, 0, 0)
     const velocity = new Vector3(-50, 0, 0)
     easeShipIntoFieldEdgeOrbit(position, velocity, STEP_SECONDS, NOT_DRAGGING)
     expect(velocity.x).toBe(-50)
   })
 
   it('repeated steps drive the outward velocity to ~0 (settled into a far orbit) at constant speed', () => {
-    const position = new Vector3(PLAY_AREA_RADIUS_METERS * 0.98, 0, 0)
+    const position = new Vector3(PLAY_AREA_RADIUS_METERS * 1.7, 0, 0)
     const velocity = new Vector3(60, 0, 60)
     const speedBefore = velocity.length()
     for (let stepIndex = 0; stepIndex < 600; stepIndex++) {

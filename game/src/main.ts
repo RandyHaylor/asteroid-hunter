@@ -389,15 +389,21 @@ const flightControls = createTouchFlightControls(leftControlCluster)
 // D47/D66: weapons are always on (no fire buttons). Left-edge status: a vertical speed-upgrade level
 // bar plus a bottom-left missile charge meter (laser bar removed in D66).
 const viewEdgeStatusIndicators = createViewEdgeStatusIndicators(viewHudOverlay)
+// D88: below this speed the ship is "too slow" — tractor/grapple cut out, the speed bar flashes red,
+// and the low-speed warning banner shows. Speed is hard to rebuild (weak thrust), so this matters.
+const LOW_SPEED_THRESHOLD_METERS_PER_SECOND = 50
+// D88: tractor/grapple is DISABLED while below the low-speed threshold (driver-agnostic — applies to the
+// player and the AI identically, keeping "AI = zero game difference"). Latching is blocked; an existing
+// orbit holds constant speed so it never drops into this state mid-orbit.
+function isShipMovingFastEnoughToGrapple(): boolean {
+  return playerShipState.velocityMetersPerSecond.length() >= LOW_SPEED_THRESHOLD_METERS_PER_SECOND
+}
 // D86: bottom-right trajectory arrow + horizontal speed bar (full at cruise) + live m/s readout
 const scratchTravelDirectionInViewSpace = new THREE.Vector3()
 const shipTrajectoryAndSpeedIndicator = createShipTrajectoryAndSpeedIndicator(
   viewHudOverlay,
   scratchTravelDirectionInViewSpace,
 )
-// D66: full-scale cruise speed the left-edge speed bar fills toward (base is 80 m/s; SPEED BOOST
-// power-ups raise the live cruise speed up toward this). Tunable — purely the bar's reference max.
-const SPEED_LEVEL_FULL_SCALE_METERS_PER_SECOND = 200
 // D67: live 3D preview of the locked enemy (with its shield/hull) sits under the THRUST button
 const lockedEnemyPreview = createLockedEnemyPreview(leftControlCluster)
 // D48: cockpit canopy frame overlay (shown only in cockpit view)
@@ -417,7 +423,10 @@ const grappleOrbitController = createGrappleOrbitController()
 // D60: tappable rim icons for in-range asteroids; tapping one drives the latch controller
 const asteroidOrbitIcons = createAsteroidOrbitIcons(
   radarSphereDisplay.getControlZoneElement(),
-  (asteroid) => grappleOrbitController.onAsteroidIconPressed(asteroid, playerShipState, performance.now() / 1000),
+  (asteroid) => {
+    if (!isShipMovingFastEnoughToGrapple()) return // D88: tractor/grapple disabled at low speed
+    grappleOrbitController.onAsteroidIconPressed(asteroid, playerShipState, performance.now() / 1000)
+  },
   (asteroid) => grappleOrbitController.onAsteroidIconReleased(asteroid, performance.now() / 1000),
 )
 
@@ -561,6 +570,7 @@ function applyForcedAutopilotForWave(waveNumber: number): void {
 
 // D74: autopilot evasion — tap-latch the nearest large asteroid to orbit (juke + isolate pursuers)
 function latchNearestAsteroidForAutopilotEvasion(): void {
+  if (!isShipMovingFastEnoughToGrapple()) return // D88: grapple disabled at low speed (same rule as the player)
   let nearestAsteroid: AsteroidBody | null = null
   let nearestDistanceMeters = Infinity
   for (const asteroid of gameWorld.asteroids) {
@@ -626,12 +636,14 @@ startScreenOverlay.className = 'startScreenOverlay'
 startScreenOverlay.innerHTML = `
   <div class="startScreenInner">
     <h1 class="startScreenTitle">ASTEROID HUNTER</h1>
-    <p class="startScreenTagline">In space, turning is expensive — there's no air to push against.
-      Slingshot around asteroids to change direction, and hunt the swarm.</p>
+    <p class="startScreenTagline">In space there's no air to push against — <b>momentum is everything</b>.
+      Thrust is weak: once you lose speed it takes a long time to build back up. The fast way to redirect
+      your trajectory is to <b>grapple an asteroid and slingshot</b> off it.</p>
     <ul class="startScreenControls">
-      <li>Hold <b>THRUST</b> to curve your momentum toward where you're facing</li>
-      <li>Drag the <b>radar sphere</b> to aim</li>
-      <li>Weapons fire <b>automatically</b> at a locked, visible enemy</li>
+      <li>Hold <b>THRUST</b> to accelerate along your nose — aligned with travel speeds you up, against it slows you down</li>
+      <li><b>Grapple asteroids</b> to swing your momentum around fast (and to dodge enemies)</li>
+      <li>Keep your speed up — go too slow and the <b>tractor/grapple cut out</b> and you're an easy target</li>
+      <li>Drag the <b>radar sphere</b> to aim; weapons fire <b>automatically</b> at a locked, visible enemy</li>
     </ul>
     <p class="startScreenPrompt">Tap or press Enter to begin</p>
   </div>`
@@ -835,8 +847,10 @@ function removeAllEnemiesFromWorld(): void {
 
 function resetPlayerShipForWaveRestart(): void {
   playerShipState.positionMeters.set(0, 0, 0)
-  playerShipState.velocityMetersPerSecond.set(0, 0, 0)
   playerShipState.orientation.identity()
+  // D88: spawn at FULL max speed moving forward (identity facing = -Z), so the player starts in motion
+  // and isn't instantly in the low-speed warning state. Velocity then varies via thrust from here.
+  playerShipState.velocityMetersPerSecond.set(0, 0, -playerShipBaseFlightStats.cruiseSpeedMetersPerSecond)
   playerShipState.currentPitchRateRadiansPerSecond = 0
   playerShipState.currentYawRateRadiansPerSecond = 0
   // snap the mesh AND the interpolation snapshot to the respawn pose so it doesn't interpolate across
@@ -1522,13 +1536,10 @@ function syncRenderObjectsFromSimulation(): void {
     avoidanceDeflectionBeam.visible = false
   }
 
-  // D66: left-edge status — speed-upgrade level (current cruise speed over the full-scale reference)
-  // and the missile charge meter (1 = recharged/ready). Laser bar was removed in D66.
-  const speedLevelFraction =
-    playerShipBaseFlightStats.cruiseSpeedMetersPerSecond / SPEED_LEVEL_FULL_SCALE_METERS_PER_SECOND
+  // D88: bottom-left missile charge meter (1 = recharged/ready). The old speed-upgrade level bar was removed.
   const missileReadyFraction =
     1 - (playerNextMissileFireTimeSeconds - simulationClockSeconds) / playerBaseMissileStats.fireCooldownSeconds
-  viewEdgeStatusIndicators.updateViewEdgeStatusIndicators(speedLevelFraction, missileReadyFraction)
+  viewEdgeStatusIndicators.updateViewEdgeStatusIndicators(missileReadyFraction)
 
   // D86: bottom-right trajectory arrow (travel direction relative to the view) + speed bar (full at
   // cruise) + live m/s. Bar reads current speed over the present cruise max; m/s carries upgrade scaling.
@@ -1536,6 +1547,7 @@ function syncRenderObjectsFromSimulation(): void {
     playerShipState.velocityMetersPerSecond,
     playerViewCamera.quaternion,
     playerShipBaseFlightStats.cruiseSpeedMetersPerSecond,
+    LOW_SPEED_THRESHOLD_METERS_PER_SECOND,
   )
 }
 

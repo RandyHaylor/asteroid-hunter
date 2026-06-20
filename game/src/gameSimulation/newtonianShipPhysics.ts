@@ -1,10 +1,12 @@
 import { Quaternion, Vector3 } from 'three'
 import type { ShipFlightStats } from '../shipStats'
 
-// R3 + D54: momentum-based flight. Ships ALWAYS move at a constant cruise speed (turning is
-// "expensive" — there is no air to push against). Velocity magnitude never changes; holding thrust
-// slowly rotates the velocity VECTOR toward the ship's facing. Facing itself is independent (set by
-// the radar drag-steer / rotation path). Not thrusting → the ship coasts in a straight line.
+// R3 + D54 + D88: momentum-based flight. Turning is "expensive" — there is no air to push against.
+// D88 makes speed VARIABLE (was constant in D54): holding thrust applies a weak linear acceleration
+// along the ship's facing, so velocity magnitude grows when the nose aligns with travel and shrinks
+// when it opposes travel — capped at the max (cruise) speed. Releasing thrust → the ship COASTS,
+// preserving its velocity exactly (no drag). Facing is independent (radar drag-steer / rotation path).
+// Because thrust is weak, momentum is expensive to rebuild — grapple-slingshots are the fast redirect.
 
 export type ShipRigidBodyState = {
   positionMeters: Vector3
@@ -20,7 +22,8 @@ export type ShipFlightControlInput = {
   pitchInput: number
   /** -1..1, positive yaws the nose right */
   yawInput: number
-  /** D54: while true, thrust rotates the velocity vector toward the ship's facing (does NOT change speed) */
+  /** D88: while true, thrust accelerates the ship along its facing (gains speed if aligned with travel,
+   *  loses speed if opposed), capped at max speed. Released → coast (velocity preserved). */
   thrustActive: boolean
 }
 
@@ -41,16 +44,10 @@ const SHIP_LOCAL_FORWARD_AXIS = new Vector3(0, 0, -1)
 /** D15: how quickly the actual turn rate eases toward the commanded rate (1/seconds, time constant ~0.17 s) */
 const TURN_RATE_RESPONSE_PER_SECOND = 6
 
-/** below this speed the velocity direction is undefined, so we (re)seed it along the ship facing */
-const MINIMUM_DEFINED_SPEED_METERS_PER_SECOND = 1e-4
-
 // scratch objects reused every step to avoid per-frame allocations in the hot simulation path
 const scratchPitchRotation = new Quaternion()
 const scratchYawRotation = new Quaternion()
 const scratchForwardDirection = new Vector3()
-const scratchVelocityDirection = new Vector3()
-const scratchVelocitySteerAxis = new Vector3()
-const scratchVelocitySteerRotation = new Quaternion()
 
 export function getShipForwardDirection(shipState: ShipRigidBodyState, outDirection: Vector3): Vector3 {
   return outDirection.copy(SHIP_LOCAL_FORWARD_AXIS).applyQuaternion(shipState.orientation)
@@ -96,32 +93,22 @@ export function stepShipFlightSimulation(
     deltaSeconds,
   )
 
-  // STEP 2: D54 — constant speed; thrust slowly rotates the velocity VECTOR toward the facing.
-  getShipForwardDirection(shipState, scratchForwardDirection)
-  const cruiseSpeedMetersPerSecond = flightStats.cruiseSpeedMetersPerSecond
-  const currentSpeedMetersPerSecond = shipState.velocityMetersPerSecond.length()
-  if (currentSpeedMetersPerSecond < MINIMUM_DEFINED_SPEED_METERS_PER_SECOND) {
-    // velocity direction undefined (e.g. just spawned) — seed it along the facing
-    scratchVelocityDirection.copy(scratchForwardDirection)
-  } else {
-    scratchVelocityDirection.copy(shipState.velocityMetersPerSecond).divideScalar(currentSpeedMetersPerSecond)
-    if (controlInput.thrustActive) {
-      // rotate the velocity direction toward the facing by at most thrustTurnRate * dt this frame
-      const angleToFacingRadians = scratchVelocityDirection.angleTo(scratchForwardDirection)
-      if (angleToFacingRadians > 1e-5) {
-        const maxSteerStepRadians = flightStats.thrustTurnRateRadiansPerSecond * deltaSeconds
-        const steerStepRadians = Math.min(angleToFacingRadians, maxSteerStepRadians)
-        scratchVelocitySteerAxis.crossVectors(scratchVelocityDirection, scratchForwardDirection)
-        if (scratchVelocitySteerAxis.lengthSq() > 1e-12) {
-          scratchVelocitySteerAxis.normalize()
-          scratchVelocitySteerRotation.setFromAxisAngle(scratchVelocitySteerAxis, steerStepRadians)
-          scratchVelocityDirection.applyQuaternion(scratchVelocitySteerRotation)
-        }
-      }
+  // STEP 2: D88 — Newtonian thrust. Holding thrust adds a weak acceleration along the facing, so the
+  // velocity magnitude grows/shrinks depending on whether the nose aligns with or opposes travel.
+  // Speed is capped at the max (cruise) speed. No thrust → coast (velocity unchanged this step).
+  if (controlInput.thrustActive) {
+    getShipForwardDirection(shipState, scratchForwardDirection)
+    shipState.velocityMetersPerSecond.addScaledVector(
+      scratchForwardDirection,
+      flightStats.thrustAccelerationMetersPerSecondSquared * deltaSeconds,
+    )
+    const maxSpeedMetersPerSecond = flightStats.cruiseSpeedMetersPerSecond
+    const newSpeedMetersPerSecond = shipState.velocityMetersPerSecond.length()
+    if (newSpeedMetersPerSecond > maxSpeedMetersPerSecond) {
+      shipState.velocityMetersPerSecond.multiplyScalar(maxSpeedMetersPerSecond / newSpeedMetersPerSecond)
     }
   }
 
-  // STEP 3: re-impose the constant cruise speed and integrate position
-  shipState.velocityMetersPerSecond.copy(scratchVelocityDirection).multiplyScalar(cruiseSpeedMetersPerSecond)
+  // STEP 3: integrate position from the (possibly updated) velocity
   shipState.positionMeters.addScaledVector(shipState.velocityMetersPerSecond, deltaSeconds)
 }

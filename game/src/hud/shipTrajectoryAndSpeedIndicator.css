@@ -15,39 +15,12 @@
   text-shadow: 0 0 4px rgba(20, 40, 60, 0.8);
 }
 
-.trajectoryArrowFrame {
-  position: relative;
-  width: 40px;
-  height: 40px;
-}
-
-.trajectoryArrowGlyph {
-  position: absolute;
-  inset: 0;
-  color: rgba(120, 230, 160, 0.95);
-  filter: drop-shadow(0 0 5px rgba(120, 230, 160, 0.5));
-  transform-origin: 50% 50%;
-  transition: opacity 0.15s linear;
-}
-.trajectoryArrowGlyph svg {
-  width: 100%;
-  height: 100%;
+/* tiny 3D arrow viewport (its own three.js render target) */
+.trajectoryArrowCanvas {
+  width: 44px;
+  height: 44px;
   display: block;
-}
-
-/* shown when travel is nearly straight into/out of the screen (heading not meaningful on-screen) */
-.trajectoryHeadOnDot {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 9px;
-  height: 9px;
-  margin: -4.5px 0 0 -4.5px;
-  border-radius: 50%;
-  background: rgba(120, 230, 160, 0.95);
-  box-shadow: 0 0 6px rgba(120, 230, 160, 0.6);
-  opacity: 0;
-  transition: opacity 0.15s linear;
+  filter: drop-shadow(0 0 4px rgba(120, 230, 160, 0.4));
 }
 
 .trajectoryLabel {
@@ -80,4 +53,40 @@
 .speedReadout {
   font: 600 10px/1 system-ui, sans-serif;
   letter-spacing: 0.04em;
+}
+
+/* D88: below the low-speed threshold the speed bar flashes red */
+.speedBarFillLowFlash {
+  background: rgba(255, 70, 60, 0.95);
+  box-shadow: 0 0 8px rgba(255, 80, 70, 0.7);
+  animation: speedBarLowFlashPulse 0.6s ease-in-out infinite;
+}
+@keyframes speedBarLowFlashPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+/* D88: low-speed warning banner across the bottom of the ship view */
+.lowSpeedWarningBanner {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 64px);
+  display: none;
+  text-align: center;
+  padding: 6px 10px;
+  background: rgba(70, 10, 8, 0.72);
+  color: rgba(255, 210, 200, 0.98);
+  font: 800 12px/1.2 system-ui, sans-serif;
+  letter-spacing: 0.06em;
+  text-shadow: 0 0 6px rgba(255, 60, 50, 0.8);
+  pointer-events: none;
+  animation: lowSpeedWarningBannerPulse 0.7s ease-in-out infinite;
+}
+.lowSpeedWarningBannerVisible {
+  display: block;
+}
+@keyframes lowSpeedWarningBannerPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
 }

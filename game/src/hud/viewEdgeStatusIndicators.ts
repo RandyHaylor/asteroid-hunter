@@ -1,19 +1,16 @@
 import './viewEdgeStatusIndicators.css'
 
-// D66: on-view status indicators along the left edge of the square play view.
-//  - A vertical SPEED-UPGRADE LEVEL bar runs up the left edge (fills bottom→top as the player's
-//    cruise speed grows via SPEED BOOST power-ups; cruise speed itself is constant within a run).
-//  - A small MISSILE charge meter sits in the bottom-left corner under the speed bar: a rocket
-//    silhouette (CSS-masked) that fills bottom→top as the missile recharges and glows when ready.
-// Replaces the old laser/missile cooldown bars (the laser bar was removed in D66). Purely
-// presentational — not controls.
+// D66/D88: on-view status indicator in the bottom-left corner.
+//  - A small MISSILE charge meter: a rocket silhouette (CSS-masked) that fills bottom→top as the
+//    missile recharges and glows when ready.
+// D88 REMOVED the old vertical speed-upgrade level bar (it was confusing alongside the new bottom-right
+// speed bar, and speed is now shown live there). Purely presentational — not a control.
 
 export type ViewEdgeStatusIndicators = {
   /**
-   * @param speedLevelFraction  0..1: current cruise speed over the full-scale reference (upgrade level)
    * @param missileReadyFraction 0..1: 1 = missile fully recharged / ready to fire
    */
-  updateViewEdgeStatusIndicators(speedLevelFraction: number, missileReadyFraction: number): void
+  updateViewEdgeStatusIndicators(missileReadyFraction: number): void
 }
 
 // rocket silhouette used as a CSS mask so the orange charge fill takes the missile shape (body
@@ -26,14 +23,6 @@ const MISSILE_SILHOUETTE_SVG_MARKUP =
 const MISSILE_SILHOUETTE_MASK_CSS_URL = `url("data:image/svg+xml;utf8,${encodeURIComponent(MISSILE_SILHOUETTE_SVG_MARKUP)}")`
 
 export function createViewEdgeStatusIndicators(viewHudOverlay: HTMLElement): ViewEdgeStatusIndicators {
-  // vertical speed-upgrade level bar on the far left edge
-  const speedLevelBar = document.createElement('div')
-  speedLevelBar.className = 'speedLevelBar'
-  const speedLevelFill = document.createElement('div')
-  speedLevelFill.className = 'speedLevelFill'
-  speedLevelBar.appendChild(speedLevelFill)
-  viewHudOverlay.appendChild(speedLevelBar)
-
   // missile charge meter (rocket silhouette filling bottom→top) in the bottom-left corner
   const missileChargeMeter = document.createElement('div')
   missileChargeMeter.className = 'missileChargeMeter'
@@ -52,8 +41,7 @@ export function createViewEdgeStatusIndicators(viewHudOverlay: HTMLElement): Vie
   }
 
   return {
-    updateViewEdgeStatusIndicators(speedLevelFraction, missileReadyFraction): void {
-      speedLevelFill.style.height = `${clampFraction(speedLevelFraction) * 100}%`
+    updateViewEdgeStatusIndicators(missileReadyFraction): void {
       const clampedMissileFraction = clampFraction(missileReadyFraction)
       missileChargeFill.style.height = `${clampedMissileFraction * 100}%`
       missileChargeMeter.classList.toggle('missileChargeMeterReady', clampedMissileFraction >= 1)

@@ -1,28 +1,5 @@
-/* D66: left-edge on-view status indicators — a vertical speed-upgrade level bar up the left edge,
-   and a rocket-silhouette missile charge meter in the bottom-left corner under it. Not controls. */
-
-.speedLevelBar {
-  position: absolute;
-  left: calc(env(safe-area-inset-left, 0px) + 8px);
-  top: 18%;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 44px);
-  width: 6px;
-  border-radius: 3px;
-  overflow: hidden;
-  background: rgba(8, 14, 22, 0.5);
-  border: 1px solid rgba(160, 200, 230, 0.25);
-  pointer-events: none;
-}
-
-.speedLevelFill {
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  width: 100%;
-  height: 0%;
-  background: linear-gradient(to top, rgba(120, 230, 160, 0.85), rgba(180, 255, 210, 0.95));
-  box-shadow: 0 0 6px rgba(140, 240, 180, 0.5);
-}
+/* D66/D88: bottom-left rocket-silhouette missile charge meter. (The vertical speed-upgrade level bar
+   was removed in D88 — speed is now shown by the bottom-right speed bar.) Not a control. */
 
 .missileChargeMeter {
   position: absolute;

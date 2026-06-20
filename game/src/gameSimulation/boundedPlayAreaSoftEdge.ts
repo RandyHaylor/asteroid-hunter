@@ -7,8 +7,10 @@ import { PLAY_AREA_RADIUS_METERS } from '../asteroids/asteroidFieldSpawner'
 // slowed. There is no inward shove and no speed damp. The auto-steer is suppressed while the player
 // is actively dragging the radar to steer; it resumes (gently) the moment they release.
 
-/** the auto-steer engages outside this fraction of the play radius */
-const EDGE_ORBIT_ONSET_RADIUS_FRACTION = 0.95
+/** D88: the auto-steer engages outside this fraction of the play radius. Pushed far out (was 0.95)
+ *  so the curve happens WELL beyond the asteroid field — it reads as a soft "don't drift off forever"
+ *  boundary, not an intentional orbit hugging the field. */
+const EDGE_ORBIT_ONSET_RADIUS_FRACTION = 1.6
 /** how fast the velocity vector is rotated toward the orbit tangent (radians/second) — gentle */
 const EDGE_ORBIT_STEER_RATE_RADIANS_PER_SECOND = 0.5
 
