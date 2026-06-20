@@ -1254,7 +1254,10 @@ function updatePlayerMovement(deltaSeconds: number): void {
     } else if (autopilotIntent.latchCommand === 'release' && grappleOrbitController.isLatched()) {
       grappleOrbitController.releaseLatch()
     }
-    effectiveThrustActive = autopilotIntent.thrustActive
+    // D84: while orbiting, the AI doesn't press thrust (a player wouldn't either) — so the universal
+    // "thrust disengages orbit" rule below doesn't fire and the orbit holds. Releasing is done via the
+    // orbit-latch interface above, exactly like the player tapping the icon.
+    effectiveThrustActive = grappleOrbitController.isLatched() ? false : autopilotIntent.thrustActive
   } else {
     if (!radarIsSteeringDrag) {
       applyPitchYawToCommandedHeading(
@@ -1274,8 +1277,10 @@ function updatePlayerMovement(deltaSeconds: number): void {
   // The ship's rotation goal is the camera heading, or the lead-aim point when an enemy is locked.
   rotatePlayerShipTowardAimGoal(deltaSeconds)
 
-  // D62: thrusting disengages the orbit (MANUAL only — the autopilot manages its own latch/release)
-  if (!autopilotModeActive && grappleOrbitController.isLatched() && flightControls.isThrustActive()) {
+  // D62/D84: thrusting disengages the orbit — UNIVERSAL, driven by the effective thrust input (manual
+  // button or autopilot), so the rule is identical whoever's flying. (The AI doesn't thrust while it
+  // wants to orbit, so this only fires for the AI on an intentional break-off.)
+  if (grappleOrbitController.isLatched() && effectiveThrustActive) {
     grappleOrbitController.releaseLatch()
   }
 
@@ -1298,29 +1303,28 @@ function updatePlayerMovement(deltaSeconds: number): void {
     )
     // D62: at the field edge, gently steer the velocity into a far orbit (constant speed, no shove) —
     // but only when the player isn't actively dragging the radar to steer.
-    // D81: the edge corrective-orbit is a PLAYER-only safety net (keeps a drifting player in the level).
-    // The AUTOPILOT must NOT use it (it changes travel without thrust) — the AI steers itself back in
-    // with thrust (see computeIdleIntent). So skip it entirely while AI mode is active.
-    if (!autopilotModeActive) {
-      easeShipIntoFieldEdgeOrbit(
-        playerShipState.positionMeters,
-        playerShipState.velocityMetersPerSecond,
-        deltaSeconds,
-        radarIsSteeringDrag,
-      )
-    }
+    // D84: UNIVERSAL — the edge corrective-orbit is a property of the ship/world, identical whether the
+    // player or the AI is flying (zero-difference). The AI also actively steers back in (computeIdleIntent),
+    // so it rarely reaches the boundary, but if it does it's treated exactly like a drifting player.
+    easeShipIntoFieldEdgeOrbit(
+      playerShipState.positionMeters,
+      playerShipState.velocityMetersPerSecond,
+      deltaSeconds,
+      radarIsSteeringDrag,
+    )
   }
 
   // D71: distance-based collision avoidance. Find the nearest close asteroid (excluding the one being
   // orbited), ramp by proximity. In FREE FLIGHT, steer the velocity outward (constant speed) — stronger
   // the closer it is. While ORBITING, the orbit controls motion, so we only record the state for the
   // deflection visuals. The render state below drives the white deflection ring + beam + player ring.
-  // D83: the avoidance pushback displaces POSITION (non-momentum) — a player-only assist. The AUTOPILOT
-  // must NOT get it (it was the "magic" strong direction change); the AI navigates by thrust/orbit only.
+  // D84: UNIVERSAL collision-avoidance — identical whether player or AI is flying (zero-difference).
   const orbitedAsteroidForAvoidance = grappleOrbitController.getLatchedAsteroid()
-  const nearestAvoidance = autopilotModeActive
-    ? null
-    : findNearestAvoidanceAsteroid(playerShipState.positionMeters, gameWorld.asteroids, orbitedAsteroidForAvoidance)
+  const nearestAvoidance = findNearestAvoidanceAsteroid(
+    playerShipState.positionMeters,
+    gameWorld.asteroids,
+    orbitedAsteroidForAvoidance,
+  )
   if (nearestAvoidance) {
     avoidanceTargetAsteroid = nearestAvoidance.asteroid
     avoidanceProximityFraction = computeAvoidanceProximityFraction(nearestAvoidance.surfaceDistanceMeters)

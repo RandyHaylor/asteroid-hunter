@@ -136,6 +136,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 
 | D83 | **AI excluded from the avoidance pushback ("magic" movement fix).** The D71 collision-avoidance pushback displaces the ship's POSITION outward at up to 70 m/s (non-momentum) within 80 m of an asteroid — a player-only assist. The AUTOPILOT was still getting it, and since the AI hugs asteroids it produced strong non-physical direction changes ("magic"). Now `findNearestAvoidanceAsteroid` is skipped entirely while AI mode is active, so the AI gets no pushback and no deflection visuals — it navigates purely by thrust + asteroid-orbit. (Verified the thrust model itself only turns velocity at 0.2 rad/s, so thrust was not the cause.) |
 
+| D84 | **AI = ZERO game difference; only the control-input source differs.** Reverted the AI-specific mechanic carve-outs (D81 edge-orbit skip, D83 avoidance skip) and made the **thrust-disengages-orbit** rule driver-agnostic (keyed to the *effective* thrust input, not specifically the manual button). Now the entire ship simulation — `rotatePlayerShipTowardAimGoal`, thrust-disengage, `stepShipFlightSimulation`, field-edge corrective orbit, collision-avoidance pushback, asteroid orbit — runs **identically** whether the player or the autopilot is flying. The autopilot's only behavioral fork is **generating the control inputs** (pitch/yaw → `applyPitchYawToCommandedHeading`, thrust, orbit-latch); it does **not** thrust while orbiting (so it doesn't self-disengage), exactly as a player wouldn't. Remaining AI-only code is view/UI only (free-look camera, THRUST-button glow). Audited: no `autopilotModeActive` branch remains in ship mechanics. |
+
 ## Requirements from the design doc
 
 ### Rendering & physics
