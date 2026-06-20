@@ -63,6 +63,12 @@ import {
   computeAvoidanceProximityFraction,
   applyAvoidancePushback,
 } from './grappleOrbit/playerAsteroidAvoidance'
+import { shipAutopilotSettings } from './autopilot/shipAutopilotSettings'
+import {
+  computeAutopilotIntent,
+  createAutopilotIntent,
+  type AutopilotContext,
+} from './autopilot/shipAutopilot'
 import { createAsteroidOrbitIcons } from './radar/asteroidOrbitIcons'
 import { createTouchFlightControls } from './hud/touchFlightControls'
 import { createPlayerCameraRig } from './hud/cameraChaseAndCockpit'
@@ -397,6 +403,48 @@ const asteroidOrbitIcons = createAsteroidOrbitIcons(
   (asteroid) => grappleOrbitController.onAsteroidIconPressed(asteroid, playerShipState, performance.now() / 1000),
   (asteroid) => grappleOrbitController.onAsteroidIconReleased(asteroid, performance.now() / 1000),
 )
+
+// D74: AUTOPILOT ("AI mode") — an "AI" toggle button + state. Default OFF (manual flight). When active,
+// the autopilot drives the commanded heading + thrust + evasion-orbit from shipAutopilotSettings.
+let autopilotModeActive = false
+let autopilotIsForcedThisWave = false // D74: wave-3 forced-AI level locks manual flight out (set in wave logic)
+const autopilotIntent = createAutopilotIntent()
+let autopilotWasEvadingLastFrame = false
+let lastPlayerDamageAtSeconds = Number.NEGATIVE_INFINITY
+const AUTOPILOT_RECENT_DAMAGE_WINDOW_SECONDS = 1.5
+
+const autopilotToggleButton = document.createElement('button')
+autopilotToggleButton.className = 'autopilotToggleButton'
+autopilotToggleButton.textContent = 'AI'
+function refreshAutopilotToggleButtonAppearance(): void {
+  autopilotToggleButton.classList.toggle('autopilotToggleButtonActive', autopilotModeActive)
+  autopilotToggleButton.setAttribute('aria-pressed', String(autopilotModeActive))
+}
+autopilotToggleButton.addEventListener('click', () => {
+  if (autopilotIsForcedThisWave) return // can't drop out of AI during a forced-AI wave (D74 wave 3)
+  autopilotModeActive = !autopilotModeActive
+  refreshAutopilotToggleButtonAppearance()
+})
+refreshAutopilotToggleButtonAppearance()
+rightControlCluster.appendChild(autopilotToggleButton)
+
+// D74: autopilot evasion — tap-latch the nearest large asteroid to orbit (juke + isolate pursuers)
+function latchNearestAsteroidForAutopilotEvasion(): void {
+  let nearestAsteroid: AsteroidBody | null = null
+  let nearestDistanceMeters = Infinity
+  for (const asteroid of gameWorld.asteroids) {
+    if (asteroid.isDestroyed || asteroid.sizeClass !== 'large') continue
+    const distanceMeters = playerShipState.positionMeters.distanceTo(asteroid.positionMeters)
+    if (distanceMeters < nearestDistanceMeters) {
+      nearestDistanceMeters = distanceMeters
+      nearestAsteroid = asteroid
+    }
+  }
+  if (!nearestAsteroid) return
+  const nowSeconds = performance.now() / 1000
+  grappleOrbitController.onAsteroidIconPressed(nearestAsteroid, playerShipState, nowSeconds)
+  grappleOrbitController.onAsteroidIconReleased(nearestAsteroid, nowSeconds) // tap → commit the orbit
+}
 
 // now that the clusters + radar region exist, lay everything out and keep it in sync on resize
 layoutGameRegions()
@@ -756,6 +804,7 @@ const weaponHitCallbacks = {
   },
   onPlayerHit(damageAmount: number): void {
     playerShipCondition.applyIncomingWeaponDamage(damageAmount, simulationClockSeconds)
+    lastPlayerDamageAtSeconds = simulationClockSeconds // D74: autopilot's "flee after any damage" signal
     gameAudioSystem.playPlayerHitSound() // D23
   },
 }
@@ -912,6 +961,24 @@ function applyPitchYawToCommandedHeading(
   commandedOrientation.multiply(scratchCommandedYawRotation).multiply(scratchCommandedPitchRotation).normalize()
 }
 
+// D74: rotate the commanded heading so its forward points toward a world direction, at the ship's max
+// turn rate (used by the autopilot to steer the camera/heading toward its desired direction).
+const scratchAutopilotCurrentForward = new THREE.Vector3()
+const scratchAutopilotDeltaRotation = new THREE.Quaternion()
+const scratchAutopilotTargetOrientation = new THREE.Quaternion()
+function steerCommandedHeadingTowardDirection(
+  commandedOrientation: THREE.Quaternion,
+  desiredDirectionWorld: THREE.Vector3,
+  deltaSeconds: number,
+): void {
+  if (desiredDirectionWorld.lengthSq() < 1e-9) return
+  scratchAutopilotCurrentForward.copy(COMMANDED_FORWARD_LOCAL).applyQuaternion(commandedOrientation)
+  scratchAutopilotDeltaRotation.setFromUnitVectors(scratchAutopilotCurrentForward, desiredDirectionWorld)
+  scratchAutopilotTargetOrientation.copy(scratchAutopilotDeltaRotation).multiply(commandedOrientation)
+  const maxStepRadians = playerShipBaseFlightStats.maxTurnRateRadiansPerSecond * deltaSeconds
+  commandedOrientation.rotateTowards(scratchAutopilotTargetOrientation, maxStepRadians)
+}
+
 // D43/D53: the ONE ship-rotation path. The ship's rotation GOAL is the camera (commanded/radar)
 // heading — UNLESS an enemy is locked, in which case the goal becomes the lead-ahead aim point
 // instead (NOT the camera), so the ship tracks the target even while you drag the camera elsewhere.
@@ -1013,25 +1080,55 @@ function updatePlayerMovement(deltaSeconds: number): void {
   // the heading back to the ship (that caused a camera jump on drag release).
   const commandedOrientation = radarSphereDisplay.getCommandedOrientation()
   const radarIsSteeringDrag = radarSphereDisplay.isSteeringDrag()
-  if (!radarIsSteeringDrag) {
-    applyPitchYawToCommandedHeading(
+  // D74: AUTOPILOT drives heading + thrust + evasion-orbit when AI mode is on; otherwise manual input.
+  let effectiveThrustActive: boolean
+  if (autopilotModeActive) {
+    const autopilotContext: AutopilotContext = {
+      playerPositionMeters: playerShipState.positionMeters,
+      playerVelocityMetersPerSecond: playerShipState.velocityMetersPerSecond,
+      enemyShips: gameWorld.enemyShips,
+      asteroids: gameWorld.asteroids,
+      shieldFraction: playerShipCondition.getShieldPointsFraction(),
+      recentlyDamaged:
+        simulationClockSeconds - lastPlayerDamageAtSeconds < AUTOPILOT_RECENT_DAMAGE_WINDOW_SECONDS,
+      engagementRangeMeters: playerEngagementRange.combinedRadarWeaponRangeMeters,
+      wasEvadingLastFrame: autopilotWasEvadingLastFrame,
+      settings: shipAutopilotSettings,
+    }
+    computeAutopilotIntent(autopilotContext, autopilotIntent)
+    autopilotWasEvadingLastFrame = autopilotIntent.isEvading
+    steerCommandedHeadingTowardDirection(
       commandedOrientation,
-      flightControlInput.pitchInput,
-      flightControlInput.yawInput,
+      autopilotIntent.desiredHeadingDirectionWorld,
       deltaSeconds,
     )
-    const lockedEnemyForCameraTracking = currentAutoAimTarget
-    if (lockedEnemyForCameraTracking !== null && !lockedEnemyForCameraTracking.isDestroyed) {
-      easeCommandedHeadingTowardEnemy(commandedOrientation, lockedEnemyForCameraTracking.positionMeters, deltaSeconds)
+    if (autopilotIntent.latchCommand === 'latchNearestForEvasion') {
+      if (!grappleOrbitController.isLatched()) latchNearestAsteroidForAutopilotEvasion()
+    } else if (autopilotIntent.latchCommand === 'release' && grappleOrbitController.isLatched()) {
+      grappleOrbitController.releaseLatch()
     }
+    effectiveThrustActive = autopilotIntent.thrustActive
+  } else {
+    if (!radarIsSteeringDrag) {
+      applyPitchYawToCommandedHeading(
+        commandedOrientation,
+        flightControlInput.pitchInput,
+        flightControlInput.yawInput,
+        deltaSeconds,
+      )
+      const lockedEnemyForCameraTracking = currentAutoAimTarget
+      if (lockedEnemyForCameraTracking !== null && !lockedEnemyForCameraTracking.isDestroyed) {
+        easeCommandedHeadingTowardEnemy(commandedOrientation, lockedEnemyForCameraTracking.positionMeters, deltaSeconds)
+      }
+    }
+    effectiveThrustActive = flightControls.isThrustActive()
   }
 
   // The ship's rotation goal is the camera heading, or the lead-aim point when an enemy is locked.
   rotatePlayerShipTowardAimGoal(deltaSeconds)
 
-  // D62: thrusting disengages the orbit — the controller leaves the tangential velocity behind, so
-  // the ship slingshots off and thrust then curves it toward the facing.
-  if (grappleOrbitController.isLatched() && flightControls.isThrustActive()) {
+  // D62: thrusting disengages the orbit (MANUAL only — the autopilot manages its own latch/release)
+  if (!autopilotModeActive && grappleOrbitController.isLatched() && flightControls.isThrustActive()) {
     grappleOrbitController.releaseLatch()
   }
 
@@ -1048,7 +1145,7 @@ function updatePlayerMovement(deltaSeconds: number): void {
     // cruise speed and, while THRUST is held, curve the velocity vector toward the facing.
     stepShipFlightSimulation(
       playerShipState,
-      { pitchInput: 0, yawInput: 0, thrustActive: flightControls.isThrustActive() },
+      { pitchInput: 0, yawInput: 0, thrustActive: effectiveThrustActive },
       playerShipBaseFlightStats,
       deltaSeconds,
     )

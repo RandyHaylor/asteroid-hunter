@@ -64,13 +64,14 @@ describe('additive enemy grapple weave', () => {
     const fireIntent = createEnemyFireIntent()
     const dt = 1 / 60
 
-    const distances: number[] = []
+    // without grapple it NEVER latches an asteroid (grappledAsteroid stays null every frame).
+    // (Checking the latch flag directly is deterministic — the old distance-variance check was flaky
+    // because dumbPatrol's wander is Math.random-driven and can stay coincidentally equidistant.)
+    let everGrappled = false
     for (let step = 0; step < 120; step++) {
       updateEnemyShipBehavior(enemy, [asteroid], playerPosition, dt, fireIntent, null)
-      distances.push(enemy.positionMeters.distanceTo(asteroid.positionMeters))
+      if (enemy.grappledAsteroid !== null) everGrappled = true
     }
-    // without grapple it patrols freely — distance is NOT pinned to a constant radius
-    const sample = distances.slice(10, 90)
-    expect(Math.max(...sample) - Math.min(...sample)).toBeGreaterThan(5)
+    expect(everGrappled).toBe(false)
   })
 })

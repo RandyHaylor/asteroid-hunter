@@ -116,6 +116,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 
 | D73 | **Gentle enemy-count ramp (walks back D72's 3×).** D72's ×3 spawn was too steep now that archetypes are harder. `waveEnemyComposition.ts`: counts grow **gently** — Drones settle at 3, Raiders/Stalkers gain ~+1 every 2 waves (`Math.ceil((wave-2)/2)` / `(wave-4)/2`), capped at **8** per tier. Difficulty now comes mainly from the escalating **archetype mix** (Raiders w3+, Stalkers w5+ grapple + are tougher), not swarm size. (Enemy 3× SIZE, D69, is unchanged.) [unit-tested] |
 
+| D74 | **Autopilot "AI mode" — core + toggle (phase 1 of 3).** New `autopilot/shipAutopilotSettings.ts` (live, tunable, **very conservative** defaults: evade at 90% shield, flee on any damage, flee if >2 enemies in range, prefer isolated targets) + `autopilot/shipAutopilot.ts` (pure, unit-tested): each frame it picks an **isolated** high-priority target (isolation-weighted to fight 1–2 at a time), approaches from a preferred angle/range, and **evades** (flees the crowd + orbits the nearest asteroid to juke) when shield-low / damaged / swarmed, with hysteresis until `reEngageShieldFraction`. Drives the **same inputs the player gives** — commanded heading (`steerCommandedHeadingTowardDirection`), thrust, and grapple-orbit latch/release. An **"AI" toggle button** (right cluster) flips manual↔AI anytime; manual's thrust-disengages-orbit rule is suppressed in AI so its evasion-orbit holds. (Phases 2–3 next: settings UI + radar shrink, and the wave-3 forced-AI level.) |
+
 ## Requirements from the design doc
 
 ### Rendering & physics

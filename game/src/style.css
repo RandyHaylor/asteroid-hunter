@@ -84,6 +84,29 @@ body {
   box-shadow: 0 0 16px rgba(120, 190, 255, 0.7);
 }
 
+/* D74: AI-mode toggle button (sits in the right control cluster). Glows green when autopilot is on. */
+.autopilotToggleButton {
+  width: clamp(48px, 16vmin, 76px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 2px solid rgba(120, 230, 160, 0.6);
+  background: rgba(20, 60, 35, 0.4);
+  color: rgba(210, 255, 225, 0.95);
+  font: 700 clamp(12px, 3.4vmin, 18px) / 1 system-ui, sans-serif;
+  letter-spacing: 1px;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
+  flex: 0 1 auto;
+}
+.autopilotToggleButtonActive {
+  background: rgba(90, 220, 130, 0.85);
+  border-color: rgba(180, 255, 210, 0.95);
+  box-shadow: 0 0 16px rgba(120, 240, 160, 0.7);
+}
+
 .fireZoneButton {
   position: relative;
   width: clamp(72px, 30vmin, 112px);
