@@ -1315,12 +1315,12 @@ function updatePlayerMovement(deltaSeconds: number): void {
   // orbited), ramp by proximity. In FREE FLIGHT, steer the velocity outward (constant speed) — stronger
   // the closer it is. While ORBITING, the orbit controls motion, so we only record the state for the
   // deflection visuals. The render state below drives the white deflection ring + beam + player ring.
+  // D83: the avoidance pushback displaces POSITION (non-momentum) — a player-only assist. The AUTOPILOT
+  // must NOT get it (it was the "magic" strong direction change); the AI navigates by thrust/orbit only.
   const orbitedAsteroidForAvoidance = grappleOrbitController.getLatchedAsteroid()
-  const nearestAvoidance = findNearestAvoidanceAsteroid(
-    playerShipState.positionMeters,
-    gameWorld.asteroids,
-    orbitedAsteroidForAvoidance,
-  )
+  const nearestAvoidance = autopilotModeActive
+    ? null
+    : findNearestAvoidanceAsteroid(playerShipState.positionMeters, gameWorld.asteroids, orbitedAsteroidForAvoidance)
   if (nearestAvoidance) {
     avoidanceTargetAsteroid = nearestAvoidance.asteroid
     avoidanceProximityFraction = computeAvoidanceProximityFraction(nearestAvoidance.surfaceDistanceMeters)

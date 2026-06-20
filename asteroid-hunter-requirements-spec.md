@@ -134,6 +134,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 
 | D82 | **Thruster visuals reflect AI thrust (exhaust + button).** The engine-exhaust plume and the THRUST button were keyed only to the **manual** button (`flightControls.isThrustActive()`), so when the autopilot thrust (curving its momentum to orbit enemies) nothing showed — it looked "magic." Now a module-level `currentEffectiveThrustActive` (manual OR autopilot thrust, and **false while orbiting** since the orbit carries the ship) drives the exhaust plume, and a new visual-only `reflectAutopilotThrustVisual` lights the **THRUST button as pressed** while the AI thrusts (cleared on exit). Confirms the AI's enemy-orbiting is genuine thrust-driven maneuvering, now visible. |
 
+| D83 | **AI excluded from the avoidance pushback ("magic" movement fix).** The D71 collision-avoidance pushback displaces the ship's POSITION outward at up to 70 m/s (non-momentum) within 80 m of an asteroid — a player-only assist. The AUTOPILOT was still getting it, and since the AI hugs asteroids it produced strong non-physical direction changes ("magic"). Now `findNearestAvoidanceAsteroid` is skipped entirely while AI mode is active, so the AI gets no pushback and no deflection visuals — it navigates purely by thrust + asteroid-orbit. (Verified the thrust model itself only turns velocity at 0.2 rad/s, so thrust was not the cause.) |
+
 ## Requirements from the design doc
 
 ### Rendering & physics
