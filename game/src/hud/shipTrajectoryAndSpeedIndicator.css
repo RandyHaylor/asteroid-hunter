@@ -1,0 +1,83 @@
+/* D86: bottom-right "trajectory + speed" cluster — a 3D-aware trajectory arrow, a "trajectory" label,
+   a horizontal speed bar (full at cruise/max speed), and the live m/s readout. Not a control. */
+
+.trajectorySpeedCluster {
+  position: absolute;
+  right: calc(env(safe-area-inset-right, 0px) + 10px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+  width: 76px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  pointer-events: none;
+  color: rgba(180, 220, 245, 0.9);
+  text-shadow: 0 0 4px rgba(20, 40, 60, 0.8);
+}
+
+.trajectoryArrowFrame {
+  position: relative;
+  width: 40px;
+  height: 40px;
+}
+
+.trajectoryArrowGlyph {
+  position: absolute;
+  inset: 0;
+  color: rgba(120, 230, 160, 0.95);
+  filter: drop-shadow(0 0 5px rgba(120, 230, 160, 0.5));
+  transform-origin: 50% 50%;
+  transition: opacity 0.15s linear;
+}
+.trajectoryArrowGlyph svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* shown when travel is nearly straight into/out of the screen (heading not meaningful on-screen) */
+.trajectoryHeadOnDot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: rgba(120, 230, 160, 0.95);
+  box-shadow: 0 0 6px rgba(120, 230, 160, 0.6);
+  opacity: 0;
+  transition: opacity 0.15s linear;
+}
+
+.trajectoryLabel {
+  font: 600 9px/1 system-ui, sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.speedBarTrack {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: rgba(8, 14, 22, 0.5);
+  border: 1px solid rgba(160, 200, 230, 0.25);
+}
+
+.speedBarFill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(to right, rgba(120, 200, 240, 0.85), rgba(190, 235, 255, 0.95));
+  box-shadow: 0 0 6px rgba(150, 215, 245, 0.5);
+}
+
+.speedReadout {
+  font: 600 10px/1 system-ui, sans-serif;
+  letter-spacing: 0.04em;
+}

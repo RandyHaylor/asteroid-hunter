@@ -41,6 +41,7 @@ import { computeLeadAimDirection } from './weapons/targetLeadPrediction'
 import { createLaserVolleySystem } from './weapons/laserFire'
 import { createMissileVolleySystem } from './weapons/missileFire'
 import { createViewEdgeStatusIndicators } from './hud/viewEdgeStatusIndicators'
+import { createShipTrajectoryAndSpeedIndicator } from './hud/shipTrajectoryAndSpeedIndicator'
 import { createLockedEnemyPreview } from './hud/lockedEnemyPreview'
 import { createCockpitFrameOverlay } from './hud/cockpitFrameOverlay'
 import {
@@ -388,6 +389,12 @@ const flightControls = createTouchFlightControls(leftControlCluster)
 // D47/D66: weapons are always on (no fire buttons). Left-edge status: a vertical speed-upgrade level
 // bar plus a bottom-left missile charge meter (laser bar removed in D66).
 const viewEdgeStatusIndicators = createViewEdgeStatusIndicators(viewHudOverlay)
+// D86: bottom-right trajectory arrow + horizontal speed bar (full at cruise) + live m/s readout
+const scratchTravelDirectionInViewSpace = new THREE.Vector3()
+const shipTrajectoryAndSpeedIndicator = createShipTrajectoryAndSpeedIndicator(
+  viewHudOverlay,
+  scratchTravelDirectionInViewSpace,
+)
 // D66: full-scale cruise speed the left-edge speed bar fills toward (base is 80 m/s; SPEED BOOST
 // power-ups raise the live cruise speed up toward this). Tunable — purely the bar's reference max.
 const SPEED_LEVEL_FULL_SCALE_METERS_PER_SECOND = 200
@@ -1520,6 +1527,14 @@ function syncRenderObjectsFromSimulation(): void {
   const missileReadyFraction =
     1 - (playerNextMissileFireTimeSeconds - simulationClockSeconds) / playerBaseMissileStats.fireCooldownSeconds
   viewEdgeStatusIndicators.updateViewEdgeStatusIndicators(speedLevelFraction, missileReadyFraction)
+
+  // D86: bottom-right trajectory arrow (travel direction relative to the view) + speed bar (full at
+  // cruise) + live m/s. Bar reads current speed over the present cruise max; m/s carries upgrade scaling.
+  shipTrajectoryAndSpeedIndicator.updateShipTrajectoryAndSpeedIndicator(
+    playerShipState.velocityMetersPerSecond,
+    playerViewCamera.quaternion,
+    playerShipBaseFlightStats.cruiseSpeedMetersPerSecond,
+  )
 }
 
 function runFrameLoop(currentFrameTimestampMs: number): void {
