@@ -422,6 +422,8 @@ const autopilotIntent = createAutopilotIntent()
 let autopilotWasEvadingLastFrame = false
 let lastPlayerDamageAtSeconds = Number.NEGATIVE_INFINITY
 const AUTOPILOT_RECENT_DAMAGE_WINDOW_SECONDS = 1.5
+// D82: the effective thrust this frame (manual OR autopilot, and not while orbiting) — drives the thruster visuals
+let currentEffectiveThrustActive = false
 
 // D75/D77: the AI settings overlay sits over the radar (radar visible behind), with a caret toggle +
 // an EXIT AI PILOT button. Exiting is blocked during a forced-AI wave (wave 3).
@@ -505,6 +507,7 @@ function setAutopilotModeActive(active: boolean): void {
   manualControlsBlockOverlay.classList.toggle('manualControlsBlockOverlayActive', active) // D77
   resetAutopilotFreeLook() // D79: recenter the look-around when the mode toggles
   autopilotFreeLookMessage.classList.toggle('autopilotFreeLookMessageVisible', active) // D79
+  if (!active) flightControls.reflectAutopilotThrustVisual(false) // D82: clear AI-driven button glow on exit
 }
 autopilotToggleButton.addEventListener('click', () => {
   if (autopilotIsForcedThisWave) return // can't drop out of AI during a forced-AI wave (D74 wave 3)
@@ -1333,6 +1336,11 @@ function updatePlayerMovement(deltaSeconds: number): void {
     avoidanceTargetAsteroid = null
     avoidanceProximityFraction = 0
   }
+
+  // D82: the EFFECTIVE thrust this frame (manual button OR autopilot), used to drive the thruster visuals
+  // (exhaust plume + the THRUST button lit). No plume while orbiting — the orbit carries the ship.
+  currentEffectiveThrustActive = effectiveThrustActive && !grappleOrbitController.isLatched()
+  if (autopilotModeActive) flightControls.reflectAutopilotThrustVisual(currentEffectiveThrustActive)
 }
 
 // ===== STEP 9: fixed-timestep simulation loop =====
@@ -1406,7 +1414,7 @@ function syncRenderObjectsFromSimulation(): void {
   shipFuzzyRing.position.copy(playerShipMesh.position)
 
   // D54: thrust plume shows while THRUST is held (momentum steering), color cycling red→yellow
-  updatePlayerEngineExhaust(flightControls.isThrustActive() ? 1 : 0, simulationClockSeconds)
+  updatePlayerEngineExhaust(currentEffectiveThrustActive ? 1 : 0, simulationClockSeconds) // D82: manual OR AI thrust
 
   // D21: blue shield / red hull bars over damaged enemies, billboarded to the player camera
   enemyConditionBarsDisplay.updateEnemyConditionBars(

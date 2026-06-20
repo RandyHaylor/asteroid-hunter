@@ -132,6 +132,8 @@ Source: `asteroid-hunter-initial-design-proposal.md` + requirements interview 20
 
 | D81 | **Autopilot navigates by thrust/orbit only (no "turning without thrust").** Root cause of the AI doing wide turns with no thrust: it **coasted** (thrust off) and the **field-edge corrective orbit** (D62) curved it — a mechanic that's a player-only safety net. Fixes: (1) **thrust is now central** — the AI thrusts whenever its current travel isn't within ~12° of its desired heading and coasts only when already aligned, so every course change is thrust-driven (the real mechanic; rotating facing alone never changes velocity, verified in `newtonianShipPhysics`). (2) The **edge corrective-orbit is skipped while AI mode is active** (`!autopilotModeActive` guard) — the AI may not use it. (3) **Idle AI steers back toward field center** (under thrust) past 1500 m so it never drifts to the boundary. Evade still orbits a nearby asteroid (a real mechanic). |
 
+| D82 | **Thruster visuals reflect AI thrust (exhaust + button).** The engine-exhaust plume and the THRUST button were keyed only to the **manual** button (`flightControls.isThrustActive()`), so when the autopilot thrust (curving its momentum to orbit enemies) nothing showed — it looked "magic." Now a module-level `currentEffectiveThrustActive` (manual OR autopilot thrust, and **false while orbiting** since the orbit carries the ship) drives the exhaust plume, and a new visual-only `reflectAutopilotThrustVisual` lights the **THRUST button as pressed** while the AI thrusts (cleared on exit). Confirms the AI's enemy-orbiting is genuine thrust-driven maneuvering, now visible. |
+
 ## Requirements from the design doc
 
 ### Rendering & physics

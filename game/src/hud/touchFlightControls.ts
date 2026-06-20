@@ -9,6 +9,9 @@ export type TouchFlightControls = {
   readFlightControlInput(): ShipFlightControlInput
   /** D54: true while the thrust button (touch) or a thrust key (Shift/Space) is held */
   isThrustActive(): boolean
+  /** D82: visually light the THRUST button as pressed while the AUTOPILOT is thrusting (visual only —
+   *  does NOT affect isThrustActive, since the AI drives thrust through its own effective-thrust flag) */
+  reflectAutopilotThrustVisual(isAutopilotThrusting: boolean): void
 }
 
 export function createTouchFlightControls(leftControlCluster: HTMLElement): TouchFlightControls {
@@ -82,5 +85,10 @@ export function createTouchFlightControls(leftControlCluster: HTMLElement): Touc
       }
     },
     isThrustActive,
+    reflectAutopilotThrustVisual(isAutopilotThrusting: boolean): void {
+      // visual only — never touch thrustButtonHeld (that's the manual control's own state)
+      thrustButton.classList.toggle('thrustButtonActive', isAutopilotThrusting)
+      thrustButton.setAttribute('aria-pressed', isAutopilotThrusting ? 'true' : 'false')
+    },
   }
 }
