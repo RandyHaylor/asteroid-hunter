@@ -107,6 +107,45 @@ body {
   box-shadow: 0 0 16px rgba(120, 240, 160, 0.7);
 }
 
+/* D76: forced-AI wave (wave 3) — full-screen red flash + bold malfunction message */
+.autopilotMalfunctionFlash {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 0, 0, 0.55);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 50;
+}
+.autopilotMalfunctionFlashActive {
+  animation: autopilotMalfunctionFlashPulse 0.5s ease-in-out 4;
+}
+@keyframes autopilotMalfunctionFlashPulse {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 0.6; }
+}
+.autopilotMalfunctionMessage {
+  position: fixed;
+  top: 16%;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 80%;
+  text-align: center;
+  color: rgb(255, 90, 90);
+  font: 700 clamp(14px, 2.6vmin, 24px) / 1.45 system-ui, sans-serif;
+  text-shadow: 0 0 12px rgba(255, 0, 0, 0.85);
+  background: rgba(25, 0, 0, 0.62);
+  padding: 14px 20px;
+  border: 2px solid rgba(255, 70, 70, 0.85);
+  border-radius: 8px;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 51;
+  transition: opacity 0.4s ease;
+}
+.autopilotMalfunctionMessageVisible {
+  opacity: 1;
+}
+
 .fireZoneButton {
   position: relative;
   width: clamp(72px, 30vmin, 112px);

@@ -435,6 +435,40 @@ autopilotToggleButton.addEventListener('click', () => {
 setAutopilotModeActive(false)
 rightControlCluster.appendChild(autopilotToggleButton)
 
+// D76: wave-3 is a FORCED AI-ONLY level — red flash + a bold "manual controls malfunction" message,
+// manual flight locked out (the toggle is blocked while forced). Unlocks again on the next wave.
+const FORCED_AUTOPILOT_WAVE_NUMBER = 3
+const autopilotMalfunctionFlash = document.createElement('div')
+autopilotMalfunctionFlash.className = 'autopilotMalfunctionFlash'
+document.body.appendChild(autopilotMalfunctionFlash)
+const autopilotMalfunctionMessage = document.createElement('div')
+autopilotMalfunctionMessage.className = 'autopilotMalfunctionMessage'
+autopilotMalfunctionMessage.textContent =
+  "WARNING - MALFUNCTION IN MANUAL FLIGHT CONTROLS DETECTED - MANUAL MODE OFFLINE - " +
+  "'Sorry, captain, looks like you'll have to rely on the ships ai for this wave...'"
+document.body.appendChild(autopilotMalfunctionMessage)
+let autopilotMalfunctionMessageHideTimeoutHandle = 0
+function showAutopilotMalfunctionWarning(): void {
+  autopilotMalfunctionFlash.classList.remove('autopilotMalfunctionFlashActive')
+  void autopilotMalfunctionFlash.offsetWidth // reflow so the flash animation restarts
+  autopilotMalfunctionFlash.classList.add('autopilotMalfunctionFlashActive')
+  autopilotMalfunctionMessage.classList.add('autopilotMalfunctionMessageVisible')
+  window.clearTimeout(autopilotMalfunctionMessageHideTimeoutHandle)
+  autopilotMalfunctionMessageHideTimeoutHandle = window.setTimeout(() => {
+    autopilotMalfunctionMessage.classList.remove('autopilotMalfunctionMessageVisible')
+  }, 5500)
+}
+// set/clear the forced-AI lock as each wave goes active
+function applyForcedAutopilotForWave(waveNumber: number): void {
+  if (waveNumber === FORCED_AUTOPILOT_WAVE_NUMBER) {
+    autopilotIsForcedThisWave = true
+    setAutopilotModeActive(true) // force AI on for the malfunction wave
+    showAutopilotMalfunctionWarning()
+  } else if (autopilotIsForcedThisWave) {
+    autopilotIsForcedThisWave = false // manual flight restored next wave (AI stays on until toggled off)
+  }
+}
+
 // D74: autopilot evasion — tap-latch the nearest large asteroid to orbit (juke + isolate pursuers)
 function latchNearestAsteroidForAutopilotEvasion(): void {
   let nearestAsteroid: AsteroidBody | null = null
@@ -749,6 +783,7 @@ function updateWavePhase(deltaSeconds: number): void {
   if (currentWavePhase === 'waveIntro' && wavePhaseCountdownSeconds <= 0) {
     hideWaveBanner()
     spawnEnemiesForWave(currentWaveNumber)
+    applyForcedAutopilotForWave(currentWaveNumber) // D76: wave 3 = forced AI-only
     currentWavePhase = 'waveActive'
     gameAudioSystem.playWaveStartSound() // D23
     return
