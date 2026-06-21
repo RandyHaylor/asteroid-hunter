@@ -1,16 +1,19 @@
 import { Quaternion, Vector3 } from 'three'
 import type { AsteroidBody } from '../gameSimulation/gameWorldTypes'
 import type { ShipRigidBodyState } from '../gameSimulation/newtonianShipPhysics'
+import { classifyAsteroidGrappleEligibility } from '../grappleOrbit/asteroidGrappleEligibility'
 import './asteroidOrbitIcons.css'
 
-// D60: DOM icons around the radar RIM — one per in-range asteroid you can slingshot around. Each icon
-// is placed at the asteroid's bearing (projected into the commanded/camera frame, snapped to the rim)
-// and colored yellow→orange→red as it gets closer (closer = a tighter, stronger slingshot). Too close
-// to orbit → black + untappable; too far → hidden. Tapping an icon drives the grapple controller.
+// D60/D102: DOM icons around the radar RIM — one per in-range asteroid. D102 gates GRAPPLEABILITY by
+// travel geometry (only rocks at/behind the perpendicular travel plane, within 45° of it, are tappable
+// — see asteroidGrappleEligibility). Rocks still APPROACHING in front show GREY and blink in their
+// distance color as they get close (not tappable yet). Closer icons layer over farther ones (z-index),
+// for both visuals and touch. The visible circle is colored yellow→orange→red by closeness.
 
 const MIN_ORBIT_SURFACE_DISTANCE_METERS = 14 // closer than this is too tight to orbit (black, untappable)
-const MAX_ORBIT_RANGE_METERS = 1200 // D66: doubled (was 600) — orbit from twice as far to start
+const MAX_ORBIT_RANGE_METERS = 1200 // D66: orbit from twice as far to start
 const RIM_OFFSET_PERCENT = 46 // icon sits this far from the scope center toward the rim
+const APPROACHING_BLINK_CLOSENESS = 0.5 // an approaching (in-front) rock blinks once it's at least this close
 
 export type AsteroidOrbitIcons = {
   updateAsteroidOrbitIcons(
@@ -19,12 +22,22 @@ export type AsteroidOrbitIcons = {
     commandedOrientation: Quaternion,
     latchedAsteroidId: number | null,
   ): void
+  /** D102/intro: hide + disable ALL rim icons (used by the pre-wave-1 intro to gate them on/off) */
+  setIconsGloballyHidden(hidden: boolean): void
 }
 
 type AsteroidIconEntry = {
   element: HTMLDivElement
   asteroid: AsteroidBody
 }
+
+const ICON_STATE_CLASSES = [
+  'asteroidOrbitIconGrappleable',
+  'asteroidOrbitIconApproaching',
+  'asteroidOrbitIconApproachingBlink',
+  'asteroidOrbitIconUnreachable',
+  'asteroidOrbitIconTooClose',
+]
 
 export function createAsteroidOrbitIcons(
   radarControlZone: HTMLElement,
@@ -61,6 +74,10 @@ export function createAsteroidOrbitIcons(
     return entry
   }
 
+  function setIconState(element: HTMLDivElement, stateClass: string): void {
+    for (const cls of ICON_STATE_CLASSES) element.classList.toggle(cls, cls === stateClass)
+  }
+
   return {
     updateAsteroidOrbitIcons(asteroids, playerShipState, commandedOrientation, latchedAsteroidId): void {
       scratchInverseCommandedOrientation.copy(commandedOrientation).invert()
@@ -93,26 +110,43 @@ export function createAsteroidOrbitIcons(
         }
         element.style.left = `${50 + RIM_OFFSET_PERCENT * screenX}%`
         element.style.top = `${50 - RIM_OFFSET_PERCENT * screenY}%`
+        // D102: closer icons layer OVER farther ones (visual + touch) — higher z for nearer rocks
+        element.style.zIndex = `${Math.max(1, Math.round(100000 - centerDistanceMeters))}`
 
-        const isTooCloseToOrbit = surfaceDistanceMeters < MIN_ORBIT_SURFACE_DISTANCE_METERS
-        if (isTooCloseToOrbit) {
-          element.style.background = '#101010'
-          element.style.borderColor = '#333333'
-          element.style.pointerEvents = 'none'
-        } else {
-          // closeness 0 at max range (yellow, hue 60°) → 1 at the min (red, hue 0°)
-          const closenessFraction = Math.max(
-            0,
-            Math.min(
-              1,
-              1 -
-                (surfaceDistanceMeters - MIN_ORBIT_SURFACE_DISTANCE_METERS) /
-                  (MAX_ORBIT_RANGE_METERS - MIN_ORBIT_SURFACE_DISTANCE_METERS),
-            ),
+        // closeness 0 at max range (yellow, hue 60°) → 1 at the min (red, hue 0°)
+        const closenessFraction = Math.max(
+          0,
+          Math.min(
+            1,
+            1 -
+              (surfaceDistanceMeters - MIN_ORBIT_SURFACE_DISTANCE_METERS) /
+                (MAX_ORBIT_RANGE_METERS - MIN_ORBIT_SURFACE_DISTANCE_METERS),
+          ),
+        )
+        const distanceColorHsl = `hsl(${60 * (1 - closenessFraction)}, 100%, 55%)`
+        element.style.setProperty('--asteroid-distance-color', distanceColorHsl)
+
+        const eligibility = classifyAsteroidGrappleEligibility(
+          playerShipState.positionMeters,
+          asteroid.positionMeters,
+          playerShipState.velocityMetersPerSecond,
+        )
+        if (surfaceDistanceMeters < MIN_ORBIT_SURFACE_DISTANCE_METERS) {
+          setIconState(element, 'asteroidOrbitIconTooClose') // too tight to orbit
+        } else if (eligibility === 'grappleable') {
+          element.style.setProperty('--asteroid-icon-color', distanceColorHsl)
+          setIconState(element, 'asteroidOrbitIconGrappleable') // tappable
+        } else if (eligibility === 'approachingInFront') {
+          // grey while still ahead; blink in its distance color once it's getting close (not tappable yet)
+          setIconState(
+            element,
+            closenessFraction >= APPROACHING_BLINK_CLOSENESS
+              ? 'asteroidOrbitIconApproachingBlink'
+              : 'asteroidOrbitIconApproaching',
           )
-          element.style.background = `hsl(${60 * (1 - closenessFraction)}, 100%, 55%)`
-          element.style.borderColor = 'rgba(255, 255, 255, 0.85)'
-          element.style.pointerEvents = 'auto'
+        } else {
+          // passed behind the 45° window (or no travel) — grey, not grappleable
+          setIconState(element, 'asteroidOrbitIconUnreachable')
         }
         element.classList.toggle('asteroidOrbitIconLatched', asteroid.asteroidId === latchedAsteroidId)
       }
@@ -123,6 +157,9 @@ export function createAsteroidOrbitIcons(
         iconLayer.removeChild(entry.element)
         iconByAsteroidId.delete(asteroidId)
       }
+    },
+    setIconsGloballyHidden(hidden: boolean): void {
+      iconLayer.style.display = hidden ? 'none' : ''
     },
   }
 }

@@ -1,4 +1,6 @@
-/* D60: rim icons for slingshot-able asteroids, overlaid on the circular radar scope */
+/* D60/D102: rim icons for slingshot-able asteroids, overlaid on the circular radar scope. The ELEMENT
+   is a larger transparent hit box (touch area a few px bigger than the visible circle, D102); the
+   ::before is the visible colored circle. */
 .asteroidOrbitIconLayer {
   position: absolute;
   inset: 0;
@@ -8,18 +10,68 @@
 
 .asteroidOrbitIcon {
   position: absolute;
-  width: clamp(14px, 5vmin, 22px);
-  height: clamp(14px, 5vmin, 22px);
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.85);
+  /* hit box — a few px larger than the visible circle so the icons are easier to tap */
+  width: clamp(22px, 7vmin, 32px);
+  height: clamp(22px, 7vmin, 32px);
   transform: translate(-50%, -50%);
   box-sizing: border-box;
-  cursor: pointer;
   touch-action: none;
   will-change: left, top;
+  pointer-events: none; /* re-enabled per-state (only grappleable icons are tappable) */
+  --asteroid-icon-color: #888888;
 }
 
-.asteroidOrbitIconLatched {
+/* the visible circle, centered in the hit box */
+.asteroidOrbitIcon::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: clamp(14px, 5vmin, 22px);
+  height: clamp(14px, 5vmin, 22px);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  background: var(--asteroid-icon-color);
+}
+
+/* grappleable (at/behind the plane within 45°): distance-colored + tappable */
+.asteroidOrbitIconGrappleable {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+/* approaching in front (not grappleable yet): grey, dim border */
+.asteroidOrbitIconApproaching::before,
+.asteroidOrbitIconApproachingBlink::before,
+.asteroidOrbitIconUnreachable::before {
+  background: #888888;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+/* an approaching rock that's getting close blinks in its distance color */
+.asteroidOrbitIconApproachingBlink::before {
+  animation: asteroidApproachBlink 0.7s steps(1, end) infinite;
+}
+@keyframes asteroidApproachBlink {
+  0%, 50% {
+    background: var(--asteroid-distance-color, #888888);
+    border-color: rgba(255, 255, 255, 0.85);
+  }
+  50.01%, 100% {
+    background: #888888;
+    border-color: rgba(255, 255, 255, 0.4);
+  }
+}
+
+/* too close to orbit: black, untappable */
+.asteroidOrbitIconTooClose::before {
+  background: #101010;
+  border-color: #333333;
+}
+
+.asteroidOrbitIconLatched::before {
   box-shadow: 0 0 10px 3px rgba(120, 200, 255, 0.9);
   border-color: #bfe6ff;
 }
