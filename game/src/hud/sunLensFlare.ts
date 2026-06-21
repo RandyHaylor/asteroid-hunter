@@ -19,18 +19,31 @@ export type SunLensFlare = {
   ): void
 }
 
+// D92: several ghost rings strung along the sun→mirror axis (classic multi-element lens flare). Each
+// is placed at a fraction of the way from the sun to its center-mirror point, with its own size/fade.
+const FLARE_GHOST_RINGS = [
+  { axisLerpFraction: 0.35, diameterPixels: 70, opacityMultiplier: 0.5 },
+  { axisLerpFraction: 0.62, diameterPixels: 44, opacityMultiplier: 0.38 },
+  { axisLerpFraction: 1.0, diameterPixels: 120, opacityMultiplier: 0.5 }, // the original mirrored ghost
+]
+
 export function createSunLensFlare(hudOverlayRoot: HTMLElement): SunLensFlare {
   const flareCoreRing = document.createElement('div')
   flareCoreRing.className = 'sunLensFlareCore'
   hudOverlayRoot.appendChild(flareCoreRing)
 
-  const flareGhostRing = document.createElement('div')
-  flareGhostRing.className = 'sunLensFlareGhost'
-  hudOverlayRoot.appendChild(flareGhostRing)
+  const flareGhostRingElements = FLARE_GHOST_RINGS.map((ghostSpec) => {
+    const ghostRing = document.createElement('div')
+    ghostRing.className = 'sunLensFlareGhost'
+    ghostRing.style.width = `${ghostSpec.diameterPixels}px`
+    ghostRing.style.height = `${ghostSpec.diameterPixels}px`
+    hudOverlayRoot.appendChild(ghostRing)
+    return ghostRing
+  })
 
   function hideFlare(): void {
     flareCoreRing.style.display = 'none'
-    flareGhostRing.style.display = 'none'
+    for (const ghostRing of flareGhostRingElements) ghostRing.style.display = 'none'
   }
 
   return {
@@ -68,10 +81,17 @@ export function createSunLensFlare(hudOverlayRoot: HTMLElement): SunLensFlare {
       flareCoreRing.style.top = `${sunScreenYPixels}px`
       flareCoreRing.style.opacity = `${flareOpacity}`
 
-      flareGhostRing.style.display = 'block'
-      flareGhostRing.style.left = `${ghostScreenXPixels}px`
-      flareGhostRing.style.top = `${ghostScreenYPixels}px`
-      flareGhostRing.style.opacity = `${flareOpacity * 0.5}`
+      // place each ghost ring at its fraction along the sun→mirror axis
+      for (let ghostIndex = 0; ghostIndex < flareGhostRingElements.length; ghostIndex++) {
+        const ghostRing = flareGhostRingElements[ghostIndex]
+        const ghostSpec = FLARE_GHOST_RINGS[ghostIndex]
+        const ghostX = sunScreenXPixels + (ghostScreenXPixels - sunScreenXPixels) * ghostSpec.axisLerpFraction
+        const ghostY = sunScreenYPixels + (ghostScreenYPixels - sunScreenYPixels) * ghostSpec.axisLerpFraction
+        ghostRing.style.display = 'block'
+        ghostRing.style.left = `${ghostX}px`
+        ghostRing.style.top = `${ghostY}px`
+        ghostRing.style.opacity = `${flareOpacity * ghostSpec.opacityMultiplier}`
+      }
     },
   }
 }

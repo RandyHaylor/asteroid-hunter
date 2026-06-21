@@ -73,8 +73,14 @@ body {
   border: 2px solid rgba(110, 180, 255, 0.6);
   background: rgba(20, 50, 90, 0.4);
   color: rgba(205, 228, 255, 0.95);
-  font: 700 clamp(11px, 3vmin, 15px) / 1 system-ui, sans-serif;
-  letter-spacing: 1px;
+  /* D92: smaller font + no letter-spacing + flex-centering so "THRUST" stays INSIDE the small circle */
+  font: 700 clamp(8px, 2.2vmin, 11px) / 1 system-ui, sans-serif;
+  letter-spacing: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  box-sizing: border-box;
   pointer-events: auto;
   touch-action: none;
   user-select: none;

@@ -7,7 +7,7 @@
   position: absolute;
   top: 4px;
   left: 4px;
-  z-index: 8;
+  z-index: 11; /* D92: above the AI settings panel (10) so exit/caret stay tappable */
   padding: 6px 10px;
   border-radius: 6px;
   border: 1px solid rgba(255, 140, 120, 0.7);
@@ -34,7 +34,7 @@
   position: absolute;
   top: 4px;
   right: 4px;
-  z-index: 8;
+  z-index: 11; /* D92: above the AI settings panel (10) so exit/caret stay tappable */
   width: 28px;
   height: 28px;
   border-radius: 6px;
@@ -53,7 +53,7 @@
   display: none;
   position: absolute;
   inset: 0; /* D77: cover the whole radar region (was a tiny corner box) */
-  z-index: 6; /* above the radar rim asteroid icons (z-index 3) so they sit UNDER the panel */
+  z-index: 10; /* D92: above the radar rim icons (3) AND the corner thrust/AI buttons (7) so they don't poke through */
   max-height: 100%;
   overflow-y: auto;
   box-sizing: border-box;
@@ -70,12 +70,16 @@
   display: block;
 }
 
+/* D92: text in the AI panel sits in its own darker box so it stays readable over the radar behind. */
 .aiSettingsTitle {
   font-weight: 700;
   letter-spacing: 1px;
   font-size: 12px;
   margin: 2px 0 8px;
   color: rgba(150, 255, 190, 0.95);
+  background: rgba(2, 10, 6, 0.75);
+  padding: 4px 7px;
+  border-radius: 4px;
 }
 
 .aiSettingRow {
@@ -85,7 +89,16 @@
 .aiSettingLabelLine {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 2px;
+  margin-bottom: 3px;
+  background: rgba(2, 10, 6, 0.72);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+/* checkbox-row label text gets the same readable dark box */
+.aiSettingCheckboxRow span {
+  background: rgba(2, 10, 6, 0.72);
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 .aiSettingValue {
   color: rgba(150, 255, 190, 0.95);

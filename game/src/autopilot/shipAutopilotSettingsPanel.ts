@@ -147,6 +147,21 @@ export function createShipAutopilotSettingsPanel(
   fleeRow.appendChild(fleeLabel)
   panel.appendChild(fleeRow)
 
+  // D92: auto-choose-upgrades checkbox (default OFF) — when on, the between-wave upgrade is auto-picked
+  const autoUpgradeRow = document.createElement('label')
+  autoUpgradeRow.className = 'aiSettingRow aiSettingCheckboxRow'
+  const autoUpgradeCheckbox = document.createElement('input')
+  autoUpgradeCheckbox.type = 'checkbox'
+  autoUpgradeCheckbox.checked = shipAutopilotSettings.autoChoosesUpgrades
+  autoUpgradeCheckbox.addEventListener('change', () => {
+    shipAutopilotSettings.autoChoosesUpgrades = autoUpgradeCheckbox.checked
+  })
+  const autoUpgradeLabel = document.createElement('span')
+  autoUpgradeLabel.textContent = 'AI auto-chooses upgrades'
+  autoUpgradeRow.appendChild(autoUpgradeCheckbox)
+  autoUpgradeRow.appendChild(autoUpgradeLabel)
+  panel.appendChild(autoUpgradeRow)
+
   let isAiModeActive = false
   let isPanelExpanded = true // default shown when entering AI mode
 

@@ -7,9 +7,10 @@
   transform: translate(-50%, -50%);
   height: 25%;
   aspect-ratio: 1;
-  border: 1.5px solid rgba(120, 255, 160, 0.6);
+  /* D92: a little more transparent so it reads as a light guide, not a solid ring */
+  border: 1.5px solid rgba(120, 255, 160, 0.32);
   border-radius: 50%;
-  box-shadow: 0 0 6px rgba(120, 255, 160, 0.25);
+  box-shadow: 0 0 6px rgba(120, 255, 160, 0.14);
   pointer-events: none;
 }
 

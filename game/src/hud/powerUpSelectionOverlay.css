@@ -58,6 +58,22 @@
   border-color: rgba(160, 215, 255, 0.9);
 }
 
+/* D92: the AI auto-pick flashes the chosen card for a couple seconds before it auto-commits */
+.powerUpSelectionCardAutoChosen {
+  border-color: rgba(160, 215, 255, 0.95);
+  animation: powerUpAutoChosenPulse 0.5s ease-in-out infinite;
+}
+@keyframes powerUpAutoChosenPulse {
+  0%, 100% {
+    background: rgba(35, 70, 115, 0.7);
+    box-shadow: 0 0 6px rgba(140, 200, 255, 0.4);
+  }
+  50% {
+    background: rgba(70, 120, 180, 0.92);
+    box-shadow: 0 0 22px rgba(160, 215, 255, 0.85);
+  }
+}
+
 .powerUpSelectionCardIcon {
   width: 48px;
   height: 48px;

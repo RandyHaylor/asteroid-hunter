@@ -452,6 +452,22 @@ let lastPlayerDamageAtSeconds = Number.NEGATIVE_INFINITY
 const AUTOPILOT_RECENT_DAMAGE_WINDOW_SECONDS = 1.5
 // D82: the effective thrust this frame (manual OR autopilot, and not while orbiting) — drives the thruster visuals
 let currentEffectiveThrustActive = false
+// D92: AI thrust comes in single-frame on/off intent which read as ugly "feathering"/flashing. Enforce
+// a MINIMUM thrust-pulse duration: once the AI engages thrust, hold it on for at least this long (it
+// re-pulses seamlessly if it still wants thrust), so AI thrust always fires in burst of >= ~1 second.
+const AUTOPILOT_MINIMUM_THRUST_PULSE_SECONDS = 1
+let autopilotThrustPulseSecondsRemaining = 0
+function computeAutopilotPulsedThrustActive(rawAutopilotWantsThrust: boolean, deltaSeconds: number): boolean {
+  if (autopilotThrustPulseSecondsRemaining > 0) {
+    autopilotThrustPulseSecondsRemaining -= deltaSeconds
+    return true // still inside the minimum-duration pulse → keep thrusting
+  }
+  if (rawAutopilotWantsThrust) {
+    autopilotThrustPulseSecondsRemaining = AUTOPILOT_MINIMUM_THRUST_PULSE_SECONDS // start a fresh >=1s burst
+    return true
+  }
+  return false
+}
 
 // D75/D77: the AI settings overlay sits over the radar (radar visible behind), with a caret toggle +
 // an EXIT AI PILOT button. Exiting is blocked during a forced-AI wave (wave 3).
@@ -913,6 +929,10 @@ function resetPlayerShipForWaveRestart(): void {
 
 // D33/D67: offer three random distinct power-ups; the picker waits for the player's tap
 const BETWEEN_WAVE_POWER_UP_CHOICE_COUNT = 3 // D67: was 2
+// D92: when "AI auto-chooses upgrades" is on, the overlay still shows the choices, flashes a randomly
+// selected one for this long, then auto-applies it and continues.
+const AI_AUTO_UPGRADE_FLASH_SECONDS = 2
+let pendingAiAutoUpgradeTimerId: ReturnType<typeof setTimeout> | null = null
 function presentBetweenWavePowerUpChoice(): void {
   hideWaveBanner()
   const offeredPowerUps = selectDistinctPowerUps(
@@ -921,10 +941,24 @@ function presentBetweenWavePowerUpChoice(): void {
     Math.random,
   )
   powerUpSelectionOverlay.showPowerUpChoices(offeredPowerUps, onBetweenWavePowerUpChosen)
+  // D92: AI auto-pick — choose a RANDOM offered upgrade, flash it, then commit after the flash window
+  if (shipAutopilotSettings.autoChoosesUpgrades && offeredPowerUps.length > 0) {
+    const autoChosenPowerUp = offeredPowerUps[Math.floor(Math.random() * offeredPowerUps.length)]
+    powerUpSelectionOverlay.flashAutoChosenPowerUp(autoChosenPowerUp)
+    pendingAiAutoUpgradeTimerId = setTimeout(() => {
+      pendingAiAutoUpgradeTimerId = null
+      onBetweenWavePowerUpChosen(autoChosenPowerUp)
+    }, AI_AUTO_UPGRADE_FLASH_SECONDS * 1000)
+  }
 }
 
 // D33: apply the chosen upgrade to the live stats, then roll into the next wave's intro
 function onBetweenWavePowerUpChosen(chosenPowerUp: PowerUpDefinition): void {
+  if (currentWavePhase !== 'powerUpSelection') return // D92: already resolved (guards auto-pick vs manual tap)
+  if (pendingAiAutoUpgradeTimerId !== null) {
+    clearTimeout(pendingAiAutoUpgradeTimerId) // a manual tap pre-empts the pending auto-pick
+    pendingAiAutoUpgradeTimerId = null
+  }
   chosenPowerUp.applyToPlayerStats()
   powerUpSelectionOverlay.hide()
   currentWaveNumber += 1
@@ -1329,7 +1363,13 @@ function updatePlayerMovement(deltaSeconds: number): void {
     // D84: while orbiting, the AI doesn't press thrust (a player wouldn't either) — so the universal
     // "thrust disengages orbit" rule below doesn't fire and the orbit holds. Releasing is done via the
     // orbit-latch interface above, exactly like the player tapping the icon.
-    effectiveThrustActive = grappleOrbitController.isLatched() ? false : autopilotIntent.thrustActive
+    if (grappleOrbitController.isLatched()) {
+      autopilotThrustPulseSecondsRemaining = 0 // D92: no thrust while orbiting; reset the pulse latch
+      effectiveThrustActive = false
+    } else {
+      // D92: min ~1s thrust bursts (no per-frame feathering/flashing)
+      effectiveThrustActive = computeAutopilotPulsedThrustActive(autopilotIntent.thrustActive, deltaSeconds)
+    }
   } else {
     if (!radarIsSteeringDrag) {
       applyPitchYawToCommandedHeading(

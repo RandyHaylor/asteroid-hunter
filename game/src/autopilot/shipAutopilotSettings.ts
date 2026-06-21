@@ -23,6 +23,9 @@ export type ShipAutopilotSettings = {
   fleeAfterAnyDamage: boolean
   /** while evading, only resume attacking once the shield has recovered to at least this fraction */
   reEngageShieldFraction: number
+  /** D92: when true, the between-wave upgrade is auto-picked (random) after a brief flash instead of
+   *  waiting for the player to tap. Default OFF. */
+  autoChoosesUpgrades: boolean
 }
 
 // VERY CONSERVATIVE defaults: barely engages, flees on any hit — the player tunes toward effectiveness.
@@ -35,4 +38,5 @@ export const shipAutopilotSettings: ShipAutopilotSettings = {
   shieldFractionBeforeEvasion: 0.9, // evade at the first dent in the shield
   fleeAfterAnyDamage: true, // break off on any damage
   reEngageShieldFraction: 1, // only re-engage at full shield
+  autoChoosesUpgrades: false, // D92: default OFF — player picks upgrades unless they enable auto-pick
 }

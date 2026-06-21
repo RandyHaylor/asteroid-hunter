@@ -30,6 +30,7 @@ function baseSettings(overrides: Partial<ShipAutopilotSettings> = {}): ShipAutop
     shieldFractionBeforeEvasion: 0.5,
     fleeAfterAnyDamage: false,
     reEngageShieldFraction: 1,
+    autoChoosesUpgrades: false,
     ...overrides,
   }
 }
