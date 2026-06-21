@@ -1,5 +1,7 @@
 import './shipAutopilotSettingsPanel.css'
 import { shipAutopilotSettings, type AutopilotTargetPriority } from './shipAutopilotSettings'
+import { playerShipBaseFlightStats, playerShipBaseTractorBeamStats, playerEngagementRange } from '../shipStats'
+import { playerBaseLaserStats, playerBaseMissileStats } from '../weapons/weaponStats'
 
 // D75: the AI-mode settings overlay. A semi-transparent shaded panel (radar stays visible behind it)
 // holding the autopilot's tunable knobs, plus a "^" caret button (top-right of the controls) that
@@ -14,6 +16,8 @@ export type ShipAutopilotSettingsPanel = {
    * so the button is greyed out and non-interactive rather than appearing as a live red action.
    */
   setExitAiPilotAvailable(isExitAvailable: boolean): void
+  /** D101: refresh the live ship-stats grid values (call when they may have changed, e.g. each frame in AI) */
+  refreshLiveStats(): void
 }
 
 function addSliderRow(
@@ -166,6 +170,46 @@ export function createShipAutopilotSettingsPanel(
   autoUpgradeRow.appendChild(autoUpgradeLabel)
   checkboxPairRow.appendChild(autoUpgradeRow)
 
+  // D101: live CURRENT-SHIP-STATS grid (the upgradeable stats), under the settings. 3-column in
+  // landscape, 1-column in portrait (body.portraitOrientation, set by the layout) so it isn't clipped.
+  const liveStatDescriptors: { label: string; readValue: () => string }[] = [
+    { label: 'SPEED', readValue: () => `${Math.round(playerShipBaseFlightStats.cruiseSpeedMetersPerSecond)}` },
+    { label: 'HANDLING', readValue: () => playerShipBaseFlightStats.maxTurnRateRadiansPerSecond.toFixed(2) },
+    { label: 'AUTO-AIM', readValue: () => playerShipBaseFlightStats.enemyTrackTurnRateRadiansPerSecond.toFixed(2) },
+    { label: 'LASER DMG', readValue: () => `${Math.round(playerBaseLaserStats.boltDamage)}` },
+    { label: 'RANGE', readValue: () => `${Math.round(playerEngagementRange.combinedRadarWeaponRangeMeters)}` },
+    { label: 'TRACTOR', readValue: () => `${Math.round(playerShipBaseTractorBeamStats.tractorGrabMaxRangeMeters)}` },
+    { label: 'MSL DMG', readValue: () => `${Math.round(playerBaseMissileStats.explosionDamage)}` },
+    { label: 'MSL SPD', readValue: () => `${Math.round(playerBaseMissileStats.missileSpeedMetersPerSecond)}` },
+    { label: 'MSL RATE', readValue: () => `${playerBaseMissileStats.fireCooldownSeconds.toFixed(1)}s` },
+    { label: 'MSL TRACK', readValue: () => playerBaseMissileStats.homingTurnRateRadiansPerSecond.toFixed(2) },
+  ]
+  const statsTitle = document.createElement('div')
+  statsTitle.className = 'aiSettingsTitle'
+  statsTitle.textContent = 'SHIP STATS'
+  panel.appendChild(statsTitle)
+  const statsGrid = document.createElement('div')
+  statsGrid.className = 'aiSettingsStatsGrid'
+  const statValueSpans: { valueSpan: HTMLElement; readValue: () => string }[] = []
+  for (const descriptor of liveStatDescriptors) {
+    const cell = document.createElement('div')
+    cell.className = 'aiSettingsStatCell'
+    const labelSpan = document.createElement('span')
+    labelSpan.className = 'aiSettingsStatLabel'
+    labelSpan.textContent = descriptor.label
+    const valueSpan = document.createElement('span')
+    valueSpan.className = 'aiSettingsStatValue'
+    cell.appendChild(labelSpan)
+    cell.appendChild(valueSpan)
+    statsGrid.appendChild(cell)
+    statValueSpans.push({ valueSpan, readValue: descriptor.readValue })
+  }
+  panel.appendChild(statsGrid)
+  function refreshLiveStats(): void {
+    for (const { valueSpan, readValue } of statValueSpans) valueSpan.textContent = readValue()
+  }
+  refreshLiveStats()
+
   let isAiModeActive = false
   let isPanelExpanded = true // default shown when entering AI mode
 
@@ -193,5 +237,6 @@ export function createShipAutopilotSettingsPanel(
       exitAiPilotButton.disabled = !isExitAvailable
       exitAiPilotButton.classList.toggle('aiExitPilotButtonDisabled', !isExitAvailable)
     },
+    refreshLiveStats,
   }
 }

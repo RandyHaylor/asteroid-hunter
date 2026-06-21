@@ -174,3 +174,31 @@
   align-items: center;
   gap: 8px;
 }
+
+/* D101: live ship-stats grid — 3 columns in landscape; 1 column in portrait (to avoid clipping) */
+.aiSettingsStatsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin-top: 4px;
+}
+.portraitOrientation .aiSettingsStatsGrid {
+  grid-template-columns: 1fr;
+}
+.aiSettingsStatCell {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(2, 10, 6, 0.72);
+  font: 600 10px/1.2 system-ui, sans-serif;
+}
+.aiSettingsStatLabel {
+  color: rgba(190, 235, 210, 0.8);
+  letter-spacing: 0.02em;
+}
+.aiSettingsStatValue {
+  color: rgba(150, 255, 190, 0.98);
+  font-weight: 800;
+}

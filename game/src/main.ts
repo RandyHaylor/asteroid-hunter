@@ -130,6 +130,7 @@ function layoutGameRegions(): void {
   const viewportWidthPixels = window.innerWidth
   const viewportHeightPixels = window.innerHeight
   const isPortrait = viewportHeightPixels >= viewportWidthPixels
+  document.body.classList.toggle('portraitOrientation', isPortrait) // D101: drives 1-col stats grid in portrait
   let shipViewWidthPixels: number
   let shipViewHeightPixels: number
 
@@ -1701,8 +1702,10 @@ function syncRenderObjectsFromSimulation(): void {
     LOW_SPEED_THRESHOLD_METERS_PER_SECOND,
   )
 
-  // D99: status log display — running 2-line + tap-to-expand in AI; latest-message-4s-fade in manual
+  // D99: status log display — running log + tap-to-expand in AI; latest-message-4s-fade in manual
   shipStatusLogDisplay.updateShipStatusLogDisplay(autopilotModeActive, simulationClockSeconds)
+  // D101: keep the live ship-stats grid current while the AI settings panel is shown
+  if (autopilotModeActive) autopilotSettingsPanel.refreshLiveStats()
 }
 
 function runFrameLoop(currentFrameTimestampMs: number): void {

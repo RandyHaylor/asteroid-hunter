@@ -8,7 +8,10 @@ import type { ShipStatusEventLog, ShipStatusLogEntry } from './shipStatusEventLo
 //    log (all entries this run). The log itself always records in both modes — only visibility differs.
 
 const MANUAL_LATEST_MESSAGE_VISIBLE_SECONDS = 4
-const AI_RUNNING_LOG_LINE_COUNT = 2
+const AI_RUNNING_LOG_LINE_COUNT = 4
+// D101: opacity by recency for the AI running log — newest two solid, then progressively faded so the
+// oldest reads as twice as transparent as the third. Index is "lines back from the newest" (0 = newest).
+const AI_RUNNING_LOG_OPACITY_BY_AGE_RANK = [1, 1, 0.6, 0.3]
 
 export type ShipStatusLogDisplay = {
   /** call every frame with the current mode + clock; refreshes the mini log / latest-message fade */
@@ -75,10 +78,17 @@ export function createShipStatusLogDisplay(
   return {
     updateShipStatusLogDisplay(isAiModeActive, nowSeconds): void {
       if (isAiModeActive) {
-        // AI: running 2-line log, always visible + tappable to expand
+        // AI: running multi-line log, always visible + tappable to expand; older lines fade out
         renderLineElements(miniLog, statusEventLog.getRecentEntries(AI_RUNNING_LOG_LINE_COUNT))
         miniLog.style.opacity = '1'
         miniLog.classList.add('shipStatusMiniLogTappable')
+        const lineElements = miniLog.children
+        const newestLineIndex = lineElements.length - 1 // lines render oldest→newest
+        for (let lineIndex = 0; lineIndex < lineElements.length; lineIndex++) {
+          const ageRank = newestLineIndex - lineIndex // 0 = newest
+          const opacity = AI_RUNNING_LOG_OPACITY_BY_AGE_RANK[ageRank] ?? 0.3
+          ;(lineElements[lineIndex] as HTMLElement).style.opacity = `${opacity}`
+        }
       } else {
         // manual: only the latest message, fading out after MANUAL_LATEST_MESSAGE_VISIBLE_SECONDS
         closeFullLog() // the expandable log is an AI-mode affordance
