@@ -32,6 +32,13 @@ export type GameAudioSystem = {
   toggleMuted(): boolean
   isMuted(): boolean
 
+  // D90: independent music / sound-effects VOLUME (0..1, where 0 = off). Replaces the on/off toggle in
+  // the UI — the settings menu drives these. Each scales its bus gain relative to the design baseline.
+  setMusicVolumeFraction(volumeFraction: number): void
+  getMusicVolumeFraction(): number
+  setSoundEffectsVolumeFraction(volumeFraction: number): void
+  getSoundEffectsVolumeFraction(): number
+
   playLaserZapSound(): void
   playMissileLaunchSound(): void
   playEnemyHitSound(): void
@@ -51,6 +58,14 @@ function createSilentAudioSystem(): GameAudioSystem {
     },
     isMuted() {
       return false
+    },
+    setMusicVolumeFraction() {},
+    getMusicVolumeFraction() {
+      return 1
+    },
+    setSoundEffectsVolumeFraction() {},
+    getSoundEffectsVolumeFraction() {
+      return 1
     },
     playLaserZapSound() {},
     playMissileLaunchSound() {},
@@ -298,6 +313,9 @@ export function createGameAudioSystem(): GameAudioSystem {
 
   let muted = false
   let audioContextUnlocked = false
+  // D90: current volume fractions (0..1); start at full (the design baseline gains set above)
+  let musicVolumeFraction = 1
+  let soundEffectsVolumeFraction = 1
 
   return {
     resumeAudioContextOnUserGesture(): void {
@@ -323,6 +341,22 @@ export function createGameAudioSystem(): GameAudioSystem {
     },
     isMuted(): boolean {
       return muted
+    },
+    setMusicVolumeFraction(volumeFraction: number): void {
+      musicVolumeFraction = Math.max(0, Math.min(1, volumeFraction))
+      // music = the synth music bus + the .ogg playlist output, both scaled from their design baselines
+      musicBusGainNode.gain.value = MUSIC_BUS_GAIN * musicVolumeFraction
+      musicFileOutputGainNode.gain.value = MUSIC_FILE_OUTPUT_GAIN * musicVolumeFraction
+    },
+    getMusicVolumeFraction(): number {
+      return musicVolumeFraction
+    },
+    setSoundEffectsVolumeFraction(volumeFraction: number): void {
+      soundEffectsVolumeFraction = Math.max(0, Math.min(1, volumeFraction))
+      soundEffectsBusGainNode.gain.value = SOUND_EFFECTS_BUS_GAIN * soundEffectsVolumeFraction
+    },
+    getSoundEffectsVolumeFraction(): number {
+      return soundEffectsVolumeFraction
     },
     playLaserZapSound(): void {
       const now = audioContext.currentTime

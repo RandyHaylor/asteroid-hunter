@@ -42,6 +42,7 @@ import { createLaserVolleySystem } from './weapons/laserFire'
 import { createMissileVolleySystem } from './weapons/missileFire'
 import { createViewEdgeStatusIndicators } from './hud/viewEdgeStatusIndicators'
 import { createShipTrajectoryAndSpeedIndicator } from './hud/shipTrajectoryAndSpeedIndicator'
+import { createGameSettingsMenu } from './hud/gameSettingsMenu'
 import { createLockedEnemyPreview } from './hud/lockedEnemyPreview'
 import { createCockpitFrameOverlay } from './hud/cockpitFrameOverlay'
 import {
@@ -608,22 +609,13 @@ const powerUpSelectionOverlay = createPowerUpSelectionOverlay(controlsOverlay) /
 // AudioContext may produce sound, so we resume + start the loop on the first pointer/key event.
 const gameAudioSystem = createGameAudioSystem()
 
-const soundToggleButton = document.createElement('button')
-soundToggleButton.className = 'soundToggleButton'
-soundToggleButton.textContent = 'SOUND: ON'
-viewHudOverlay.appendChild(soundToggleButton)
-
-function toggleGameSound(): void {
-  const nowMuted = gameAudioSystem.toggleMuted()
-  soundToggleButton.textContent = nowMuted ? 'SOUND: OFF' : 'SOUND: ON'
-}
-soundToggleButton.addEventListener('click', (clickEvent) => {
-  clickEvent.stopPropagation()
-  toggleGameSound()
+// D90: SETTINGS menu (hamburger, top-right) replaces the old SOUND on/off toggle. Opening it pauses
+// the game (isGamePausedBySettingsMenu freezes the sim) and exposes music + SFX volume sliders.
+let isGamePausedBySettingsMenu = false
+const gameSettingsMenu = createGameSettingsMenu(viewHudOverlay, gameAudioSystem, (isMenuOpen) => {
+  isGamePausedBySettingsMenu = isMenuOpen
 })
-window.addEventListener('keydown', (keyboardEvent) => {
-  if (keyboardEvent.code === 'KeyM') toggleGameSound()
-})
+void gameSettingsMenu // referenced via its pause callback + closed automatically with the overlay
 
 // D64: resume on EVERY gesture (not once) — iOS re-suspends the context, so a single resume left the
 // game silent "fairly often". resumeAudioContextOnUserGesture is cheap + idempotent for music start.
@@ -1391,9 +1383,14 @@ let playerShipRenderInterpolationAlpha = 1
 function updateGameSimulation(deltaSeconds: number): void {
   // D54: hold the whole simulation until the player dismisses the start screen
   if (!gameHasStarted) return
+  // D90: the settings menu freezes the ENTIRE sim (including the wave-phase clock) while it's open
+  if (isGamePausedBySettingsMenu) return
   simulationClockSeconds += deltaSeconds
 
   updateWavePhase(deltaSeconds)
+  // D90: between-waves "level end" pause — the wave-phase clock above still advances (waveCleared →
+  // power-up pick), but the ship/enemies/projectiles freeze so the game is paused at level end.
+  if (currentWavePhase === 'waveCleared' || currentWavePhase === 'powerUpSelection') return
   updatePlayerMovement(deltaSeconds)
 
   if (currentWavePhase === 'waveActive') {
