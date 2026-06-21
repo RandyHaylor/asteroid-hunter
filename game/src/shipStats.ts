@@ -20,7 +20,7 @@ export type ShipFlightStats = {
 }
 
 export const playerShipBaseFlightStats: ShipFlightStats = {
-  cruiseSpeedMetersPerSecond: 240, // D106: doubled (was 120) — faster-moving game
+  cruiseSpeedMetersPerSecond: 120, // D85/D88: MAX (cap) speed — was the constant cruise; now the ceiling
   maxTurnRateRadiansPerSecond: 1.6,
   turnAccelerationRadiansPerSecondSquared: 2.5, // D65: ramps the facing turn up to max in ~0.6 s, eases out on arrival
   thrustAccelerationMetersPerSecondSquared: 14, // D88: weak/gradual — 0→max (120) takes ~8.5 s of held thrust; reversing direction much longer (momentum is expensive)
