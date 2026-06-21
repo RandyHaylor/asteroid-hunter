@@ -107,6 +107,34 @@
   width: 100%;
   accent-color: rgb(120, 220, 150);
 }
+
+/* D92: slider rows on ONE line — [label | slider | value] — to save vertical space */
+.aiSettingSliderRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.aiSettingSliderRow .aiSettingLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.15;
+  background: rgba(2, 10, 6, 0.72);
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+.aiSettingSliderRow input[type='range'] {
+  flex: 0 0 36%;
+  width: auto;
+}
+.aiSettingSliderRow .aiSettingValue {
+  flex: 0 0 auto;
+  min-width: 30px;
+  text-align: right;
+  background: rgba(2, 10, 6, 0.72);
+  padding: 2px 4px;
+  border-radius: 4px;
+}
 .aiSettingSelect {
   width: 100%;
   margin-top: 2px;

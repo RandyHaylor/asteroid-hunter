@@ -26,8 +26,9 @@ function addSliderRow(
   writeValue: (value: number) => void,
   formatValue: (value: number) => string,
 ): void {
+  // D92: label, slider, and value all on ONE line (label | slider | value) to save vertical space.
   const row = document.createElement('label')
-  row.className = 'aiSettingRow'
+  row.className = 'aiSettingRow aiSettingSliderRow'
   const labelSpan = document.createElement('span')
   labelSpan.className = 'aiSettingLabel'
   const valueSpan = document.createElement('span')
@@ -47,12 +48,9 @@ function addSliderRow(
     refreshLabel()
   })
   refreshLabel()
-  const labelLine = document.createElement('div')
-  labelLine.className = 'aiSettingLabelLine'
-  labelLine.appendChild(labelSpan)
-  labelLine.appendChild(valueSpan)
-  row.appendChild(labelLine)
+  row.appendChild(labelSpan)
   row.appendChild(slider)
+  row.appendChild(valueSpan)
   parent.appendChild(row)
 }
 
@@ -85,7 +83,8 @@ export function createShipAutopilotSettingsPanel(
   title.textContent = 'AI PILOT SETTINGS'
   panel.appendChild(title)
 
-  addSliderRow(panel, 'Approach angle', 0, 180, 5,
+  // D92: 90° is the max meaningful approach angle (perpendicular flank) — you aren't "approaching" past it
+  addSliderRow(panel, 'Approach angle', 0, 90, 5,
     () => shipAutopilotSettings.preferredApproachAngleDegrees,
     (v) => (shipAutopilotSettings.preferredApproachAngleDegrees = v),
     (v) => `${Math.round(v)}°`)
