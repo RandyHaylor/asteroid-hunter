@@ -13,6 +13,10 @@ import { computeOrbitStep } from './computeOrbitStep'
 // velocity (a straight-line slingshot). The ship FACING and camera are unaffected (handled elsewhere).
 
 const HOLD_TO_ORBIT_THRESHOLD_SECONDS = 1
+// D93: when an orbit engages, ramp the orbit speed from the ship's speed AT LATCH up to cruise over this
+// window (smoothstep). A lower initial speed = a smaller angular step = a gentler entry curve, so the
+// ship eases onto the circle instead of snapping to the full-speed tangent.
+const ORBIT_ENTRY_SMOOTH_SECONDS = 0.55
 
 const scratchRadiusVector = new Vector3()
 const scratchOrbitAxis = new Vector3()
@@ -38,6 +42,9 @@ export function createGrappleOrbitController(): GrappleOrbitController {
   let latchWasCommittedByTap = false
   let pressStartSeconds = 0
   let pressedAsteroidId: number | null = null
+  // D93: entry-smoothing state — the ship's speed at latch, and how much of the smoothing window remains
+  let orbitEntrySpeedMetersPerSecond = 0
+  let orbitEntrySmoothSecondsRemaining = 0
 
   function computeOrbitFrameFromShip(asteroid: AsteroidBody, shipState: ShipRigidBodyState): void {
     scratchRadiusVector.copy(shipState.positionMeters).sub(asteroid.positionMeters)
@@ -53,6 +60,9 @@ export function createGrappleOrbitController(): GrappleOrbitController {
   function latchTo(asteroid: AsteroidBody, shipState: ShipRigidBodyState): void {
     latchedAsteroid = asteroid
     computeOrbitFrameFromShip(asteroid, shipState)
+    // D93: start the entry-smoothing ramp from the ship's current speed up to cruise
+    orbitEntrySpeedMetersPerSecond = shipState.velocityMetersPerSecond.length()
+    orbitEntrySmoothSecondsRemaining = ORBIT_ENTRY_SMOOTH_SECONDS
   }
 
   function releaseLatch(): void {
@@ -96,12 +106,22 @@ export function createGrappleOrbitController(): GrappleOrbitController {
     },
     stepOrbit(shipState, cruiseSpeedMetersPerSecond, deltaSeconds): void {
       if (latchedAsteroid === null) return
+      // D93: ease the orbit speed from the latch speed up to cruise over the entry window (smoothstep),
+      // so the entry curve is gentle instead of snapping straight to the full-speed tangent.
+      let orbitSpeedMetersPerSecond = cruiseSpeedMetersPerSecond
+      if (orbitEntrySmoothSecondsRemaining > 0) {
+        orbitEntrySmoothSecondsRemaining = Math.max(0, orbitEntrySmoothSecondsRemaining - deltaSeconds)
+        const entryProgress = 1 - orbitEntrySmoothSecondsRemaining / ORBIT_ENTRY_SMOOTH_SECONDS
+        const easedProgress = entryProgress * entryProgress * (3 - 2 * entryProgress) // smoothstep
+        orbitSpeedMetersPerSecond =
+          orbitEntrySpeedMetersPerSecond + (cruiseSpeedMetersPerSecond - orbitEntrySpeedMetersPerSecond) * easedProgress
+      }
       computeOrbitStep(
         shipState.positionMeters,
         latchedAsteroid.positionMeters,
         orbitAxisUnit,
         orbitRadiusMeters,
-        cruiseSpeedMetersPerSecond,
+        orbitSpeedMetersPerSecond,
         deltaSeconds,
         shipState.positionMeters,
         shipState.velocityMetersPerSecond,
