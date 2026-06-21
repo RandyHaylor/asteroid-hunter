@@ -43,6 +43,8 @@ import { createMissileVolleySystem } from './weapons/missileFire'
 import { createViewEdgeStatusIndicators } from './hud/viewEdgeStatusIndicators'
 import { createShipTrajectoryAndSpeedIndicator } from './hud/shipTrajectoryAndSpeedIndicator'
 import { createGameSettingsMenu } from './hud/gameSettingsMenu'
+import { createShipStatusEventLog } from './hud/shipStatusEventLog'
+import { createShipStatusLogDisplay } from './hud/shipStatusLogDisplay'
 import { createLockedEnemyPreview } from './hud/lockedEnemyPreview'
 import { createCockpitFrameOverlay } from './hud/cockpitFrameOverlay'
 import {
@@ -400,6 +402,12 @@ const LOW_SPEED_THRESHOLD_METERS_PER_SECOND = 50
 function isShipMovingFastEnoughToGrapple(): boolean {
   return playerShipState.velocityMetersPerSecond.length() >= LOW_SPEED_THRESHOLD_METERS_PER_SECOND
 }
+// D99: ship status event log (always recording) + its bottom-of-view display (latest-4s in manual,
+// running 2-line + tap-to-expand in AI). Events are fed in at the combat/wave hook points below.
+const shipStatusEventLog = createShipStatusEventLog()
+const shipStatusLogDisplay = createShipStatusLogDisplay(viewHudOverlay, shipStatusEventLog)
+let previousShieldFractionForRechargeLog = 1 // D99: detect the shield finishing a recharge to full
+let previouslyLockedEnemyShipId: number | null = null // D99: detect a new enemy lock for the log
 // D86: bottom-right trajectory arrow + horizontal speed bar (full at cruise) + live m/s readout
 const scratchTravelDirectionInViewSpace = new THREE.Vector3()
 const shipTrajectoryAndSpeedIndicator = createShipTrajectoryAndSpeedIndicator(
@@ -972,6 +980,11 @@ function updateWavePhase(deltaSeconds: number): void {
     applyForcedAutopilotForWave(currentWaveNumber) // D76: wave 3 = forced AI-only
     currentWavePhase = 'waveActive'
     gameAudioSystem.playWaveStartSound() // D23
+    // D99: fresh per-wave log + a single "N enemies spotted" entry as the wave goes active
+    shipStatusEventLog.clear()
+    previouslyLockedEnemyShipId = null
+    const spottedEnemyCount = gameWorld.enemyShips.filter((enemyShip) => !enemyShip.isDestroyed).length
+    shipStatusEventLog.logMessage(`${spottedEnemyCount} enemies spotted`, simulationClockSeconds)
     return
   }
 
@@ -1023,6 +1036,7 @@ const weaponHitCallbacks = {
     if (hitEnemy.isDestroyed) {
       gameScene.remove(hitEnemy.renderObject)
       gameAudioSystem.playExplosionSound() // D23
+      shipStatusEventLog.logMessage('Enemy destroyed', simulationClockSeconds) // D99
     } else {
       gameAudioSystem.playEnemyHitSound() // D23
     }
@@ -1034,6 +1048,8 @@ const weaponHitCallbacks = {
     playerShipCondition.applyIncomingWeaponDamage(damageAmount, simulationClockSeconds)
     lastPlayerDamageAtSeconds = simulationClockSeconds // D74: autopilot's "flee after any damage" signal
     gameAudioSystem.playPlayerHitSound() // D23
+    // D99: aggregate into a laser "barrage" — reported as one summary once the strike run lapses
+    shipStatusEventLog.recordEnemyLaserStrike(damageAmount, simulationClockSeconds, enemyBaseLaserStats.fireCooldownSeconds)
   },
 }
 
@@ -1059,6 +1075,12 @@ function updatePlayerWeaponsFire(): void {
     gameWorld.asteroids,
     playerEngagementRange.combinedRadarWeaponRangeMeters, // D67: lock only within the combined range
   )
+  // D99: log a fresh enemy lock (only when the locked target CHANGES to a new enemy)
+  const lockedEnemyShipId = currentAutoAimTarget !== null ? currentAutoAimTarget.enemyShipId : null
+  if (lockedEnemyShipId !== null && lockedEnemyShipId !== previouslyLockedEnemyShipId) {
+    shipStatusEventLog.logMessage('Enemy locked', simulationClockSeconds)
+  }
+  previouslyLockedEnemyShipId = lockedEnemyShipId
 
   // D47: weapons are ALWAYS ON — auto-fire at the locked (visible) target, gated only by cooldown.
   const lockedTarget = currentAutoAimTarget
@@ -1523,6 +1545,14 @@ function updateGameSimulation(deltaSeconds: number): void {
   updateDriftingAsteroids(gameWorld.asteroids, deltaSeconds)
   updateAsteroidDamageParticles(deltaSeconds)
   playerShipCondition.updateShieldRegeneration(deltaSeconds, simulationClockSeconds)
+  // D99: log "Shield recharged" when the shield finishes climbing back to full
+  const shieldFractionNow = playerShipCondition.getShieldPointsFraction()
+  if (shieldFractionNow >= 1 && previousShieldFractionForRechargeLog < 1) {
+    shipStatusEventLog.logMessage('Shield recharged', simulationClockSeconds)
+  }
+  previousShieldFractionForRechargeLog = shieldFractionNow
+  // D99: complete + log any laser barrage whose strike-run has lapsed
+  shipStatusEventLog.flushCompletedBarrage(simulationClockSeconds)
   radarSignatureTracker.updateRadarContacts(
     gameWorld.enemyShips,
     gameWorld.asteroids,
@@ -1655,6 +1685,9 @@ function syncRenderObjectsFromSimulation(): void {
     playerShipBaseFlightStats.cruiseSpeedMetersPerSecond,
     LOW_SPEED_THRESHOLD_METERS_PER_SECOND,
   )
+
+  // D99: status log display — running 2-line + tap-to-expand in AI; latest-message-4s-fade in manual
+  shipStatusLogDisplay.updateShipStatusLogDisplay(autopilotModeActive, simulationClockSeconds)
 }
 
 function runFrameLoop(currentFrameTimestampMs: number): void {

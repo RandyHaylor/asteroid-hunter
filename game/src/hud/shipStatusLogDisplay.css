@@ -1,0 +1,89 @@
+/* D99: ship status log — bottom-center mini log (AI: 2 running lines, tappable; manual: latest line,
+   fading) + a full scrollable wave-log overlay. */
+
+.shipStatusMiniLog {
+  position: absolute;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 30px);
+  transform: translateX(-50%);
+  max-width: 86%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s linear;
+}
+/* tappable (AI mode) — re-enable pointer events + a subtle affordance */
+.shipStatusMiniLogTappable {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.shipStatusLogLine {
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: rgba(6, 16, 12, 0.66);
+  color: rgba(170, 245, 200, 0.95);
+  font: 600 11px/1.25 system-ui, sans-serif;
+  letter-spacing: 0.03em;
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.shipStatusFullLogOverlay {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 8, 14, 0.8);
+  pointer-events: auto;
+  z-index: 28;
+}
+.shipStatusFullLogOverlayVisible {
+  display: flex;
+}
+
+.shipStatusFullLogPanel {
+  width: min(88%, 360px);
+  max-height: 80%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(10, 20, 16, 0.96);
+  border: 1px solid rgba(120, 230, 160, 0.35);
+}
+.shipStatusFullLogTitle {
+  font: 800 14px/1 system-ui, sans-serif;
+  letter-spacing: 3px;
+  color: rgba(170, 255, 200, 0.95);
+  text-align: center;
+}
+.shipStatusFullLogList {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.shipStatusFullLogList .shipStatusLogLine {
+  white-space: normal;
+  text-align: left;
+}
+.shipStatusFullLogClose {
+  padding: 9px 0;
+  font: 800 12px/1 system-ui, sans-serif;
+  letter-spacing: 2px;
+  color: rgba(210, 255, 225, 0.95);
+  background: rgba(20, 60, 35, 0.7);
+  border: 1px solid rgba(120, 230, 160, 0.5);
+  border-radius: 8px;
+  cursor: pointer;
+}
