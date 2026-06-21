@@ -101,7 +101,6 @@ const SHIP_VIEW_ASPECT_RATIO = 4 / 3
 // reserves a right-side control strip — the ship view + radar fill the full width (no empty gap).
 const LANDSCAPE_LEFT_STRIP_MIN_PIXELS = 0
 const PORTRAIT_SHIP_VIEW_HEIGHT_FRACTION = 0.42
-const PORTRAIT_BUTTON_COLUMN_MIN_PIXELS = 132 // min width reserved for the button column left of the radar
 const REGION_GAP_PIXELS = 8
 
 const playerViewCamera = new THREE.PerspectiveCamera(70, SHIP_VIEW_ASPECT_RATIO, 0.1, 8000)
@@ -173,23 +172,17 @@ function layoutGameRegions(): void {
 
     const lowerAreaTopPixels = shipViewHeightPixels + REGION_GAP_PIXELS
     const lowerAreaHeightPixels = Math.max(0, viewportHeightPixels - lowerAreaTopPixels)
-    const radarSquareSizePixels = Math.max(
-      0,
-      Math.min(lowerAreaHeightPixels, viewportWidthPixels - PORTRAIT_BUTTON_COLUMN_MIN_PIXELS),
-    )
+    // D93: the controls now live INSIDE the radar square, so there's no side button column to reserve.
+    // Size the radar to fit the lower area and CENTER it horizontally, directly under the centered ship
+    // view (was right-aligned with a left button column, which left it offset to the right).
+    const radarSquareSizePixels = Math.max(0, Math.min(lowerAreaHeightPixels, viewportWidthPixels))
     const radarTopPixels = lowerAreaTopPixels + Math.floor((lowerAreaHeightPixels - radarSquareSizePixels) / 2)
-    applyFixedBoxStyle(radarRegion, viewportWidthPixels - radarSquareSizePixels, radarTopPixels, radarSquareSizePixels, radarSquareSizePixels)
+    const radarLeftPixels = Math.floor((viewportWidthPixels - radarSquareSizePixels) / 2)
+    applyFixedBoxStyle(radarRegion, radarLeftPixels, radarTopPixels, radarSquareSizePixels, radarSquareSizePixels)
 
-    const buttonColumnWidthPixels = viewportWidthPixels - radarSquareSizePixels
-    const clusterSplitHeightPixels = Math.floor(lowerAreaHeightPixels * 0.6)
-    applyFixedBoxStyle(leftControlCluster, 0, lowerAreaTopPixels, buttonColumnWidthPixels, clusterSplitHeightPixels)
-    applyFixedBoxStyle(
-      rightControlCluster,
-      0,
-      lowerAreaTopPixels + clusterSplitHeightPixels,
-      buttonColumnWidthPixels,
-      lowerAreaHeightPixels - clusterSplitHeightPixels,
-    )
+    // the side control clusters are retired in portrait too (zero-size; controls are in the radar corners)
+    applyFixedBoxStyle(leftControlCluster, 0, lowerAreaTopPixels, 0, 0)
+    applyFixedBoxStyle(rightControlCluster, 0, lowerAreaTopPixels, 0, 0)
   }
 
   currentShipViewWidthPixels = shipViewWidthPixels
