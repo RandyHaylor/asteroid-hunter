@@ -454,7 +454,7 @@ radarRegion.appendChild(flightControls.thrustButtonElement)
 const preWaveOneIntroSequence = createPreWaveOneIntroSequence({
   logStatusMessage: (message) => shipStatusEventLog.logMessage(message, simulationClockSeconds),
   setRadarIconsHidden: (hidden) => asteroidOrbitIcons.setIconsGloballyHidden(hidden),
-  beginAutoGrappleNearestAsteroid: () => latchNearestAsteroidForAutopilotEvasion(),
+  beginAutoGrappleNearestAsteroid: () => latchSecondNearestLargeAsteroidForIntro(), // D105: not the avoided rock
   releaseAutoGrapple: () => {
     if (grappleOrbitController.isLatched()) grappleOrbitController.releaseLatch()
   },
@@ -680,6 +680,33 @@ function latchNearestAsteroidForAutopilotEvasion(): void {
   grappleOrbitController.onAsteroidIconReleased(nearestAsteroid, nowSeconds) // tap → commit the orbit
 }
 
+// D105: the intro's orbit-test grapples the SECOND-nearest large asteroid, so it doesn't re-grab the
+// rock it just avoided (that looked odd). Falls back to the nearest if there's only one large rock.
+function latchSecondNearestLargeAsteroidForIntro(): void {
+  let nearestAsteroid: AsteroidBody | null = null
+  let secondNearestAsteroid: AsteroidBody | null = null
+  let nearestDistanceMeters = Infinity
+  let secondNearestDistanceMeters = Infinity
+  for (const asteroid of gameWorld.asteroids) {
+    if (asteroid.isDestroyed || asteroid.sizeClass !== 'large') continue
+    const distanceMeters = playerShipState.positionMeters.distanceTo(asteroid.positionMeters)
+    if (distanceMeters < nearestDistanceMeters) {
+      secondNearestDistanceMeters = nearestDistanceMeters
+      secondNearestAsteroid = nearestAsteroid
+      nearestDistanceMeters = distanceMeters
+      nearestAsteroid = asteroid
+    } else if (distanceMeters < secondNearestDistanceMeters) {
+      secondNearestDistanceMeters = distanceMeters
+      secondNearestAsteroid = asteroid
+    }
+  }
+  const grappleTarget = secondNearestAsteroid ?? nearestAsteroid
+  if (!grappleTarget) return
+  const nowSeconds = performance.now() / 1000
+  grappleOrbitController.onAsteroidIconPressed(grappleTarget, playerShipState, nowSeconds)
+  grappleOrbitController.onAsteroidIconReleased(grappleTarget, nowSeconds) // tap → commit the orbit
+}
+
 // now that the clusters + radar region exist, lay everything out and keep it in sync on resize
 layoutGameRegions()
 window.addEventListener('resize', layoutGameRegions)
@@ -753,7 +780,7 @@ function aimShipAtDemoAsteroidForIntro(): void {
   scratchIntroTravelDirection.copy(demoAsteroid.positionMeters)
   if (scratchIntroTravelDirection.lengthSq() < 1e-6) return
   scratchIntroTravelDirection.normalize()
-  const standoffMeters = demoAsteroid.currentRadiusMeters + 300
+  const standoffMeters = demoAsteroid.currentRadiusMeters + 550 // D105: more lead-in so it's not cramped
   playerShipState.positionMeters.copy(demoAsteroid.positionMeters).addScaledVector(scratchIntroTravelDirection, -standoffMeters)
   playerShipState.velocityMetersPerSecond
     .copy(scratchIntroTravelDirection)
