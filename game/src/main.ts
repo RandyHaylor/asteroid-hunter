@@ -97,7 +97,9 @@ gameScene.background = createProceduralSpaceNebulaTexture()
 //  - PORTRAIT: ship-view (4:3) on top; radar square on the right of the lower area, button column left.
 // currentShipView{Width,Height}Pixels feed the screen-space HUD projection (edge markers + flare).
 const SHIP_VIEW_ASPECT_RATIO = 4 / 3
-const LANDSCAPE_LEFT_STRIP_MIN_PIXELS = 140
+// D91: the controls moved INTO the radar square's dead corners, so the landscape layout no longer
+// reserves a right-side control strip — the ship view + radar fill the full width (no empty gap).
+const LANDSCAPE_LEFT_STRIP_MIN_PIXELS = 0
 const PORTRAIT_SHIP_VIEW_HEIGHT_FRACTION = 0.42
 const PORTRAIT_BUTTON_COLUMN_MIN_PIXELS = 132 // min width reserved for the button column left of the radar
 const REGION_GAP_PIXELS = 8
@@ -410,7 +412,9 @@ const shipTrajectoryAndSpeedIndicator = createShipTrajectoryAndSpeedIndicator(
   scratchTravelDirectionInViewSpace,
 )
 // D67: live 3D preview of the locked enemy (with its shield/hull) sits under the THRUST button
-const lockedEnemyPreview = createLockedEnemyPreview(leftControlCluster)
+// D91: the right control strip is gone (controls live in the radar corners now), so the locked-enemy
+// preview overlays the ship view (top-left) instead of sitting in the strip.
+const lockedEnemyPreview = createLockedEnemyPreview(viewHudOverlay)
 // D48: cockpit canopy frame overlay (shown only in cockpit view)
 const cockpitFrameOverlay = createCockpitFrameOverlay(viewHudOverlay)
 const playerCameraRig = createPlayerCameraRig(playerViewCamera)
@@ -434,6 +438,9 @@ const asteroidOrbitIcons = createAsteroidOrbitIcons(
   },
   (asteroid) => grappleOrbitController.onAsteroidIconReleased(asteroid, performance.now() / 1000),
 )
+// D91: tuck the THRUST button into the radar square's bottom-RIGHT dead corner (outside the radar
+// circle), instead of a separate side cluster. The AI button goes in the bottom-LEFT corner (below).
+radarRegion.appendChild(flightControls.thrustButtonElement)
 
 // D74: AUTOPILOT ("AI mode") — an "AI" toggle button + state. Default OFF (manual flight). When active,
 // the autopilot drives the commanded heading + thrust + evasion-orbit from shipAutopilotSettings.
@@ -483,14 +490,29 @@ function resetAutopilotFreeLook(): void {
 let autopilotFreeLookDragPointerId = -1
 let autopilotFreeLookLastClientX = 0
 let autopilotFreeLookLastClientY = 0
+// D91: wall-clock time of the last free-look interaction; after a quiet gap the camera eases back to
+// center (the aim direction). Wall clock (not the sim clock) so it returns even while paused.
+let autopilotFreeLookLastInteractionMs = 0
+const AUTOPILOT_FREE_LOOK_RETURN_DELAY_SECONDS = 3 // idle gap before the smoothed return starts
+const AUTOPILOT_FREE_LOOK_RETURN_RESPONSE_PER_SECOND = 3 // ease rate toward center (~0.6 s settle)
+function noteAutopilotFreeLookInteraction(): void {
+  autopilotFreeLookLastInteractionMs = performance.now()
+}
 gameRenderCanvas.addEventListener('pointerdown', (event) => {
   if (!autopilotModeActive) return // free-look drag only in AI mode (manual steering is the radar)
   autopilotFreeLookDragPointerId = event.pointerId
   autopilotFreeLookLastClientX = event.clientX
   autopilotFreeLookLastClientY = event.clientY
+  noteAutopilotFreeLookInteraction()
 })
 gameRenderCanvas.addEventListener('pointermove', (event) => {
   if (autopilotFreeLookDragPointerId !== event.pointerId) return
+  // D91 stuck-drag fix: if the primary button is no longer held (e.g. it was released OUTSIDE the
+  // window and we never got a pointerup), end the drag instead of "sticking" in look mode on re-entry.
+  if ((event.buttons & 1) === 0) {
+    autopilotFreeLookDragPointerId = -1
+    return
+  }
   autopilotFreeLookYawRadians -= (event.clientX - autopilotFreeLookLastClientX) * AUTOPILOT_FREE_LOOK_RADIANS_PER_PIXEL
   autopilotFreeLookPitchRadians = Math.max(
     -AUTOPILOT_FREE_LOOK_MAX_PITCH_RADIANS,
@@ -501,6 +523,7 @@ gameRenderCanvas.addEventListener('pointermove', (event) => {
   )
   autopilotFreeLookLastClientX = event.clientX
   autopilotFreeLookLastClientY = event.clientY
+  noteAutopilotFreeLookInteraction()
   refreshAutopilotFreeLookOffsetQuaternion()
 })
 function endAutopilotFreeLookDrag(event: PointerEvent): void {
@@ -508,6 +531,28 @@ function endAutopilotFreeLookDrag(event: PointerEvent): void {
 }
 gameRenderCanvas.addEventListener('pointerup', endAutopilotFreeLookDrag)
 gameRenderCanvas.addEventListener('pointercancel', endAutopilotFreeLookDrag)
+// D91: also catch the release when it happens OUTSIDE the canvas/window (the reported bug: drag out,
+// release outside, return hovering with the button up). A window-level pointerup always ends the drag.
+window.addEventListener('pointerup', endAutopilotFreeLookDrag)
+window.addEventListener('blur', () => {
+  autopilotFreeLookDragPointerId = -1
+})
+
+// D91: after AUTOPILOT_FREE_LOOK_RETURN_DELAY_SECONDS of no look interaction, smoothly ease the camera
+// look-offset back to center (yaw/pitch → 0). Called every render frame.
+function updateAutopilotFreeLookReturn(deltaSeconds: number): void {
+  if (!autopilotModeActive) return
+  if (autopilotFreeLookDragPointerId !== -1) return // actively dragging — don't fight the player
+  if (autopilotFreeLookYawRadians === 0 && autopilotFreeLookPitchRadians === 0) return
+  const idleSeconds = (performance.now() - autopilotFreeLookLastInteractionMs) / 1000
+  if (idleSeconds < AUTOPILOT_FREE_LOOK_RETURN_DELAY_SECONDS) return
+  const easeBlend = 1 - Math.exp(-AUTOPILOT_FREE_LOOK_RETURN_RESPONSE_PER_SECOND * deltaSeconds)
+  autopilotFreeLookYawRadians += (0 - autopilotFreeLookYawRadians) * easeBlend
+  autopilotFreeLookPitchRadians += (0 - autopilotFreeLookPitchRadians) * easeBlend
+  if (Math.abs(autopilotFreeLookYawRadians) < 1e-4) autopilotFreeLookYawRadians = 0
+  if (Math.abs(autopilotFreeLookPitchRadians) < 1e-4) autopilotFreeLookPitchRadians = 0
+  refreshAutopilotFreeLookOffsetQuaternion()
+}
 
 // D79: bottom-of-view message shown while AI mode is active
 const autopilotFreeLookMessage = document.createElement('div')
@@ -524,6 +569,13 @@ function refreshAutopilotToggleButtonAppearance(): void {
 function setAutopilotModeActive(active: boolean): void {
   autopilotModeActive = active
   refreshAutopilotToggleButtonAppearance()
+  // D91: in AI mode the round AI button is unavailable — you must use EXIT AI PILOT to leave. (Disabled
+  // buttons don't fire clicks, so this also blocks re-toggling via the AI button.)
+  autopilotToggleButton.disabled = active
+  // D91: the THRUST button now lives in the radar square (outside the manual-controls block overlay),
+  // so block manual thrust taps directly while in AI mode — but keep the button visible + glowing to
+  // reflect the AI's thrust (reflectAutopilotThrustVisual). Pointer-events off = no manual input.
+  flightControls.thrustButtonElement.style.pointerEvents = active ? 'none' : 'auto'
   autopilotSettingsPanel.setAiModeActive(active) // D75: show/hide the settings overlay with the mode
   manualControlsBlockOverlay.classList.toggle('manualControlsBlockOverlayActive', active) // D77
   resetAutopilotFreeLook() // D79: recenter the look-around when the mode toggles
@@ -535,7 +587,8 @@ autopilotToggleButton.addEventListener('click', () => {
   setAutopilotModeActive(!autopilotModeActive)
 })
 setAutopilotModeActive(false)
-rightControlCluster.appendChild(autopilotToggleButton)
+// D91: AI button tucks into the radar square's bottom-LEFT dead corner (was the right side cluster)
+radarRegion.appendChild(autopilotToggleButton)
 
 // D76: wave-3 is a FORCED AI-ONLY level — red flash + a bold "manual controls malfunction" message,
 // manual flight locked out (the toggle is blocked while forced). Unlocks again on the next wave.
@@ -1568,6 +1621,8 @@ function runFrameLoop(currentFrameTimestampMs: number): void {
   }
   playerShipRenderInterpolationAlpha = simulationTimeAccumulatorSeconds / FIXED_SIMULATION_TIMESTEP_SECONDS
 
+  // D91: ease the AI free-look camera back to center after the idle delay (real-time, view-only)
+  updateAutopilotFreeLookReturn(frameDeltaSeconds)
   syncRenderObjectsFromSimulation()
   // D56-fix: pin the camera to the SMOOTHED mesh position (the one actually rendered), so the ship
   // never jitters or swims closer/farther relative to the rigid rig as it moves/rotates.

@@ -7,6 +7,9 @@ import type { ShipFlightControlInput } from '../gameSimulation/newtonianShipPhys
 
 export type TouchFlightControls = {
   readFlightControlInput(): ShipFlightControlInput
+  /** D91: the THRUST button element, so the caller can place it (D91 tucks it into the radar square's
+   *  bottom-right dead corner instead of a side cluster). */
+  thrustButtonElement: HTMLElement
   /** D54: true while the thrust button (touch) or a thrust key (Shift/Space) is held */
   isThrustActive(): boolean
   /** D82: visually light the THRUST button as pressed while the AUTOPILOT is thrusting (visual only —
@@ -75,6 +78,7 @@ export function createTouchFlightControls(leftControlCluster: HTMLElement): Touc
   }
 
   return {
+    thrustButtonElement: thrustButton,
     // D40/D54: touch steering comes from the radar drag (merged in main.ts); here pitch/yaw are the
     // keyboard fallback only (A3). thrustActive is the hold-to-thrust button or a thrust key.
     readFlightControlInput(): ShipFlightControlInput {

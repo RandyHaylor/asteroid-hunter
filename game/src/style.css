@@ -61,8 +61,13 @@ body {
 
 /* D40/D54: steering is dragging the radar sphere (radarHud.css). The only flight control widget is
    the hold-to-thrust button, which sits in the left cluster (bottom-left relative to the radar). */
+/* D91: tucked into the radar square's bottom-RIGHT dead corner (absolute child of .radarRegion). */
 .thrustButton {
-  width: clamp(64px, 22vmin, 104px);
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  z-index: 7;
+  width: clamp(42px, 12vmin, 64px);
   aspect-ratio: 1;
   border-radius: 50%;
   border: 2px solid rgba(110, 180, 255, 0.6);
@@ -75,7 +80,6 @@ body {
   user-select: none;
   -webkit-user-select: none;
   cursor: pointer;
-  flex: 0 1 auto;
 }
 
 .thrustButtonActive {
@@ -84,9 +88,15 @@ body {
   box-shadow: 0 0 16px rgba(120, 190, 255, 0.7);
 }
 
-/* D74: AI-mode toggle button (sits in the right control cluster). Glows green when autopilot is on. */
+/* D74/D91: AI-mode toggle, tucked into the radar square's bottom-LEFT dead corner (absolute child of
+   .radarRegion). Glows green when autopilot is on; disabled (greyed) WHILE in AI mode (exit via the
+   EXIT AI PILOT button). */
 .autopilotToggleButton {
-  width: clamp(48px, 16vmin, 76px);
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  z-index: 7;
+  width: clamp(40px, 11vmin, 58px);
   aspect-ratio: 1;
   border-radius: 50%;
   border: 2px solid rgba(120, 230, 160, 0.6);
@@ -99,12 +109,16 @@ body {
   user-select: none;
   -webkit-user-select: none;
   cursor: pointer;
-  flex: 0 1 auto;
 }
 .autopilotToggleButtonActive {
   background: rgba(90, 220, 130, 0.85);
   border-color: rgba(180, 255, 210, 0.95);
   box-shadow: 0 0 16px rgba(120, 240, 160, 0.7);
+}
+.autopilotToggleButton:disabled {
+  opacity: 0.45;
+  filter: grayscale(0.6);
+  cursor: not-allowed;
 }
 
 /* D79: bottom-of-view banner shown while AI mode is active (free-look hint) */

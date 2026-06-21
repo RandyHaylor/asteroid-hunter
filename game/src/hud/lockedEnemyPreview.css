@@ -3,8 +3,9 @@
    bottom-left). Hidden until an enemy is locked. */
 .lockedEnemyPreviewPanel {
   position: absolute;
-  top: 0;
-  left: 0;
+  top: 40px; /* D91: overlays the ship view top-left, just below the shield/hull strip */
+  left: 6px;
+  z-index: 6;
   display: none;
   flex-direction: column;
   align-items: center;
