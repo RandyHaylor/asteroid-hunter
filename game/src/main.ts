@@ -227,6 +227,10 @@ const gameWorld: GameWorld = {
 }
 
 const playerShipState = createShipRigidBodyStateAtRest()
+// D88: start the game already at FULL max speed moving forward (identity facing = -Z), so the player
+// begins in motion rather than at 0 m/s in the low-speed warning state. (Wave-restart re-applies this
+// in resetPlayerShipForWaveRestart; this covers the initial boot, which never calls that.)
+playerShipState.velocityMetersPerSecond.set(0, 0, -playerShipBaseFlightStats.cruiseSpeedMetersPerSecond)
 const playerShipMesh = createPlayerShipMesh()
 gameScene.add(playerShipMesh)
 
