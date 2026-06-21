@@ -1828,9 +1828,12 @@ function runFrameLoop(currentFrameTimestampMs: number): void {
   playerViewCamera.updateMatrixWorld()
   // D52: mark the ship's true weapon bore — a point straight ahead of the nose projected to the
   // view. It drifts off the center reticle as the ship aims ahead of the camera (D53).
-  getShipForwardDirection(playerShipState, scratchShipWeaponBoreForward)
+  // D109 jitter fix: build the bore from the RENDERED (interpolated) mesh pose — the SAME pose the camera
+  // is pinned to — not the sim pose. Otherwise the camera↔aim-point origin gap (≈ one interp-lag of
+  // travel, which scales with SPEED) makes the crosshair shift every frame → speed-dependent jitter.
+  scratchShipWeaponBoreForward.copy(COMMANDED_FORWARD_LOCAL).applyQuaternion(playerShipMesh.quaternion)
   scratchShipWeaponBoreWorldPoint
-    .copy(playerShipState.positionMeters)
+    .copy(playerShipMesh.position)
     .addScaledVector(scratchShipWeaponBoreForward, 300)
   shipWeaponCrosshair.updateShipWeaponCrosshair(
     scratchShipWeaponBoreWorldPoint,
@@ -1842,7 +1845,7 @@ function runFrameLoop(currentFrameTimestampMs: number): void {
   // during AI free-look it stays on the real aim point (doesn't move with the camera). In normal flight
   // this projects to screen-center, exactly as before. Hidden if the aim point is behind the camera.
   scratchCommandedForwardWorld.copy(COMMANDED_FORWARD_LOCAL).applyQuaternion(radarSphereDisplay.getCommandedOrientation())
-  scratchAimReticleWorldPoint.copy(playerShipState.positionMeters).addScaledVector(scratchCommandedForwardWorld, 300)
+  scratchAimReticleWorldPoint.copy(playerShipMesh.position).addScaledVector(scratchCommandedForwardWorld, 300) // D109: rendered pos (camera-consistent), not sim pos
   scratchAimReticleNdc.copy(scratchAimReticleWorldPoint).project(playerViewCamera)
   if (scratchAimReticleNdc.z > 1 || Math.abs(scratchAimReticleNdc.x) > 1.3 || Math.abs(scratchAimReticleNdc.y) > 1.3) {
     aimingReticle.setAimScreenPosition(null)
