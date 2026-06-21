@@ -230,3 +230,77 @@ src/
 ## Testing approach
 - Pure-logic modules (cover solver, auto-aim cone, radar tracker, throttle physics) get vitest unit tests
 - Visual/gameplay verified in a tight loop with playwright-browser-emulation (per solid-developer TDD override)
+
+---
+
+## Design updates — D85–D103 (post-spec; supersedes earlier conflicting notes)
+
+This block records the design changes built after the original spec above. Where it conflicts with
+earlier sections, THIS is authoritative (and the code + the source-of-truth ledger are the final word).
+
+### Flight & momentum (D85, D88, D89)
+- **Base speeds +50%** at game start: player cruise/max 80→120 m/s; enemy patrol 30→45, orbit/cover 50→75.
+- **Variable-speed Newtonian flight (D88, reverses D54's constant momentum):** holding THRUST applies a
+  weak linear acceleration along the facing — gain speed when aligned with travel, lose speed when
+  opposed — capped at the max (cruise) speed; releasing thrust COASTS (velocity preserved, no drag).
+  `thrustAccelerationMetersPerSecondSquared` stat (≈14) replaces the old `thrustTurnRateRadiansPerSecond`.
+  Momentum is expensive to rebuild, so grapple-slingshots are the fast way to redirect.
+- **Spawn at full max speed moving forward** — both at initial boot (D89 fix) and wave restart.
+- **Low-speed (<50 m/s):** speed bar flashes red, a bottom warning banner shows, and tractor/grapple are
+  DISABLED (driver-agnostic). "Vulnerable to enemy tracking" is flavor only.
+- **Field-edge auto-orbit** onset pushed far out (1.6× play radius) so it reads as a soft boundary.
+
+### HUD (D86, D88, D90, D99, D101)
+- **Bottom-right trajectory cluster:** a real tiny 3D arrow (three.js ArrowHelper) pointing in the
+  travel direction relative to the view, a horizontal speed bar (full at cruise; does NOT scale with
+  upgrades), and a live m/s readout (which does). The old left speed-upgrade bar was removed.
+- **Settings menu (D90):** the SOUND on/off toggle became a hamburger (top-right) opening a pausing
+  overlay with independent Music + SFX volume sliders (0 = off). Opening it freezes the sim; level-end
+  (waveCleared / power-up pick) also pauses the ship/enemies.
+- **Status log (D99/D100/D101):** `shipStatusEventLog` (always recording) + `shipStatusLogDisplay`.
+  Events: N enemies spotted (wave start), enemy locked, enemy destroyed, shield recharged, and laser
+  BARRAGE summaries (successive enemy laser hits reported as one line once the strike-run lapses, gap
+  window 2.2× the enemy laser charge interval). The AI also narrates its action (Evading / Grapple-
+  redirecting / Engaging / Cruising) on change. Manual mode: latest message only, 4s fade, bottom-
+  centre. AI mode: 4-line running log (older lines faded), tap → full scrollable wave log.
+- **Live ship-stats grid (D101)** under the AI settings (10 upgradeable stats), 3-col landscape /
+  1-col portrait.
+
+### Controls & layout (D87, D91, D93, D97, D101)
+- THRUST + AI buttons tucked into the radar square's bottom-right / bottom-left dead corners. The AI
+  button is disabled while in AI mode (exit via EXIT AI PILOT, which greys out on the forced wave 3).
+- Radar drag-steer is disabled in AI mode; the ship-view drag is the AI free-look, which smoothly
+  returns to centre after 3s idle (and no longer sticks if the button is released off-window).
+- Landscape: ship view + radar fill the width (no right control strip); the locked-enemy preview
+  overlays the ship view. Portrait: radar centred under the ship view.
+
+### Autopilot (D92, D94, D100, D102)
+- AI thrust fires in ≥1s pulses (no per-frame feathering).
+- **Grapple-steer (D94):** for a desired travel change >30° while near full speed with an asteroid in
+  reach, the AI slingshots off a rock (`latchForRedirect`) instead of thrusting against momentum; aim/
+  facing stay independent of the orbit. Approach-angle slider maxes at 90°. Auto-choose-upgrades option
+  (random, flashes the pick 2s).
+
+### Grapple / avoidance (D96, D98, D102)
+- Orbit-entry curve smoothed (speed ramps from latch speed up to cruise over ~0.55s).
+- Avoidance now STRAFES sideways (perpendicular to travel) and stops once the rock is behind the
+  perpendicular plane; avoided-rock ring/line are red, ship ring/lines half-thickness.
+- **Grapple eligibility (D102):** only asteroids at/behind the perpendicular travel plane and within 45°
+  of it are grappleable; ones still ahead show grey and blink as they near; closer rim icons layer over
+  farther; icon tap area enlarged.
+
+### Built-in intro (D103)
+- A scripted pre-wave-1 tutorial: radar icons hidden → ship aimed at an asteroid → auto-avoid → "testing
+  orbit system" + 2s auto-grapple → "manual control online" → icons flash 3× then enable. Wave 1 and
+  manual/AI control are held until it finishes. See `pre-wave-1-intro-sequence.md`.
+
+### New / changed modules
+```
+hud/shipTrajectoryAndSpeedIndicator.ts  — 3D trajectory arrow + speed bar + m/s + low-speed warning (D86/D88)
+hud/gameSettingsMenu.ts                 — hamburger settings menu, music/SFX volume, pause (D90)
+hud/shipStatusEventLog.ts               — status-log model + laser-barrage aggregator (D99) [unit-tested]
+hud/shipStatusLogDisplay.ts             — status-log HUD (manual latest-fade / AI running + full log) (D99)
+gameSimulation/preWaveOneIntroSequence.ts — scripted pre-wave-1 intro timeline (D103) [unit-tested]
+grappleOrbit/asteroidGrappleEligibility.ts — perpendicular-plane + 45° grapple gate (D102) [unit-tested]
+gameSimulation/newtonianShipPhysics.ts  — now D88 variable-speed thrust (was D54 constant momentum)
+```
