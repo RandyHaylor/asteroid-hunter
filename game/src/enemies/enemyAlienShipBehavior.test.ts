@@ -44,7 +44,7 @@ describe('dumbPatrol tier', () => {
       positionBeforeStep.copy(patrolEnemy.positionMeters)
       updateEnemyShipBehavior(patrolEnemy, [], farAwayPlayerPosition, FIXED_TIMESTEP_SECONDS, fireIntent)
       if (patrolEnemy.positionMeters.distanceTo(positionBeforeStep) > 0) stepsWherePositionChanged++
-      expect(patrolEnemy.velocityMetersPerSecond.length()).toBeLessThanOrEqual(45 * 1.02) // D85: patrol speed bumped 30→45
+      expect(patrolEnemy.velocityMetersPerSecond.length()).toBeLessThanOrEqual(75 * 1.02) // D107: patrol speed +30 → 75
     }
 
     // it actually patrols: nearly every step moves the ship (the first step starts from rest)
