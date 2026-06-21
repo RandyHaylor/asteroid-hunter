@@ -7,7 +7,9 @@ import type { ShipAutopilotSettings } from './shipAutopilotSettings'
 // evade — from the world state + the player's tunable settings. Pure (writes into the out-intent, no
 // allocations), so it's unit-testable. The integration layer (main.ts) applies the intent each frame.
 
-export type AutopilotLatchCommand = 'latchNearestForEvasion' | 'release' | 'hold'
+// D93: 'latchForRedirect' = grapple-slingshot to CHANGE TRAVEL DIRECTION (a big >30° turn) instead of
+// thrusting against momentum. Distinct from 'latchNearestForEvasion' (juking pursuers while low/swarmed).
+export type AutopilotLatchCommand = 'latchNearestForEvasion' | 'latchForRedirect' | 'release' | 'hold'
 
 export type AutopilotIntent = {
   desiredHeadingDirectionWorld: Vector3
@@ -37,6 +39,8 @@ export type AutopilotContext = {
   recentlyDamaged: boolean
   /** combined radar+weapon range — the "in range" gate for counting threats + engaging */
   engagementRangeMeters: number
+  /** D93: the ship's max (cruise cap) speed — used to gate redirect-grapple to "near full speed" */
+  maxSpeedMetersPerSecond: number
   /** hysteresis: was the autopilot evading last frame (so it waits for reEngageShieldFraction) */
   wasEvadingLastFrame: boolean
   settings: ShipAutopilotSettings
@@ -51,6 +55,13 @@ const WORLD_UP_AXIS = new Vector3(0, 1, 0)
 const THRUST_STEER_ALIGNMENT_COSINE = Math.cos((12 * Math.PI) / 180)
 // when idle (no target) and drifting past this distance from field center, head back in (under thrust)
 const AUTOPILOT_FIELD_KEEP_IN_RADIUS_METERS = 1500
+// D93: redirect-grapple — when the desired travel direction differs from current travel by MORE than
+// this, the AI slingshots off an asteroid to redirect instead of thrusting against its momentum (which
+// is weak and bleeds speed). Only when near full speed (else thrusting up to speed takes priority) and
+// an asteroid is within reach.
+const REDIRECT_GRAPPLE_MIN_TURN_COSINE = Math.cos((30 * Math.PI) / 180)
+const REDIRECT_GRAPPLE_MIN_SPEED_FRACTION = 0.85
+const REDIRECT_GRAPPLE_ASTEROID_REACH_METERS = 600
 const scratchVelocityDirection = new Vector3()
 
 const scratchToTarget = new Vector3()
@@ -137,9 +148,42 @@ export function computeAutopilotIntent(context: AutopilotContext, outIntent: Aut
     }
   }
 
+  // D93: a BIG travel-direction change is cheaper via a grapple-slingshot than fighting momentum with
+  // the weak thruster. If the desired heading is >30° off current travel AND we're near full speed AND
+  // an asteroid is in reach (and we're not already evade-orbiting), request a redirect latch and DON'T
+  // thrust — the orbit swings the trajectory around; we release once travel realigns (handled here next
+  // frame as the angle shrinks back under the threshold). Aim/facing is independent of this.
+  if (!outIntent.isEvading && shouldRedirectViaGrapple(context, outIntent.desiredHeadingDirectionWorld)) {
+    outIntent.latchCommand = 'latchForRedirect'
+    outIntent.thrustActive = false
+    return
+  }
+
   // D81: THRUST to steer the travel toward the desired heading; coast only when already aligned. (When
   // the evade-orbit latch is engaged, the orbit controls motion and this thrust flag is moot.)
   outIntent.thrustActive = shouldThrustToSteerTravel(context, outIntent.desiredHeadingDirectionWorld)
+}
+
+/** D93: true when a big (>30°) travel-direction change is wanted while near full speed with an asteroid
+ *  in reach — the case where slinging off a rock beats thrusting against momentum. */
+function shouldRedirectViaGrapple(context: AutopilotContext, desiredHeadingWorld: Vector3): boolean {
+  if (desiredHeadingWorld.lengthSq() < 1e-9) return false
+  const speedMetersPerSecond = context.playerVelocityMetersPerSecond.length()
+  // "thrust up to full speed" takes priority — only redirect-grapple once we're near the speed cap
+  if (speedMetersPerSecond < REDIRECT_GRAPPLE_MIN_SPEED_FRACTION * context.maxSpeedMetersPerSecond) return false
+  scratchVelocityDirection.copy(context.playerVelocityMetersPerSecond).divideScalar(speedMetersPerSecond)
+  if (scratchVelocityDirection.dot(desiredHeadingWorld) >= REDIRECT_GRAPPLE_MIN_TURN_COSINE) return false // turn too small
+  return hasGrappleableAsteroidInReach(context)
+}
+
+function hasGrappleableAsteroidInReach(context: AutopilotContext): boolean {
+  for (const asteroid of context.asteroids) {
+    if (asteroid.isDestroyed) continue
+    const surfaceDistanceMeters =
+      asteroid.positionMeters.distanceTo(context.playerPositionMeters) - asteroid.currentRadiusMeters
+    if (surfaceDistanceMeters <= REDIRECT_GRAPPLE_ASTEROID_REACH_METERS) return true
+  }
+  return false
 }
 
 /** thrust whenever current travel isn't aligned with the desired heading (or we have no momentum yet) */

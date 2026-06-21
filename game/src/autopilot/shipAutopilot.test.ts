@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { Object3D, Quaternion, Vector3 } from 'three'
 import { computeAutopilotIntent, createAutopilotIntent, type AutopilotContext } from './shipAutopilot'
 import type { ShipAutopilotSettings } from './shipAutopilotSettings'
-import type { EnemyShip } from '../gameSimulation/gameWorldTypes'
+import type { AsteroidBody, EnemyShip } from '../gameSimulation/gameWorldTypes'
+
+// D93: minimal asteroid for redirect-grapple tests — the autopilot only reads position/radius/isDestroyed
+function makeAsteroid(positionMeters: Vector3, currentRadiusMeters = 30): AsteroidBody {
+  return { positionMeters, currentRadiusMeters, isDestroyed: false } as unknown as AsteroidBody
+}
 
 let nextId = 1
 function makeEnemy(positionMeters: Vector3, grappleStrength = 0): EnemyShip {
@@ -43,6 +48,7 @@ function baseContext(overrides: Partial<AutopilotContext> = {}): AutopilotContex
     shieldFraction: 1,
     recentlyDamaged: false,
     engagementRangeMeters: 600,
+    maxSpeedMetersPerSecond: 120,
     wasEvadingLastFrame: false,
     settings: baseSettings(),
     ...overrides,
@@ -69,6 +75,52 @@ describe('computeAutopilotIntent', () => {
     expect(intent.isEvading).toBe(false)
     expect(intent.engagedEnemyShipId).toBe(enemy.enemyShipId)
     expect(intent.thrustActive).toBe(true) // closing the gap
+  })
+
+  it('D93: redirect-grapples (not thrust) for a big >30° turn at near-full speed with an asteroid in reach', () => {
+    const enemyBehind = makeEnemy(new Vector3(0, 0, 300)) // behind the -Z travel → ~180° turn wanted
+    const asteroidInReach = makeAsteroid(new Vector3(0, 0, 80)) // surface ~50m away, within reach
+    const intent = createAutopilotIntent()
+    computeAutopilotIntent(
+      baseContext({
+        playerVelocityMetersPerSecond: new Vector3(0, 0, -120), // full speed forward (-Z)
+        enemyShips: [enemyBehind],
+        asteroids: [asteroidInReach],
+      }),
+      intent,
+    )
+    expect(intent.latchCommand).toBe('latchForRedirect')
+    expect(intent.thrustActive).toBe(false) // slingshot redirects instead of fighting momentum with thrust
+  })
+
+  it('D93: does NOT redirect-grapple below near-full speed — it thrusts up to speed first', () => {
+    const enemyBehind = makeEnemy(new Vector3(0, 0, 300))
+    const asteroidInReach = makeAsteroid(new Vector3(0, 0, 80))
+    const intent = createAutopilotIntent()
+    computeAutopilotIntent(
+      baseContext({
+        playerVelocityMetersPerSecond: new Vector3(0, 0, -40), // 40 < 0.85*120 → too slow to redirect-grapple
+        enemyShips: [enemyBehind],
+        asteroids: [asteroidInReach],
+      }),
+      intent,
+    )
+    expect(intent.latchCommand).not.toBe('latchForRedirect')
+    expect(intent.thrustActive).toBe(true) // thrust to build speed / steer
+  })
+
+  it('D93: does NOT redirect-grapple for a big turn when no asteroid is in reach', () => {
+    const enemyBehind = makeEnemy(new Vector3(0, 0, 300))
+    const intent = createAutopilotIntent()
+    computeAutopilotIntent(
+      baseContext({
+        playerVelocityMetersPerSecond: new Vector3(0, 0, -120),
+        enemyShips: [enemyBehind],
+        asteroids: [], // none in reach
+      }),
+      intent,
+    )
+    expect(intent.latchCommand).not.toBe('latchForRedirect')
   })
 
   it('evades when the shield drops below the evasion threshold', () => {

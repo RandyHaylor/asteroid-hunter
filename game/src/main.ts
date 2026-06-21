@@ -1342,6 +1342,7 @@ function updatePlayerMovement(deltaSeconds: number): void {
       recentlyDamaged:
         simulationClockSeconds - lastPlayerDamageAtSeconds < AUTOPILOT_RECENT_DAMAGE_WINDOW_SECONDS,
       engagementRangeMeters: playerEngagementRange.combinedRadarWeaponRangeMeters,
+      maxSpeedMetersPerSecond: playerShipBaseFlightStats.cruiseSpeedMetersPerSecond, // D93: gate redirect-grapple to near full speed
       wasEvadingLastFrame: autopilotWasEvadingLastFrame,
       settings: shipAutopilotSettings,
     }
@@ -1355,7 +1356,12 @@ function updatePlayerMovement(deltaSeconds: number): void {
       autopilotHeadingYawInput,
       deltaSeconds,
     )
-    if (autopilotIntent.latchCommand === 'latchNearestForEvasion') {
+    // D93: both evasion-juke and redirect-slingshot latch the nearest reachable asteroid (the orbit then
+    // carries the ship); the autopilot stops requesting the latch (→ 'release') once it's done with it.
+    if (
+      autopilotIntent.latchCommand === 'latchNearestForEvasion' ||
+      autopilotIntent.latchCommand === 'latchForRedirect'
+    ) {
       if (!grappleOrbitController.isLatched()) latchNearestAsteroidForAutopilotEvasion()
     } else if (autopilotIntent.latchCommand === 'release' && grappleOrbitController.isLatched()) {
       grappleOrbitController.releaseLatch()
