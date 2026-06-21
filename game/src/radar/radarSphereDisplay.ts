@@ -46,6 +46,8 @@ export type RadarSphereDisplay = {
   renderRadar(): void
   /** D42: true while the player is dragging the radar to steer */
   isSteeringDrag(): boolean
+  /** D93: enable/disable radar drag-steer (disabled in AI mode so it can't fight the autopilot) */
+  setSteeringDragEnabled(enabled: boolean): void
   /** D42: the orientation the player has dragged the radar to — the ship slews toward this */
   getCommandedOrientation(): Quaternion
   /** D42: keep the radar mirroring the ship while the player isn't dragging */
@@ -103,8 +105,12 @@ export function createRadarSphereDisplay(controlClusterElement: HTMLElement): Ra
   let steeringPointerId: number | null = null
   let lastPointerXPixels = 0
   let lastPointerYPixels = 0
+  // D93: radar drag-steer is disabled in AI mode — the autopilot owns the heading, and dragging the
+  // radar then fought it. (Look-around in AI is the ship-view drag, not the radar.)
+  let isSteeringDragEnabled = true
 
   radarCanvas.addEventListener('pointerdown', (pointerEvent) => {
+    if (!isSteeringDragEnabled) return // D93: ignore radar drag while AI flies
     steeringPointerId = pointerEvent.pointerId
     radarCanvas.setPointerCapture(pointerEvent.pointerId)
     lastPointerXPixels = pointerEvent.clientX
@@ -333,6 +339,10 @@ export function createRadarSphereDisplay(controlClusterElement: HTMLElement): Ra
     updateRadarDisplay,
     renderRadar,
     isSteeringDrag: () => steeringPointerId !== null,
+    setSteeringDragEnabled(enabled: boolean): void {
+      isSteeringDragEnabled = enabled
+      if (!enabled) steeringPointerId = null // drop any in-progress drag
+    },
     getCommandedOrientation: () => radarCommandedOrientation,
     syncCommandedOrientationToShip: (shipOrientation: Quaternion) => {
       radarCommandedOrientation.copy(shipOrientation)

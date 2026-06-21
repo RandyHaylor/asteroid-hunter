@@ -592,6 +592,7 @@ function setAutopilotModeActive(active: boolean): void {
   // so block manual thrust taps directly while in AI mode — but keep the button visible + glowing to
   // reflect the AI's thrust (reflectAutopilotThrustVisual). Pointer-events off = no manual input.
   flightControls.thrustButtonElement.style.pointerEvents = active ? 'none' : 'auto'
+  radarSphereDisplay.setSteeringDragEnabled(!active) // D93: radar not draggable in AI mode (autopilot owns heading)
   autopilotSettingsPanel.setAiModeActive(active) // D75: show/hide the settings overlay with the mode
   manualControlsBlockOverlay.classList.toggle('manualControlsBlockOverlayActive', active) // D77
   resetAutopilotFreeLook() // D79: recenter the look-around when the mode toggles
