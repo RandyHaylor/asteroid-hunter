@@ -762,10 +762,16 @@ startScreenOverlay.innerHTML = `
 document.body.appendChild(startScreenOverlay)
 
 let gameHasStarted = false
-// D103: aim the ship straight at the nearest large asteroid (a standoff back) so it's on a collision
-// course — the intro's auto-avoidance then fires on cue. No large rock → skip the collision demo.
+// D103/D110: aim the ship to GRAZE the nearest large asteroid (pass super close, not dead-on) from a
+// standoff back, so the intro's auto-avoidance fires on the near miss. No large rock → skip the demo.
+const scratchIntroApproachDirection = new THREE.Vector3()
+const scratchIntroGrazeOffsetAxis = new THREE.Vector3()
+const scratchIntroGrazePoint = new THREE.Vector3()
 const scratchIntroTravelDirection = new THREE.Vector3()
 const SHIP_INTRO_FORWARD_LOCAL = new THREE.Vector3(0, 0, -1)
+const INTRO_WORLD_UP_AXIS = new THREE.Vector3(0, 1, 0)
+const INTRO_WORLD_RIGHT_AXIS = new THREE.Vector3(1, 0, 0)
+const INTRO_GRAZE_SURFACE_MARGIN_METERS = 30 // closest pass ~30 m off the surface (within the 80 m avoidance trigger)
 function aimShipAtDemoAsteroidForIntro(): void {
   let demoAsteroid: import('./gameSimulation/gameWorldTypes').AsteroidBody | null = null
   let nearestDistanceSquared = Infinity
@@ -778,11 +784,23 @@ function aimShipAtDemoAsteroidForIntro(): void {
     }
   }
   if (demoAsteroid === null) return
-  scratchIntroTravelDirection.copy(demoAsteroid.positionMeters)
-  if (scratchIntroTravelDirection.lengthSq() < 1e-6) return
-  scratchIntroTravelDirection.normalize()
-  const standoffMeters = demoAsteroid.currentRadiusMeters + 550 // D105: more lead-in so it's not cramped
-  playerShipState.positionMeters.copy(demoAsteroid.positionMeters).addScaledVector(scratchIntroTravelDirection, -standoffMeters)
+  scratchIntroApproachDirection.copy(demoAsteroid.positionMeters) // origin → asteroid (approach line)
+  if (scratchIntroApproachDirection.lengthSq() < 1e-6) return
+  scratchIntroApproachDirection.normalize()
+  // a perpendicular axis to offset the aim point sideways, so the ship GRAZES rather than hits dead-on
+  scratchIntroGrazeOffsetAxis.crossVectors(scratchIntroApproachDirection, INTRO_WORLD_UP_AXIS)
+  if (scratchIntroGrazeOffsetAxis.lengthSq() < 1e-6) {
+    scratchIntroGrazeOffsetAxis.crossVectors(scratchIntroApproachDirection, INTRO_WORLD_RIGHT_AXIS)
+  }
+  scratchIntroGrazeOffsetAxis.normalize()
+  // aim at a point one radius + a small margin to the SIDE of the asteroid → a close fly-by
+  scratchIntroGrazePoint
+    .copy(demoAsteroid.positionMeters)
+    .addScaledVector(scratchIntroGrazeOffsetAxis, demoAsteroid.currentRadiusMeters + INTRO_GRAZE_SURFACE_MARGIN_METERS)
+  // start a standoff back along the approach line, then head toward the graze point
+  const standoffMeters = demoAsteroid.currentRadiusMeters + 550 // D105: lead-in so it's not cramped
+  playerShipState.positionMeters.copy(demoAsteroid.positionMeters).addScaledVector(scratchIntroApproachDirection, -standoffMeters)
+  scratchIntroTravelDirection.copy(scratchIntroGrazePoint).sub(playerShipState.positionMeters).normalize()
   playerShipState.velocityMetersPerSecond
     .copy(scratchIntroTravelDirection)
     .multiplyScalar(playerShipBaseFlightStats.cruiseSpeedMetersPerSecond)

@@ -22,7 +22,7 @@ describe('preWaveOneIntroSequence', () => {
     const { hooks, events } = makeRecordingHooks()
     const seq = createPreWaveOneIntroSequence(hooks)
     seq.start()
-    advance(seq, 3.2)
+    advance(seq, 5.2)
     expect(events[0]).toBe('icons:hidden')
     expect(events).toContain('msg:Grappling tractor beam online.')
     expect(events).toContain('msg:Grappling tractor auto-deployed — avoiding collision.')
@@ -34,7 +34,7 @@ describe('preWaveOneIntroSequence', () => {
     const { hooks, events } = makeRecordingHooks()
     const seq = createPreWaveOneIntroSequence(hooks)
     seq.start()
-    advance(seq, 9)
+    advance(seq, 11)
     expect(events).toContain('grapple:release')
     expect(events).toContain('msg:System check: trajectory redirection confirmed. Manual control online.')
     expect(events[events.length - 1]).toBe('icons:shown') // settles ON

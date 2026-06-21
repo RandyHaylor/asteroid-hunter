@@ -29,18 +29,19 @@ type IntroStep = { atSeconds: number; run: (hooks: PreWaveOneIntroHooks) => void
 const INTRO_STEPS: readonly IntroStep[] = [
   { atSeconds: 0.0, run: (h) => { h.setRadarIconsHidden(true); h.logStatusMessage('Grappling tractor beam online.') } },
   { atSeconds: 1.0, run: (h) => h.logStatusMessage('Grappling tractor auto-deployed — avoiding collision.') },
-  { atSeconds: 3.0, run: (h) => { h.logStatusMessage('Testing asteroid orbit system...'); h.beginAutoGrappleNearestAsteroid() } },
-  { atSeconds: 5.0, run: (h) => { h.releaseAutoGrapple(); h.logStatusMessage('System check: trajectory redirection confirmed. Manual control online.') } },
+  // wait a couple extra seconds after the grazing pass before the orbit test (D110)
+  { atSeconds: 5.0, run: (h) => { h.logStatusMessage('Testing asteroid orbit system...'); h.beginAutoGrappleNearestAsteroid() } },
+  { atSeconds: 7.0, run: (h) => { h.releaseAutoGrapple(); h.logStatusMessage('System check: trajectory redirection confirmed. Manual control online.') } },
   // radar icons flash on/off ×3 (0.5s cadence), then stay on
-  { atSeconds: 5.0, run: (h) => h.setRadarIconsHidden(false) },
-  { atSeconds: 5.5, run: (h) => h.setRadarIconsHidden(true) },
-  { atSeconds: 6.0, run: (h) => h.setRadarIconsHidden(false) },
-  { atSeconds: 6.5, run: (h) => h.setRadarIconsHidden(true) },
   { atSeconds: 7.0, run: (h) => h.setRadarIconsHidden(false) },
   { atSeconds: 7.5, run: (h) => h.setRadarIconsHidden(true) },
   { atSeconds: 8.0, run: (h) => h.setRadarIconsHidden(false) },
+  { atSeconds: 8.5, run: (h) => h.setRadarIconsHidden(true) },
+  { atSeconds: 9.0, run: (h) => h.setRadarIconsHidden(false) },
+  { atSeconds: 9.5, run: (h) => h.setRadarIconsHidden(true) },
+  { atSeconds: 10.0, run: (h) => h.setRadarIconsHidden(false) },
 ]
-const INTRO_TOTAL_SECONDS = 8.0
+const INTRO_TOTAL_SECONDS = 10.0
 
 export function createPreWaveOneIntroSequence(hooks: PreWaveOneIntroHooks): PreWaveOneIntroSequence {
   let isActive = false
