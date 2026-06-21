@@ -45,6 +45,7 @@ import { createShipTrajectoryAndSpeedIndicator } from './hud/shipTrajectoryAndSp
 import { createGameSettingsMenu } from './hud/gameSettingsMenu'
 import { createShipStatusEventLog } from './hud/shipStatusEventLog'
 import { createShipStatusLogDisplay } from './hud/shipStatusLogDisplay'
+import { createPreWaveOneIntroSequence } from './gameSimulation/preWaveOneIntroSequence'
 import { createLockedEnemyPreview } from './hud/lockedEnemyPreview'
 import { createCockpitFrameOverlay } from './hud/cockpitFrameOverlay'
 import {
@@ -447,6 +448,18 @@ const asteroidOrbitIcons = createAsteroidOrbitIcons(
 // circle), instead of a separate side cluster. The AI button goes in the bottom-LEFT corner (below).
 radarRegion.appendChild(flightControls.thrustButtonElement)
 
+// D103: pre-wave-1 intro ("tutorial") — drives status messages, radar-icon visibility, and a demo
+// auto-grapple over a scripted timeline. The ship is aimed at an asteroid at start (below) so the
+// auto-avoidance fires on cue. While it runs, wave-1 + manual control are held off (gated below).
+const preWaveOneIntroSequence = createPreWaveOneIntroSequence({
+  logStatusMessage: (message) => shipStatusEventLog.logMessage(message, simulationClockSeconds),
+  setRadarIconsHidden: (hidden) => asteroidOrbitIcons.setIconsGloballyHidden(hidden),
+  beginAutoGrappleNearestAsteroid: () => latchNearestAsteroidForAutopilotEvasion(),
+  releaseAutoGrapple: () => {
+    if (grappleOrbitController.isLatched()) grappleOrbitController.releaseLatch()
+  },
+})
+
 // D74: AUTOPILOT ("AI mode") — an "AI" toggle button + state. Default OFF (manual flight). When active,
 // the autopilot drives the commanded heading + thrust + evasion-orbit from shipAutopilotSettings.
 let autopilotModeActive = false
@@ -721,11 +734,42 @@ startScreenOverlay.innerHTML = `
 document.body.appendChild(startScreenOverlay)
 
 let gameHasStarted = false
+// D103: aim the ship straight at the nearest large asteroid (a standoff back) so it's on a collision
+// course — the intro's auto-avoidance then fires on cue. No large rock → skip the collision demo.
+const scratchIntroTravelDirection = new THREE.Vector3()
+const SHIP_INTRO_FORWARD_LOCAL = new THREE.Vector3(0, 0, -1)
+function aimShipAtDemoAsteroidForIntro(): void {
+  let demoAsteroid: import('./gameSimulation/gameWorldTypes').AsteroidBody | null = null
+  let nearestDistanceSquared = Infinity
+  for (const asteroid of gameWorld.asteroids) {
+    if (asteroid.isDestroyed || asteroid.sizeClass !== 'large') continue
+    const distanceSquared = asteroid.positionMeters.lengthSq()
+    if (distanceSquared < nearestDistanceSquared) {
+      nearestDistanceSquared = distanceSquared
+      demoAsteroid = asteroid
+    }
+  }
+  if (demoAsteroid === null) return
+  scratchIntroTravelDirection.copy(demoAsteroid.positionMeters)
+  if (scratchIntroTravelDirection.lengthSq() < 1e-6) return
+  scratchIntroTravelDirection.normalize()
+  const standoffMeters = demoAsteroid.currentRadiusMeters + 300
+  playerShipState.positionMeters.copy(demoAsteroid.positionMeters).addScaledVector(scratchIntroTravelDirection, -standoffMeters)
+  playerShipState.velocityMetersPerSecond
+    .copy(scratchIntroTravelDirection)
+    .multiplyScalar(playerShipBaseFlightStats.cruiseSpeedMetersPerSecond)
+  playerShipState.orientation.setFromUnitVectors(SHIP_INTRO_FORWARD_LOCAL, scratchIntroTravelDirection)
+  radarSphereDisplay.syncCommandedOrientationToShip(playerShipState.orientation)
+}
+
 function beginGameFromStartScreen(): void {
   if (gameHasStarted) return
   gameHasStarted = true
   startScreenOverlay.classList.add('startScreenOverlayHidden')
   resumeGameAudioOnUserGesture()
+  // D103: play the built-in intro/tutorial before wave 1
+  aimShipAtDemoAsteroidForIntro()
+  preWaveOneIntroSequence.start()
 }
 startScreenOverlay.addEventListener('pointerdown', (pointerEvent) => {
   pointerEvent.stopPropagation()
@@ -974,6 +1018,7 @@ function onBetweenWavePowerUpChosen(chosenPowerUp: PowerUpDefinition): void {
 }
 
 function updateWavePhase(deltaSeconds: number): void {
+  if (preWaveOneIntroSequence.isActive()) return // D103: hold wave 1 until the intro/tutorial finishes
   wavePhaseCountdownSeconds -= deltaSeconds
 
   if (currentWavePhase === 'waveIntro' && wavePhaseCountdownSeconds <= 0) {
@@ -1353,7 +1398,11 @@ function updatePlayerMovement(deltaSeconds: number): void {
   const radarIsSteeringDrag = radarSphereDisplay.isSteeringDrag()
   // D74: AUTOPILOT drives heading + thrust + evasion-orbit when AI mode is on; otherwise manual input.
   let effectiveThrustActive: boolean
-  if (autopilotModeActive) {
+  if (preWaveOneIntroSequence.isActive()) {
+    // D103: during the intro the ship is on rails (placed on a collision course; avoidance + the scripted
+    // auto-grapple drive it). Ignore manual + AI control inputs until "manual control online".
+    effectiveThrustActive = false
+  } else if (autopilotModeActive) {
     const autopilotContext: AutopilotContext = {
       playerPositionMeters: playerShipState.positionMeters,
       playerVelocityMetersPerSecond: playerShipState.velocityMetersPerSecond,
@@ -1530,6 +1579,7 @@ function updateGameSimulation(deltaSeconds: number): void {
   if (isGamePausedBySettingsMenu) return
   simulationClockSeconds += deltaSeconds
 
+  preWaveOneIntroSequence.update(deltaSeconds) // D103: advance the intro/tutorial timeline (no-op once done)
   updateWavePhase(deltaSeconds)
   // D90: between-waves "level end" pause — the wave-phase clock above still advances (waveCleared →
   // power-up pick), but the ship/enemies/projectiles freeze so the game is paused at level end.
