@@ -459,6 +459,7 @@ const preWaveOneIntroSequence = createPreWaveOneIntroSequence({
     if (grappleOrbitController.isLatched()) grappleOrbitController.releaseLatch()
   },
 })
+let wasPreWaveIntroActiveLastFrame = false // D108: drives the intro control-lock on/off transition
 
 // D74: AUTOPILOT ("AI mode") — an "AI" toggle button + state. Default OFF (manual flight). When active,
 // the autopilot drives the commanded heading + thrust + evasion-orbit from shipAutopilotSettings.
@@ -1607,6 +1608,16 @@ function updateGameSimulation(deltaSeconds: number): void {
   simulationClockSeconds += deltaSeconds
 
   preWaveOneIntroSequence.update(deltaSeconds) // D103: advance the intro/tutorial timeline (no-op once done)
+  // D108: lock ALL player controls while the intro plays (radar drag-steer + thrust button + AI toggle),
+  // and restore them the moment it ends. updatePlayerMovement already ignores manual heading/thrust during
+  // the intro; this also blocks the radar drag + buttons that bypass that path.
+  const isPreWaveIntroActive = preWaveOneIntroSequence.isActive()
+  if (isPreWaveIntroActive !== wasPreWaveIntroActiveLastFrame) {
+    radarSphereDisplay.setSteeringDragEnabled(!isPreWaveIntroActive)
+    flightControls.thrustButtonElement.style.pointerEvents = isPreWaveIntroActive ? 'none' : 'auto'
+    autopilotToggleButton.disabled = isPreWaveIntroActive
+    wasPreWaveIntroActiveLastFrame = isPreWaveIntroActive
+  }
   updateWavePhase(deltaSeconds)
   // D90: between-waves "level end" pause — the wave-phase clock above still advances (waveCleared →
   // power-up pick), but the ship/enemies/projectiles freeze so the game is paused at level end.
