@@ -408,6 +408,7 @@ const shipStatusEventLog = createShipStatusEventLog()
 const shipStatusLogDisplay = createShipStatusLogDisplay(viewHudOverlay, shipStatusEventLog)
 let previousShieldFractionForRechargeLog = 1 // D99: detect the shield finishing a recharge to full
 let previouslyLockedEnemyShipId: number | null = null // D99: detect a new enemy lock for the log
+let previousAutopilotNarration: string | null = null // D99: only log AI-action narration on change
 // D86: bottom-right trajectory arrow + horizontal speed bar (full at cruise) + live m/s readout
 const scratchTravelDirectionInViewSpace = new THREE.Vector3()
 const shipTrajectoryAndSpeedIndicator = createShipTrajectoryAndSpeedIndicator(
@@ -983,6 +984,7 @@ function updateWavePhase(deltaSeconds: number): void {
     // D99: fresh per-wave log + a single "N enemies spotted" entry as the wave goes active
     shipStatusEventLog.clear()
     previouslyLockedEnemyShipId = null
+    previousAutopilotNarration = null
     const spottedEnemyCount = gameWorld.enemyShips.filter((enemyShip) => !enemyShip.isDestroyed).length
     shipStatusEventLog.logMessage(`${spottedEnemyCount} enemies spotted`, simulationClockSeconds)
     return
@@ -1366,6 +1368,19 @@ function updatePlayerMovement(deltaSeconds: number): void {
     }
     computeAutopilotIntent(autopilotContext, autopilotIntent)
     autopilotWasEvadingLastFrame = autopilotIntent.isEvading
+    // D99: narrate the AI's current ACTION into the status log, but only when the action CHANGES (so the
+    // running log actually updates as the AI flies, instead of sitting on the wave-start entries).
+    const autopilotNarration = autopilotIntent.isEvading
+      ? 'Evading — orbiting to recover shield'
+      : autopilotIntent.latchCommand === 'latchForRedirect'
+        ? 'Grapple-redirecting trajectory'
+        : autopilotIntent.engagedEnemyShipId !== null
+          ? 'Engaging — closing on target'
+          : 'Cruising — scanning for targets'
+    if (autopilotNarration !== previousAutopilotNarration) {
+      shipStatusEventLog.logMessage(autopilotNarration, simulationClockSeconds)
+      previousAutopilotNarration = autopilotNarration
+    }
     // D80: turn via the PLAYER heading control (pitch/yaw → applyPitchYawToCommandedHeading), same as keys
     computeAutopilotHeadingTurnInputs(commandedOrientation, autopilotIntent.desiredHeadingDirectionWorld)
     applyPitchYawToCommandedHeading(

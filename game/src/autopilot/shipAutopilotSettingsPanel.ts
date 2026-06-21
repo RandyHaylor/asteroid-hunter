@@ -109,11 +109,11 @@ export function createShipAutopilotSettingsPanel(
     (v) => (shipAutopilotSettings.reEngageShieldFraction = v),
     (v) => `${Math.round(v * 100)}%`)
 
-  // target-priority select
+  // target-priority select — D92: label + dropdown on ONE line (was stacked)
   const priorityRow = document.createElement('label')
-  priorityRow.className = 'aiSettingRow'
-  const priorityLabel = document.createElement('div')
-  priorityLabel.className = 'aiSettingLabelLine'
+  priorityRow.className = 'aiSettingRow aiSettingInlineRow'
+  const priorityLabel = document.createElement('span')
+  priorityLabel.className = 'aiSettingLabel'
   priorityLabel.textContent = 'Target priority'
   const prioritySelect = document.createElement('select')
   prioritySelect.className = 'aiSettingSelect'
@@ -131,9 +131,14 @@ export function createShipAutopilotSettingsPanel(
   priorityRow.appendChild(prioritySelect)
   panel.appendChild(priorityRow)
 
+  // D92: flee + auto-upgrade checkboxes share ONE row, side by side, to free vertical space for the log
+  const checkboxPairRow = document.createElement('div')
+  checkboxPairRow.className = 'aiSettingRow aiSettingCheckboxPairRow'
+  panel.appendChild(checkboxPairRow)
+
   // flee-after-any-damage checkbox
   const fleeRow = document.createElement('label')
-  fleeRow.className = 'aiSettingRow aiSettingCheckboxRow'
+  fleeRow.className = 'aiSettingCheckboxRow'
   const fleeCheckbox = document.createElement('input')
   fleeCheckbox.type = 'checkbox'
   fleeCheckbox.checked = shipAutopilotSettings.fleeAfterAnyDamage
@@ -144,11 +149,11 @@ export function createShipAutopilotSettingsPanel(
   fleeLabel.textContent = 'Flee after any damage'
   fleeRow.appendChild(fleeCheckbox)
   fleeRow.appendChild(fleeLabel)
-  panel.appendChild(fleeRow)
+  checkboxPairRow.appendChild(fleeRow)
 
   // D92: auto-choose-upgrades checkbox (default OFF) — when on, the between-wave upgrade is auto-picked
   const autoUpgradeRow = document.createElement('label')
-  autoUpgradeRow.className = 'aiSettingRow aiSettingCheckboxRow'
+  autoUpgradeRow.className = 'aiSettingCheckboxRow'
   const autoUpgradeCheckbox = document.createElement('input')
   autoUpgradeCheckbox.type = 'checkbox'
   autoUpgradeCheckbox.checked = shipAutopilotSettings.autoChoosesUpgrades
@@ -159,7 +164,7 @@ export function createShipAutopilotSettingsPanel(
   autoUpgradeLabel.textContent = 'AI auto-chooses upgrades'
   autoUpgradeRow.appendChild(autoUpgradeCheckbox)
   autoUpgradeRow.appendChild(autoUpgradeLabel)
-  panel.appendChild(autoUpgradeRow)
+  checkboxPairRow.appendChild(autoUpgradeRow)
 
   let isAiModeActive = false
   let isPanelExpanded = true // default shown when entering AI mode

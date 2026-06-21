@@ -84,7 +84,32 @@
 
 .aiSettingRow {
   display: block;
-  margin: 7px 0;
+  margin: 3px 0; /* D92: tighter rows to free vertical space for the AI status log */
+}
+/* D92: inline row — label on the left, control (e.g. the priority dropdown) on the right, one line */
+.aiSettingInlineRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.aiSettingInlineRow .aiSettingLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11px;
+  background: rgba(2, 10, 6, 0.72);
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+.aiSettingInlineRow .aiSettingSelect {
+  flex: 0 0 auto;
+  width: auto;
+  margin-top: 0;
+}
+/* D92: the two checkboxes share one row, side by side */
+.aiSettingCheckboxPairRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
 }
 .aiSettingLabelLine {
   display: flex;
