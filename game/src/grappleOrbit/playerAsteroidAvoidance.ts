@@ -14,6 +14,7 @@ export const AVOIDANCE_TRIGGER_SURFACE_DISTANCE_METERS = 80
 export const AVOIDANCE_MAX_PUSHBACK_SPEED_METERS_PER_SECOND = 70
 
 const scratchOutwardDirection = new Vector3()
+const scratchTravelDirectionUnit = new Vector3()
 
 export type NearestAvoidanceAsteroid = {
   asteroid: AsteroidBody
@@ -53,23 +54,52 @@ export function computeAvoidanceProximityFraction(surfaceDistanceMeters: number)
 }
 
 /**
- * Push the ship's POSITION outward (away from the asteroid centre), scaled by proximity — a smooth
- * distance-based repulsion that strengthens the closer it gets. Mutates playerPositionMeters in place.
- * Works for any approach angle (incl. head-on). The constant cruise momentum is untouched, so the ship
- * keeps its heading but gets shoved off the collision course — the field curves the path around.
+ * D93: STRAFE the ship sideways past the asteroid, scaled by proximity. The push is the outward
+ * (away-from-asteroid) direction with its ALONG-TRAVEL component removed — i.e. perpendicular to the
+ * velocity — so the ship slides sideways off the collision course WITHOUT changing its heading (a
+ * "strafing" correction, per design). For a purely head-on/fore-aft approach (no perpendicular
+ * component) it falls back to plain outward push so a dead-on heading still deflects. Velocity
+ * magnitude/heading is untouched; only position is nudged. Mutates playerPositionMeters in place.
  */
 export function applyAvoidancePushback(
   playerPositionMeters: Vector3,
   asteroidPositionMeters: Vector3,
+  playerVelocityMetersPerSecond: Vector3,
   proximityFraction: number,
   deltaSeconds: number,
 ): void {
   if (proximityFraction <= 0) return
   scratchOutwardDirection.copy(playerPositionMeters).sub(asteroidPositionMeters)
   if (scratchOutwardDirection.lengthSq() < 1e-9) return
+  // strafe: drop the component along the travel direction so the push is a sideways slide
+  const speedMetersPerSecond = playerVelocityMetersPerSecond.length()
+  if (speedMetersPerSecond > 1e-6) {
+    scratchTravelDirectionUnit.copy(playerVelocityMetersPerSecond).divideScalar(speedMetersPerSecond)
+    scratchOutwardDirection.addScaledVector(scratchTravelDirectionUnit, -scratchOutwardDirection.dot(scratchTravelDirectionUnit))
+  }
+  if (scratchOutwardDirection.lengthSq() < 1e-9) {
+    // head-on (outward was purely along travel) — fall back to plain outward so we still deflect
+    scratchOutwardDirection.copy(playerPositionMeters).sub(asteroidPositionMeters)
+  }
   scratchOutwardDirection.normalize()
   playerPositionMeters.addScaledVector(
     scratchOutwardDirection,
     proximityFraction * AVOIDANCE_MAX_PUSHBACK_SPEED_METERS_PER_SECOND * deltaSeconds,
   )
+}
+
+/**
+ * D93: true once the asteroid is BEHIND the plane perpendicular to the ship's travel (the ship has
+ * passed it) — avoidance should stop then. With (near-)zero speed there's no travel plane, so returns
+ * false (keep avoiding). "Cleared" = the asteroid is no longer ahead of the ship's motion.
+ */
+export function isAsteroidClearedBehindTravelPlane(
+  playerPositionMeters: Vector3,
+  asteroidPositionMeters: Vector3,
+  playerVelocityMetersPerSecond: Vector3,
+): boolean {
+  const speedMetersPerSecond = playerVelocityMetersPerSecond.length()
+  if (speedMetersPerSecond < 1e-6) return false
+  scratchOutwardDirection.copy(asteroidPositionMeters).sub(playerPositionMeters) // ship → asteroid
+  return scratchOutwardDirection.dot(playerVelocityMetersPerSecond) <= 0 // asteroid behind the travel plane
 }

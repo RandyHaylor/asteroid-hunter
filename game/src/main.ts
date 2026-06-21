@@ -64,6 +64,7 @@ import {
   findNearestAvoidanceAsteroid,
   computeAvoidanceProximityFraction,
   applyAvoidancePushback,
+  isAsteroidClearedBehindTravelPlane,
 } from './grappleOrbit/playerAsteroidAvoidance'
 import { shipAutopilotSettings } from './autopilot/shipAutopilotSettings'
 import { createShipAutopilotSettingsPanel } from './autopilot/shipAutopilotSettingsPanel'
@@ -296,10 +297,11 @@ function createThinFuzzyRingTexture(): THREE.CanvasTexture {
   ringCanvas.height = textureSizePixels
   const drawContext = ringCanvas.getContext('2d') as CanvasRenderingContext2D
   const centerPixels = textureSizePixels / 2
+  // D93: half-thickness ring band (inner edge 0.46 vs 0.42 → band 0.04 wide, half the old 0.08)
   const radialGradient = drawContext.createRadialGradient(
     centerPixels,
     centerPixels,
-    textureSizePixels * 0.42,
+    textureSizePixels * 0.46,
     centerPixels,
     centerPixels,
     textureSizePixels * 0.5,
@@ -348,7 +350,7 @@ function createWhiteFuzzyRingTexture(): THREE.CanvasTexture {
 const avoidanceDeflectionRing = new THREE.Sprite(
   new THREE.SpriteMaterial({
     map: createWhiteFuzzyRingTexture(),
-    color: 0xffffff,
+    color: 0xff4040, // D93: avoided-asteroid ring is RED (the ship's own ring stays white)
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
@@ -359,7 +361,7 @@ gameScene.add(avoidanceDeflectionRing)
 const avoidanceDeflectionBeam = new THREE.Mesh(
   new THREE.CylinderGeometry(1, 1, 1, 8, 1, true),
   new THREE.MeshBasicMaterial({
-    color: 0xffffff,
+    color: 0xff4040, // D93: connecting deflection line is RED too
     transparent: true,
     opacity: 0.6,
     blending: THREE.AdditiveBlending,
@@ -368,7 +370,7 @@ const avoidanceDeflectionBeam = new THREE.Mesh(
 )
 avoidanceDeflectionBeam.visible = false
 gameScene.add(avoidanceDeflectionBeam)
-const AVOIDANCE_DEFLECTION_BEAM_RADIUS_METERS = 0.8
+const AVOIDANCE_DEFLECTION_BEAM_RADIUS_METERS = 0.4 // D93: half as thick as before (was 0.8)
 const scratchAvoidanceBeamDelta = new THREE.Vector3()
 const scratchAvoidanceBeamDirection = new THREE.Vector3()
 // D71: render state set each sim step by updatePlayerMovement, consumed by the render sync
@@ -1437,13 +1439,23 @@ function updatePlayerMovement(deltaSeconds: number): void {
     gameWorld.asteroids,
     orbitedAsteroidForAvoidance,
   )
-  if (nearestAvoidance) {
+  // D93: stop avoiding once the asteroid is behind the plane perpendicular to travel (we've passed it) —
+  // the strafe is a brief sideways slide to clear the rock, not an orbit.
+  const avoidanceAsteroidCleared =
+    nearestAvoidance !== null &&
+    isAsteroidClearedBehindTravelPlane(
+      playerShipState.positionMeters,
+      nearestAvoidance.asteroid.positionMeters,
+      playerShipState.velocityMetersPerSecond,
+    )
+  if (nearestAvoidance && !avoidanceAsteroidCleared) {
     avoidanceTargetAsteroid = nearestAvoidance.asteroid
     avoidanceProximityFraction = computeAvoidanceProximityFraction(nearestAvoidance.surfaceDistanceMeters)
     if (!grappleOrbitController.isLatched() && avoidanceProximityFraction > 0) {
       applyAvoidancePushback(
         playerShipState.positionMeters,
         avoidanceTargetAsteroid.positionMeters,
+        playerShipState.velocityMetersPerSecond, // D93: strafe sideways relative to travel
         avoidanceProximityFraction,
         deltaSeconds,
       )
