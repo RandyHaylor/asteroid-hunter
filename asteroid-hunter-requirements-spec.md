@@ -307,7 +307,7 @@ gameSimulation/newtonianShipPhysics.ts  — now D88 variable-speed thrust (was D
 
 ---
 
-## Design updates — D104–D118 (continues the block above; this is authoritative over earlier text)
+## Design updates — D104–D119 (continues the block above; this is authoritative over earlier text)
 
 ### Current base speeds (supersedes the D85 numbers above)
 - Player max/cruise **180** m/s; enemy patrol **105**, orbit/cover **135** (D107 + D116, each +30; D116 also note: an
@@ -351,3 +351,14 @@ gameSimulation/newtonianShipPhysics.ts  — now D88 variable-speed thrust (was D
 hud/grappleControlButton.ts             — bottom-left GRAPPLE button (arm/release, color mirrors target) (D117)
 radar/asteroidOrbitIcons.ts             — exported computeAsteroidDistanceColorHsl + orbit-range consts (shared w/ grapple button) (D117)
 ```
+
+### Enemy lethality — laser range vs standoff (D119)
+- **Rule:** no enemy holds a distance farther than its weapon range (the only sanctioned exception is retreating below a
+  shield threshold), and every tier must actually attack — none may merely avoid the player.
+- **Fix:** enemy laser range (`weaponEngagementRanges.laserShortRangeMeters`, enemy-only — the player laser uses
+  `playerEngagementRange`) raised **280 → 456 m = the orbitStrafe standoff (380 m) × 1.2**. Before this, strafers held
+  380 m — beyond their 280 m laser — so they *never* lasered and only lobbed missiles, making the game too easy. The
+  bump also extends the enemy bolt despawn distance (`enemyBaseLaserStats.maxRangeMeters` reads the same constant), so
+  the longer shots connect. Missiles already covered the 250–900 m envelope, so only the laser range was deficient.
+- Result: orbitStrafe now lasers from its standoff; all three tiers (patrol / orbitStrafe / coverHunter) attack within
+  the wider range. Covered by `enemyAlienShipBehavior.test.ts` (laser fires at the 400 m standoff, not beyond 456 m).

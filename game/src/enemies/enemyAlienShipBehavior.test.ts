@@ -100,8 +100,30 @@ describe('orbitStrafe tier', () => {
 
     updateEnemyShipBehavior(strafeEnemy, [], playerPosition, FIXED_TIMESTEP_SECONDS, fireIntent)
     expect(fireIntent.wantsToFireMissile).toBe(true)
-    // 400 m is beyond laser short range
+  })
+
+  // D119: the laser range (456 m) now exceeds the orbitStrafe standoff (380 m), so a strafer holding at
+  // its standoff is INSIDE laser range and actually fires its laser — it no longer just lobs missiles.
+  it('fires its laser at its standoff distance (laser range now exceeds the 380 m standoff)', () => {
+    const gameScene = new Scene()
+    const strafeEnemy = createEnemyShip('orbitStrafe', new Vector3(0, 0, 0), gameScene)
+    const playerAtStandoffPosition = new Vector3(0, 0, -400) // ~ the orbitStrafe hold distance, within 456 m
+    const fireIntent = createEnemyFireIntent()
+
+    updateEnemyShipBehavior(strafeEnemy, [], playerAtStandoffPosition, FIXED_TIMESTEP_SECONDS, fireIntent)
+    expect(fireIntent.wantsToFireLaser).toBe(true)
+    expect(fireIntent.wantsToFireMissile).toBe(true) // 400 m also sits in the 250–900 m missile envelope
+  })
+
+  it('does not fire its laser beyond laser range (still missiles in the long envelope)', () => {
+    const gameScene = new Scene()
+    const strafeEnemy = createEnemyShip('orbitStrafe', new Vector3(0, 0, 0), gameScene)
+    const playerBeyondLaserPosition = new Vector3(0, 0, -500) // past the 456 m laser range, inside missile envelope
+    const fireIntent = createEnemyFireIntent()
+
+    updateEnemyShipBehavior(strafeEnemy, [], playerBeyondLaserPosition, FIXED_TIMESTEP_SECONDS, fireIntent)
     expect(fireIntent.wantsToFireLaser).toBe(false)
+    expect(fireIntent.wantsToFireMissile).toBe(true)
   })
 })
 

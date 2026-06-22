@@ -46,6 +46,11 @@ export type GameWorld = {
 // R9: lasers are short range; missiles are long range (travel time, no hard distance limit).
 // "missileEffectiveLongRangeMeters" is the in-sight threat distance used by cover logic (R8), not a flight cap.
 export const weaponEngagementRanges = {
-  laserShortRangeMeters: 280,
+  // D119: enemy laser range = orbitStrafe standoff (380 m, see ORBIT_STANDOFF_RADIUS_METERS in
+  // enemyAlienShipBehavior.ts) × 1.2 = 456. Previously 280 — SHORTER than the 380 standoff, so strafers
+  // held a distance their laser could never reach and only ever lobbed missiles. Now every tier's hold
+  // distance sits inside laser range, so all enemies actually fire. This also extends the enemy bolt
+  // despawn distance (enemyBaseLaserStats.maxRangeMeters reads this), so the longer-range shots connect.
+  laserShortRangeMeters: 456,
   missileEffectiveLongRangeMeters: 1000,
 } as const
