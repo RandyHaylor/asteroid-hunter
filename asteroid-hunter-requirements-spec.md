@@ -304,3 +304,50 @@ gameSimulation/preWaveOneIntroSequence.ts — scripted pre-wave-1 intro timeline
 grappleOrbit/asteroidGrappleEligibility.ts — perpendicular-plane + 45° grapple gate (D102) [unit-tested]
 gameSimulation/newtonianShipPhysics.ts  — now D88 variable-speed thrust (was D54 constant momentum)
 ```
+
+---
+
+## Design updates — D104–D118 (continues the block above; this is authoritative over earlier text)
+
+### Current base speeds (supersedes the D85 numbers above)
+- Player max/cruise **180** m/s; enemy patrol **105**, orbit/cover **135** (D107 + D116, each +30; D116 also note: an
+  earlier *double*-speed bump (D106 → 240) was **reverted** because at that speed the aim markers jittered — see D109).
+- Ship still spawns at full max speed moving forward, at boot **and** wave restart (D89 fixed the boot path).
+
+### Aim / camera (D109)
+- The weapon-bore **crosshair** and the **aim reticle** are now built from the RENDERED (interpolated) ship pose — the
+  same pose the chase camera is pinned to — not the sim pose. The old sim-vs-render origin gap scaled with speed and
+  made both markers jitter; now they're steady at any speed.
+
+### Autopilot (D111, D112, D114, D115)
+- **Grapple-redirect release (D111):** the orbit plane is frozen at latch, so an out-of-plane desired heading is
+  unreachable. Main releases the redirect orbit when travel ALIGNS, when it has PASSED the best alignment the orbit can
+  offer (peak, after ≥90°), or via a 270° failsafe; a 2s cooldown prevents immediately re-grabbing the same plane.
+- **Enemies hunt (D112):** patrol drones scatter waypoints within 600 m of the PLAYER (not the origin) so they close in;
+  cover-hunters ladder in to closer cover sooner (advance reconsider 6s→4s).
+- **AI-settings coupling (D114):** the Engage-range slider's max tracks the player's live radar+weapon range; Re-engage
+  shield is clamped ≥ Evade-below shield (dragging either past the other raises re-engage); when the two are EQUAL,
+  evasion is effectively off and both rows grey out.
+- **Anti-cluster + separation (D115):** an enemy won't grapple/orbit an asteroid another live enemy is already orbiting
+  (`isAsteroidGrappledByAnotherEnemy`, tested); harder enemies (grappleStrength>0) get a boids-style separation nudge to
+  their goal point, capped at 200 m (failsafe — far below the player-goal distance, so it spreads the pack but never
+  stalls pursuit).
+
+### Intro / controls (D108, D110, D113, D117, D118)
+- **Pre-wave-1 intro (D110):** the ship now GRAZES the demo asteroid (aims one radius + ~30 m to the side, standoff
+  radius + 550 m) instead of dead-on; the orbit-test is delayed (~5 s) and grapples the SECOND-nearest large asteroid
+  (D105) so it doesn't re-grab the one it just avoided. **All player controls (radar drag, thrust, AI button, grapple
+  button) are locked while the intro plays (D108)** and restored when it ends.
+- **AI-view stats grid (D113):** each upgradeable stat's VALUE turns green once it differs from its baseline; portrait
+  keeps a minimum of 2 columns.
+- **Controls layout (D117/D118):** the round AI button moved to the radar square's TOP-LEFT corner (hidden while AI is
+  engaged — only EXIT AI PILOT shows there). A new **GRAPPLE control button** sits bottom-left: press/hold mirror the rim
+  icons (tap = commit orbit, tap-again = release, hold = orbit-while-held); with no grappleable rock a tap ARMS it (grabs
+  the first rock to enter range) and a hold-then-release cancels the arm; its color mirrors the grappled rock (reads
+  RELEASE) or idle-previews the nearest grappleable rock's distance color, grey when none. Disabled in AI mode + intro.
+
+### New modules (D104–D118)
+```
+hud/grappleControlButton.ts             — bottom-left GRAPPLE button (arm/release, color mirrors target) (D117)
+radar/asteroidOrbitIcons.ts             — exported computeAsteroidDistanceColorHsl + orbit-range consts (shared w/ grapple button) (D117)
+```
