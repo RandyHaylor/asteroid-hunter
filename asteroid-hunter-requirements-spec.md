@@ -307,7 +307,7 @@ gameSimulation/newtonianShipPhysics.ts  — now D88 variable-speed thrust (was D
 
 ---
 
-## Design updates — D104–D122 (continues the block above; this is authoritative over earlier text)
+## Design updates — D104–D123 (continues the block above; this is authoritative over earlier text)
 
 ### Current base speeds (supersedes the D85 numbers above)
 - Player max/cruise **180** m/s; enemy patrol **105**, orbit/cover **135** (D107 + D116, each +30; D116 also note: an
@@ -400,3 +400,14 @@ radar/asteroidOrbitIcons.ts             — exported computeAsteroidDistanceColo
   2 s); the icon-flash finale + total shift +2 s (total 12 s). Covered by `preWaveOneIntroSequence.test.ts` (still
   grappling at 8.5 s, released by 9.2 s). The asteroid selection lives in `main.ts` (untested there) but routes through
   the already-tested `classifyAsteroidGrappleEligibility`.
+
+### AI default approach angle 90° → 60° (D123)
+- **Settings are live:** confirmed AI-pilot settings are obeyed immediately — `shipAutopilotSettings` is a mutable
+  singleton the panel writes (slider getter/setter) and the autopilot reads every frame via `context.settings`
+  (`main.ts` passes the same singleton). No apply/confirm step.
+- **Default change:** `preferredApproachAngleDegrees` default 90 → **60**. At 90° (perpendicular flank) the default AI
+  skirted enemies at max engagement range and never attacked; 60° is a closing flank so the default AI actually engages.
+  Covered by `autopilot/shipAutopilotSettingsDefaults.test.ts`.
+- The approach-angle MECHANIC is unchanged (kept per request): the autopilot still arcs to a stand-off point rotated by
+  the approach angle at the engagement range, so the angle still grazes enemies at the player's weapon/radar range.
+  Other conservative defaults (flee-on-any-damage, evade at 0.9 shield) were left as-is — not requested here.

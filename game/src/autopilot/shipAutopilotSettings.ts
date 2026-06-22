@@ -30,7 +30,8 @@ export type ShipAutopilotSettings = {
 
 // VERY CONSERVATIVE defaults: barely engages, flees on any hit — the player tunes toward effectiveness.
 export const shipAutopilotSettings: ShipAutopilotSettings = {
-  preferredApproachAngleDegrees: 90, // flank, not head-on
+  preferredApproachAngleDegrees: 60, // D123: a closing flank (was 90 = perpendicular, which skirted enemies
+  //                                     at max range and never attacked); 60° drives the default AI in to fight
   preferredEngagementRangeMeters: 520, // stay far
   targetPriority: 'nearest',
   isolationWeight: 0.8, // strongly prefer singling out 1–2
