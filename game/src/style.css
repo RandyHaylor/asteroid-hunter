@@ -100,7 +100,7 @@ body {
 .autopilotToggleButton {
   position: absolute;
   left: 4px;
-  bottom: 4px;
+  top: 40px; /* D117: top-left, just under where the EXIT AI PILOT button appears when AI is engaged */
   z-index: 7;
   width: clamp(40px, 11vmin, 58px);
   aspect-ratio: 1;

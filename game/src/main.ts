@@ -62,7 +62,9 @@ import { createPlayerShipCondition } from './player/playerShipCondition'
 import { createPlayerConditionDisplay } from './hud/playerConditionDisplay'
 import { createRadarSignatureTracker } from './radar/radarSignatureTracker'
 import { createRadarSphereDisplay } from './radar/radarSphereDisplay'
-import { createGrappleOrbitController } from './grappleOrbit/grappleOrbitController'
+import { createGrappleOrbitController, HOLD_TO_ORBIT_THRESHOLD_SECONDS } from './grappleOrbit/grappleOrbitController'
+import { classifyAsteroidGrappleEligibility } from './grappleOrbit/asteroidGrappleEligibility'
+import { createGrappleControlButton } from './hud/grappleControlButton'
 import {
   findNearestAvoidanceAsteroid,
   computeAvoidanceProximityFraction,
@@ -76,7 +78,12 @@ import {
   createAutopilotIntent,
   type AutopilotContext,
 } from './autopilot/shipAutopilot'
-import { createAsteroidOrbitIcons } from './radar/asteroidOrbitIcons'
+import {
+  createAsteroidOrbitIcons,
+  computeAsteroidDistanceColorHsl,
+  MIN_ORBIT_SURFACE_DISTANCE_METERS,
+  MAX_ORBIT_RANGE_METERS,
+} from './radar/asteroidOrbitIcons'
 import { createTouchFlightControls } from './hud/touchFlightControls'
 import { createPlayerCameraRig } from './hud/cameraChaseAndCockpit'
 import { createPlayerShipMesh, updatePlayerEngineExhaust } from './player/playerShipMesh'
@@ -622,9 +629,11 @@ function refreshAutopilotToggleButtonAppearance(): void {
 function setAutopilotModeActive(active: boolean): void {
   autopilotModeActive = active
   refreshAutopilotToggleButtonAppearance()
-  // D91: in AI mode the round AI button is unavailable — you must use EXIT AI PILOT to leave. (Disabled
-  // buttons don't fire clicks, so this also blocks re-toggling via the AI button.)
+  // D117: in AI mode the round AI button is HIDDEN (only EXIT AI PILOT shows, in its top-left slot); off,
+  // the AI button shows just under that slot. Manual grapple button is also disabled (AI drives grappling).
   autopilotToggleButton.disabled = active
+  autopilotToggleButton.style.display = active ? 'none' : ''
+  grappleControlButton.setInteractive(!active)
   // D91: the THRUST button now lives in the radar square (outside the manual-controls block overlay),
   // so block manual thrust taps directly while in AI mode — but keep the button visible + glowing to
   // reflect the AI's thrust (reflectAutopilotThrustVisual). Pointer-events off = no manual input.
@@ -640,8 +649,66 @@ autopilotToggleButton.addEventListener('click', () => {
   if (autopilotIsForcedThisWave) return // can't drop out of AI during a forced-AI wave (D74 wave 3)
   setAutopilotModeActive(!autopilotModeActive)
 })
+// D117: GRAPPLE control button (radar square bottom-left). Press/release mirror the rim icons (tap =
+// commit orbit, tap-again = release, hold = orbit-while-held) by routing through the grapple controller.
+// With no grappleable rock it ARMS (grabs the first that enters range); a hold-then-release while grey
+// cancels the arm. Its color mirrors the grappled rock (or, idle, the nearest grappleable one).
+let isGrappleButtonArmed = false
+let grappleButtonPressedAsteroid: AsteroidBody | null = null
+let grappleButtonGreyPressStartSeconds = 0
+function findNearestGrappleableAsteroidForButton(): { asteroid: AsteroidBody; surfaceDistanceMeters: number } | null {
+  let bestTarget: { asteroid: AsteroidBody; surfaceDistanceMeters: number } | null = null
+  let bestCenterDistanceMeters = Infinity
+  for (const asteroid of gameWorld.asteroids) {
+    if (asteroid.isDestroyed || asteroid.sizeClass !== 'large') continue
+    const centerDistanceMeters = playerShipState.positionMeters.distanceTo(asteroid.positionMeters)
+    const surfaceDistanceMeters = centerDistanceMeters - asteroid.currentRadiusMeters
+    if (surfaceDistanceMeters < MIN_ORBIT_SURFACE_DISTANCE_METERS || surfaceDistanceMeters > MAX_ORBIT_RANGE_METERS) continue
+    if (
+      classifyAsteroidGrappleEligibility(playerShipState.positionMeters, asteroid.positionMeters, playerShipState.velocityMetersPerSecond) !==
+      'grappleable'
+    ) {
+      continue
+    }
+    if (centerDistanceMeters < bestCenterDistanceMeters) {
+      bestCenterDistanceMeters = centerDistanceMeters
+      bestTarget = { asteroid, surfaceDistanceMeters }
+    }
+  }
+  return bestTarget
+}
+function handleGrappleControlButtonPress(): void {
+  const nowSeconds = performance.now() / 1000
+  const targetAsteroid =
+    grappleOrbitController.getLatchedAsteroid() ?? findNearestGrappleableAsteroidForButton()?.asteroid ?? null
+  if (targetAsteroid && (grappleOrbitController.isLatched() || isShipMovingFastEnoughToGrapple())) {
+    grappleButtonPressedAsteroid = targetAsteroid // controller handles tap-commit / tap-again-release / hold
+    grappleOrbitController.onAsteroidIconPressed(targetAsteroid, playerShipState, nowSeconds)
+    isGrappleButtonArmed = false
+  } else {
+    grappleButtonPressedAsteroid = null // grey: arming press (tap toggles arm, hold-release cancels it)
+    grappleButtonGreyPressStartSeconds = nowSeconds
+  }
+}
+function handleGrappleControlButtonRelease(): void {
+  const nowSeconds = performance.now() / 1000
+  if (grappleButtonPressedAsteroid) {
+    grappleOrbitController.onAsteroidIconReleased(grappleButtonPressedAsteroid, nowSeconds)
+    grappleButtonPressedAsteroid = null
+    return
+  }
+  const heldSeconds = nowSeconds - grappleButtonGreyPressStartSeconds
+  if (heldSeconds > HOLD_TO_ORBIT_THRESHOLD_SECONDS) isGrappleButtonArmed = false // hold cancels the arm
+  else isGrappleButtonArmed = !isGrappleButtonArmed // quick tap toggles armed
+}
+const grappleControlButton = createGrappleControlButton(
+  radarRegion,
+  handleGrappleControlButtonPress,
+  handleGrappleControlButtonRelease,
+)
+
 setAutopilotModeActive(false)
-// D91: AI button tucks into the radar square's bottom-LEFT dead corner (was the right side cluster)
+// D117: AI button tucks into the radar square's TOP-LEFT (under the EXIT AI PILOT slot); GRAPPLE is bottom-left
 radarRegion.appendChild(autopilotToggleButton)
 
 // D76: wave-3 is a FORCED AI-ONLY level — red flash + a bold "manual controls malfunction" message,
@@ -1689,6 +1756,7 @@ function updateGameSimulation(deltaSeconds: number): void {
     radarSphereDisplay.setSteeringDragEnabled(!isPreWaveIntroActive)
     flightControls.thrustButtonElement.style.pointerEvents = isPreWaveIntroActive ? 'none' : 'auto'
     autopilotToggleButton.disabled = isPreWaveIntroActive
+    grappleControlButton.setInteractive(!isPreWaveIntroActive) // D117: no manual grapple during the intro
     wasPreWaveIntroActiveLastFrame = isPreWaveIntroActive
   }
   updateWavePhase(deltaSeconds)
@@ -1865,6 +1933,33 @@ function syncRenderObjectsFromSimulation(): void {
 
   // D99: status log display — running log + tap-to-expand in AI; latest-message-4s-fade in manual
   shipStatusLogDisplay.updateShipStatusLogDisplay(autopilotModeActive, simulationClockSeconds)
+
+  // D117: grapple control button — armed grabs the first rock that enters range; otherwise reflect the
+  // grappled rock's color (RELEASE), or idle-preview the nearest grappleable rock's color, or grey.
+  if (isGrappleButtonArmed && !grappleOrbitController.isLatched() && isShipMovingFastEnoughToGrapple()) {
+    const armedTarget = findNearestGrappleableAsteroidForButton()
+    if (armedTarget) {
+      const nowSeconds = performance.now() / 1000
+      grappleOrbitController.onAsteroidIconPressed(armedTarget.asteroid, playerShipState, nowSeconds)
+      grappleOrbitController.onAsteroidIconReleased(armedTarget.asteroid, nowSeconds) // tap-commit the orbit
+      isGrappleButtonArmed = false
+    }
+  }
+  const grappleButtonLatchedAsteroid = grappleOrbitController.getLatchedAsteroid()
+  if (grappleButtonLatchedAsteroid) {
+    const latchedSurfaceMeters =
+      playerShipState.positionMeters.distanceTo(grappleButtonLatchedAsteroid.positionMeters) -
+      grappleButtonLatchedAsteroid.currentRadiusMeters
+    grappleControlButton.setVisualState('grappling', computeAsteroidDistanceColorHsl(latchedSurfaceMeters))
+  } else if (isGrappleButtonArmed) {
+    grappleControlButton.setVisualState('armed', null)
+  } else {
+    const previewTarget = findNearestGrappleableAsteroidForButton()
+    grappleControlButton.setVisualState(
+      previewTarget ? 'preview' : 'idle',
+      previewTarget ? computeAsteroidDistanceColorHsl(previewTarget.surfaceDistanceMeters) : null,
+    )
+  }
   // D101: keep the live ship-stats grid current while the AI settings panel is shown
   if (autopilotModeActive) autopilotSettingsPanel.refreshLiveStats()
 }

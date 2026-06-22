@@ -1,0 +1,54 @@
+/* D117: GRAPPLE control button — radar square's bottom-left dead corner (where the AI button was).
+   Round, sized like the other corner buttons; its fill mirrors the targeted asteroid's distance color. */
+.grappleControlButton {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  z-index: 7;
+  width: clamp(40px, 11vmin, 58px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  background: rgba(30, 36, 44, 0.55); /* grey/idle */
+  color: rgba(230, 240, 250, 0.95);
+  font: 700 clamp(7px, 2vmin, 10px) / 1 system-ui, sans-serif;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  box-sizing: border-box;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
+  --grapple-button-color: #888888;
+}
+
+/* previewing / grappling a rock → fill with that rock's distance color + bright border */
+.grappleControlButtonColored {
+  background: var(--grapple-button-color);
+  border-color: rgba(255, 255, 255, 0.9);
+  color: rgba(10, 14, 20, 0.95);
+}
+
+/* actively grappling (RELEASE) → add the latched-style glow */
+.grappleControlButtonEngaged {
+  box-shadow: 0 0 12px 3px rgba(160, 220, 255, 0.85);
+}
+
+/* armed while grey (waiting for a rock to enter range) → pulsing white ring, no fill color yet */
+.grappleControlButtonArmed {
+  border-color: rgba(255, 255, 255, 0.95);
+  animation: grappleArmedPulse 0.7s ease-in-out infinite;
+}
+@keyframes grappleArmedPulse {
+  0%, 100% { box-shadow: 0 0 4px 1px rgba(255, 255, 255, 0.4); }
+  50% { box-shadow: 0 0 14px 4px rgba(255, 255, 255, 0.85); }
+}
+
+.grappleControlButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

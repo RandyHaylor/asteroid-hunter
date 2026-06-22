@@ -12,7 +12,7 @@ import { computeOrbitStep } from './computeOrbitStep'
 // position/velocity are then driven along that circle each frame; releasing keeps the tangential
 // velocity (a straight-line slingshot). The ship FACING and camera are unaffected (handled elsewhere).
 
-const HOLD_TO_ORBIT_THRESHOLD_SECONDS = 1
+export const HOLD_TO_ORBIT_THRESHOLD_SECONDS = 1
 // D93: when an orbit engages, ramp the orbit speed from the ship's speed AT LATCH up to cruise over this
 // window (smoothstep). A lower initial speed = a smaller angular step = a gentler entry curve, so the
 // ship eases onto the circle instead of snapping to the full-speed tangent.

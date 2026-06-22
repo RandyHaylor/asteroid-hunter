@@ -10,10 +10,23 @@ import './asteroidOrbitIcons.css'
 // distance color as they get close (not tappable yet). Closer icons layer over farther ones (z-index),
 // for both visuals and touch. The visible circle is colored yellow→orange→red by closeness.
 
-const MIN_ORBIT_SURFACE_DISTANCE_METERS = 14 // closer than this is too tight to orbit (black, untappable)
-const MAX_ORBIT_RANGE_METERS = 1200 // D66: orbit from twice as far to start
+export const MIN_ORBIT_SURFACE_DISTANCE_METERS = 14 // closer than this is too tight to orbit (black, untappable)
+export const MAX_ORBIT_RANGE_METERS = 1200 // D66: orbit from twice as far to start
 const RIM_OFFSET_PERCENT = 46 // icon sits this far from the scope center toward the rim
 const APPROACHING_BLINK_CLOSENESS = 0.5 // an approaching (in-front) rock blinks once it's at least this close
+
+/** D117: the rim-icon distance color (yellow at max range → red at the min). Exported so the GRAPPLE
+ *  control button can show the exact same color as the rock it targets. */
+export function computeAsteroidDistanceColorHsl(surfaceDistanceMeters: number): string {
+  const closenessFraction = Math.max(
+    0,
+    Math.min(
+      1,
+      1 - (surfaceDistanceMeters - MIN_ORBIT_SURFACE_DISTANCE_METERS) / (MAX_ORBIT_RANGE_METERS - MIN_ORBIT_SURFACE_DISTANCE_METERS),
+    ),
+  )
+  return `hsl(${60 * (1 - closenessFraction)}, 100%, 55%)`
+}
 
 export type AsteroidOrbitIcons = {
   updateAsteroidOrbitIcons(
@@ -123,7 +136,7 @@ export function createAsteroidOrbitIcons(
                 (MAX_ORBIT_RANGE_METERS - MIN_ORBIT_SURFACE_DISTANCE_METERS),
           ),
         )
-        const distanceColorHsl = `hsl(${60 * (1 - closenessFraction)}, 100%, 55%)`
+        const distanceColorHsl = computeAsteroidDistanceColorHsl(surfaceDistanceMeters) // D117: shared formula
         element.style.setProperty('--asteroid-distance-color', distanceColorHsl)
 
         // D113: the LATCHED asteroid stays colored + highlighted while grappled — skip the eligibility
