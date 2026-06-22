@@ -463,7 +463,7 @@ radarRegion.appendChild(flightControls.thrustButtonElement)
 const preWaveOneIntroSequence = createPreWaveOneIntroSequence({
   logStatusMessage: (message) => shipStatusEventLog.logMessage(message, simulationClockSeconds),
   setRadarIconsHidden: (hidden) => asteroidOrbitIcons.setIconsGloballyHidden(hidden),
-  beginAutoGrappleNearestAsteroid: () => latchSecondNearestLargeAsteroidForIntro(), // D105: not the avoided rock
+  beginAutoGrappleNearestAsteroid: () => latchGrappleEligibleAsteroidForIntro(), // D122: only a UI-grappleable rock
   releaseAutoGrapple: () => {
     if (grappleOrbitController.isLatched()) grappleOrbitController.releaseLatch()
   },
@@ -658,23 +658,31 @@ autopilotToggleButton.addEventListener('click', () => {
 let isGrappleButtonArmed = false
 let grappleButtonPressedAsteroid: AsteroidBody | null = null
 let grappleButtonGreyPressStartSeconds = 0
+// D102 + D66: the single gate the live grapple UI uses to decide a large rock is grappleable RIGHT NOW —
+// in orbit range AND at/behind the ship's perpendicular travel plane within 45°. Shared by the GRAPPLE
+// button selector and the intro orbit-test (D122) so they can never drift from what the radar icons allow.
+function isLargeAsteroidGrappleEligibleAndInRangeNow(asteroid: AsteroidBody): boolean {
+  if (asteroid.isDestroyed || asteroid.sizeClass !== 'large') return false
+  const centerDistanceMeters = playerShipState.positionMeters.distanceTo(asteroid.positionMeters)
+  const surfaceDistanceMeters = centerDistanceMeters - asteroid.currentRadiusMeters
+  if (surfaceDistanceMeters < MIN_ORBIT_SURFACE_DISTANCE_METERS || surfaceDistanceMeters > MAX_ORBIT_RANGE_METERS) return false
+  return (
+    classifyAsteroidGrappleEligibility(
+      playerShipState.positionMeters,
+      asteroid.positionMeters,
+      playerShipState.velocityMetersPerSecond,
+    ) === 'grappleable'
+  )
+}
 function findNearestGrappleableAsteroidForButton(): { asteroid: AsteroidBody; surfaceDistanceMeters: number } | null {
   let bestTarget: { asteroid: AsteroidBody; surfaceDistanceMeters: number } | null = null
   let bestCenterDistanceMeters = Infinity
   for (const asteroid of gameWorld.asteroids) {
-    if (asteroid.isDestroyed || asteroid.sizeClass !== 'large') continue
+    if (!isLargeAsteroidGrappleEligibleAndInRangeNow(asteroid)) continue
     const centerDistanceMeters = playerShipState.positionMeters.distanceTo(asteroid.positionMeters)
-    const surfaceDistanceMeters = centerDistanceMeters - asteroid.currentRadiusMeters
-    if (surfaceDistanceMeters < MIN_ORBIT_SURFACE_DISTANCE_METERS || surfaceDistanceMeters > MAX_ORBIT_RANGE_METERS) continue
-    if (
-      classifyAsteroidGrappleEligibility(playerShipState.positionMeters, asteroid.positionMeters, playerShipState.velocityMetersPerSecond) !==
-      'grappleable'
-    ) {
-      continue
-    }
     if (centerDistanceMeters < bestCenterDistanceMeters) {
       bestCenterDistanceMeters = centerDistanceMeters
-      bestTarget = { asteroid, surfaceDistanceMeters }
+      bestTarget = { asteroid, surfaceDistanceMeters: centerDistanceMeters - asteroid.currentRadiusMeters }
     }
   }
   return bestTarget
@@ -768,27 +776,33 @@ function latchNearestAsteroidForAutopilotEvasion(): void {
   grappleOrbitController.onAsteroidIconReleased(nearestAsteroid, nowSeconds) // tap → commit the orbit
 }
 
-// D105: the intro's orbit-test grapples the SECOND-nearest large asteroid, so it doesn't re-grab the
-// rock it just avoided (that looked odd). Falls back to the nearest if there's only one large rock.
-function latchSecondNearestLargeAsteroidForIntro(): void {
-  let nearestAsteroid: AsteroidBody | null = null
-  let secondNearestAsteroid: AsteroidBody | null = null
-  let nearestDistanceMeters = Infinity
-  let secondNearestDistanceMeters = Infinity
+// D110: the large rock the intro aims the ship to GRAZE (set when the ship is placed) — so the orbit-test
+// can prefer NOT to re-grab it (D105 intent), while still only ever grabbing a UI-grappleable rock (D122).
+let introGrazedDemoAsteroid: AsteroidBody | null = null
+
+// D122: the intro's orbit-test grapples a rock the UI would ACTUALLY let you grapple right now — one that
+// passes the live eligibility+range gate (at/behind the travel plane, within 45°, in range) — NOT whatever
+// is second-nearest (which could be dead ahead, ungrappleable). Preference (preserves the D105 intent): the
+// nearest ELIGIBLE rock that ISN'T the just-grazed one; if the grazed rock is the only eligible one, use it
+// rather than grabbing nothing or an illegal front rock.
+function latchGrappleEligibleAsteroidForIntro(): void {
+  let preferredNonGrazedTarget: AsteroidBody | null = null
+  let preferredNonGrazedCenterDistanceMeters = Infinity
+  let fallbackEligibleTarget: AsteroidBody | null = null
+  let fallbackEligibleCenterDistanceMeters = Infinity
   for (const asteroid of gameWorld.asteroids) {
-    if (asteroid.isDestroyed || asteroid.sizeClass !== 'large') continue
-    const distanceMeters = playerShipState.positionMeters.distanceTo(asteroid.positionMeters)
-    if (distanceMeters < nearestDistanceMeters) {
-      secondNearestDistanceMeters = nearestDistanceMeters
-      secondNearestAsteroid = nearestAsteroid
-      nearestDistanceMeters = distanceMeters
-      nearestAsteroid = asteroid
-    } else if (distanceMeters < secondNearestDistanceMeters) {
-      secondNearestDistanceMeters = distanceMeters
-      secondNearestAsteroid = asteroid
+    if (!isLargeAsteroidGrappleEligibleAndInRangeNow(asteroid)) continue
+    const centerDistanceMeters = playerShipState.positionMeters.distanceTo(asteroid.positionMeters)
+    if (centerDistanceMeters < fallbackEligibleCenterDistanceMeters) {
+      fallbackEligibleCenterDistanceMeters = centerDistanceMeters
+      fallbackEligibleTarget = asteroid
+    }
+    if (asteroid !== introGrazedDemoAsteroid && centerDistanceMeters < preferredNonGrazedCenterDistanceMeters) {
+      preferredNonGrazedCenterDistanceMeters = centerDistanceMeters
+      preferredNonGrazedTarget = asteroid
     }
   }
-  const grappleTarget = secondNearestAsteroid ?? nearestAsteroid
+  const grappleTarget = preferredNonGrazedTarget ?? fallbackEligibleTarget
   if (!grappleTarget) return
   const nowSeconds = performance.now() / 1000
   grappleOrbitController.onAsteroidIconPressed(grappleTarget, playerShipState, nowSeconds)
@@ -871,6 +885,7 @@ function aimShipAtDemoAsteroidForIntro(): void {
     }
   }
   if (demoAsteroid === null) return
+  introGrazedDemoAsteroid = demoAsteroid // D122: remember it so the orbit-test prefers a DIFFERENT eligible rock
   scratchIntroApproachDirection.copy(demoAsteroid.positionMeters) // origin → asteroid (approach line)
   if (scratchIntroApproachDirection.lengthSq() < 1e-6) return
   scratchIntroApproachDirection.normalize()

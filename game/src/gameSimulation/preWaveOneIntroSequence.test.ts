@@ -34,11 +34,23 @@ describe('preWaveOneIntroSequence', () => {
     const { hooks, events } = makeRecordingHooks()
     const seq = createPreWaveOneIntroSequence(hooks)
     seq.start()
-    advance(seq, 11)
+    advance(seq, 13) // D122: timeline now ends at 12 s (orbit release pushed to 9 s)
     expect(events).toContain('grapple:release')
     expect(events).toContain('msg:System check: trajectory redirection confirmed. Manual control online.')
     expect(events[events.length - 1]).toBe('icons:shown') // settles ON
     expect(seq.isActive()).toBe(false)
+  })
+
+  it('orbits the asteroid for ~4 s (D122 +2 s): still grappling at 8.5 s, released by 9.2 s', () => {
+    const { hooks, events } = makeRecordingHooks()
+    const seq = createPreWaveOneIntroSequence(hooks)
+    seq.start()
+    advance(seq, 8.5)
+    // grapple has begun (t=5) but NOT yet released — the orbit runs longer than the old 2 s window
+    expect(events).toContain('grapple:begin')
+    expect(events).not.toContain('grapple:release')
+    advance(seq, 0.7) // now past t=9.0
+    expect(events).toContain('grapple:release')
   })
 
   it('is inactive until started and a no-op when updated before start', () => {

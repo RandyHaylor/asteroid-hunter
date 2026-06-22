@@ -307,7 +307,7 @@ gameSimulation/newtonianShipPhysics.ts  — now D88 variable-speed thrust (was D
 
 ---
 
-## Design updates — D104–D121 (continues the block above; this is authoritative over earlier text)
+## Design updates — D104–D122 (continues the block above; this is authoritative over earlier text)
 
 ### Current base speeds (supersedes the D85 numbers above)
 - Player max/cruise **180** m/s; enemy patrol **105**, orbit/cover **135** (D107 + D116, each +30; D116 also note: an
@@ -386,3 +386,17 @@ radar/asteroidOrbitIcons.ts             — exported computeAsteroidDistanceColo
 - Wiring: each enemy's missile stat block is built at spawn (main.ts) as `enemyBaseMissileStats` with this homing rate
   substituted, stored on its `EnemyCombatTimers`, and used when it fires. Values are gameplay-feel starting points,
   tunable. Covered by `weapons/enemyMissileHomingByTier.test.ts`.
+
+### Intro orbit-test — grapple only a UI-legal rock + 2 s longer orbit (D122)
+- **Bug:** the intro's orbit-test grappled the SECOND-nearest large rock (`latchSecondNearestLargeAsteroidForIntro`) by
+  calling the grapple controller directly — bypassing the UI gate — so it could attach to a rock dead AHEAD, which the
+  live UI never allows.
+- **Fix:** the intro now grapples a rock that passes the SAME live gate the radar icons / GRAPPLE button use — extracted
+  as `isLargeAsteroidGrappleEligibleAndInRangeNow` (in orbit range AND `classifyAsteroidGrappleEligibility ===
+  'grappleable'`, i.e. at/behind the perpendicular travel plane within 45°). It prefers the nearest eligible rock that
+  ISN'T the just-grazed demo rock (preserves the D105 intent), falling back to the grazed rock if it's the only eligible
+  one. The same predicate now backs `findNearestGrappleableAsteroidForButton`, so the intro and the button can't drift.
+- **Orbit +2 s:** the intro timeline releases the grapple at t=9.0 s instead of 7.0 s (orbit test runs 5→9 s = 4 s, was
+  2 s); the icon-flash finale + total shift +2 s (total 12 s). Covered by `preWaveOneIntroSequence.test.ts` (still
+  grappling at 8.5 s, released by 9.2 s). The asteroid selection lives in `main.ts` (untested there) but routes through
+  the already-tested `classifyAsteroidGrappleEligibility`.
