@@ -21,8 +21,13 @@ export type ShipAutopilotSettings = {
   shieldFractionBeforeEvasion: number
   /** any damage at all → break off and evade (the conservative default) */
   fleeAfterAnyDamage: boolean
-  /** while evading, only resume attacking once the shield has recovered to at least this fraction */
+  /** while evading, only resume attacking once the shield has recovered to at least this fraction
+   *  (used while ONLY the shield has been dented — no hull damage yet) */
   reEngageShieldFraction: number
+  /** D124: once the ship has taken HULL damage (permanent — the hull never regenerates), require the
+   *  shield to recover to at least THIS fraction before re-engaging, separate from reEngageShieldFraction.
+   *  Lets the player be MORE cautious once real (hull) damage has been taken. */
+  reEngageShieldFractionAfterHullDamage: number
   /** D92: when true, the between-wave upgrade is auto-picked (random) after a brief flash instead of
    *  waiting for the player to tap. Default OFF. */
   autoChoosesUpgrades: boolean
@@ -39,5 +44,6 @@ export const shipAutopilotSettings: ShipAutopilotSettings = {
   shieldFractionBeforeEvasion: 0.9, // evade at the first dent in the shield
   fleeAfterAnyDamage: true, // break off on any damage
   reEngageShieldFraction: 1, // only re-engage at full shield
+  reEngageShieldFractionAfterHullDamage: 1, // D124: equally cautious by default (full shield); tune independently
   autoChoosesUpgrades: false, // D92: default OFF — player picks upgrades unless they enable auto-pick
 }

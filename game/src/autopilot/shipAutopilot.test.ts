@@ -35,6 +35,7 @@ function baseSettings(overrides: Partial<ShipAutopilotSettings> = {}): ShipAutop
     shieldFractionBeforeEvasion: 0.5,
     fleeAfterAnyDamage: false,
     reEngageShieldFraction: 1,
+    reEngageShieldFractionAfterHullDamage: 1,
     autoChoosesUpgrades: false,
     ...overrides,
   }
@@ -46,6 +47,7 @@ function baseContext(overrides: Partial<AutopilotContext> = {}): AutopilotContex
     enemyShips: [],
     asteroids: [],
     shieldFraction: 1,
+    hullFraction: 1,
     recentlyDamaged: false,
     engagementRangeMeters: 600,
     maxSpeedMetersPerSecond: 120,
@@ -129,6 +131,33 @@ describe('computeAutopilotIntent', () => {
     computeAutopilotIntent(baseContext({ enemyShips: [enemy], shieldFraction: 0.3 }), intent)
     expect(intent.isEvading).toBe(true)
     expect(intent.thrustActive).toBe(true)
+  })
+
+  it('D124: after HULL damage, holds the higher after-hull re-engage shield level before returning', () => {
+    const enemy = makeEnemy(new Vector3(0, 0, -300))
+    // shield 60% sits ABOVE the normal re-engage (50%) but BELOW the after-hull re-engage (90%)
+    const settings = baseSettings({
+      shieldFractionBeforeEvasion: 0.4,
+      reEngageShieldFraction: 0.5,
+      reEngageShieldFractionAfterHullDamage: 0.9,
+    })
+
+    // hull intact → uses the normal 50% gate → 60% shield clears it → re-engages (stops evading)
+    const intactIntent = createAutopilotIntent()
+    computeAutopilotIntent(
+      baseContext({ enemyShips: [enemy], settings, shieldFraction: 0.6, hullFraction: 1, wasEvadingLastFrame: true }),
+      intactIntent,
+    )
+    expect(intactIntent.isEvading).toBe(false)
+    expect(intactIntent.engagedEnemyShipId).toBe(enemy.enemyShipId)
+
+    // hull damaged → uses the 90% gate → 60% shield is still too low → keeps evading
+    const hullDamagedIntent = createAutopilotIntent()
+    computeAutopilotIntent(
+      baseContext({ enemyShips: [enemy], settings, shieldFraction: 0.6, hullFraction: 0.8, wasEvadingLastFrame: true }),
+      hullDamagedIntent,
+    )
+    expect(hullDamagedIntent.isEvading).toBe(true)
   })
 
   it('evades on any damage when fleeAfterAnyDamage is set', () => {

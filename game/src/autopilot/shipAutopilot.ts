@@ -36,6 +36,9 @@ export type AutopilotContext = {
   enemyShips: readonly EnemyShip[]
   asteroids: readonly AsteroidBody[]
   shieldFraction: number
+  /** D124: 0..1 hull fraction — once below 1 (hull damage taken, never regenerates) the autopilot
+   *  re-engages at reEngageShieldFractionAfterHullDamage instead of the normal reEngageShieldFraction */
+  hullFraction: number
   recentlyDamaged: boolean
   /** combined radar+weapon range — the "in range" gate for counting threats + engaging */
   engagementRangeMeters: number
@@ -131,8 +134,13 @@ export function computeAutopilotIntent(context: AutopilotContext, outIntent: Aut
   const swarmedThreshold = enemiesInRangeCount > settings.maxEnemiesInRangeBeforeFlee
   const shieldLow = context.shieldFraction <= settings.shieldFractionBeforeEvasion
   const damageFlee = settings.fleeAfterAnyDamage && context.recentlyDamaged
-  // hysteresis: once evading, keep evading until the shield recovers to the re-engage fraction
-  const stillRecovering = context.wasEvadingLastFrame && context.shieldFraction < settings.reEngageShieldFraction
+  // hysteresis: once evading, keep evading until the shield recovers to the re-engage fraction. D124: if
+  // the ship has taken HULL damage (permanent), use the (typically stricter) after-hull re-engage level.
+  const hasTakenHullDamage = context.hullFraction < 1
+  const reEngageShieldFractionToUse = hasTakenHullDamage
+    ? settings.reEngageShieldFractionAfterHullDamage
+    : settings.reEngageShieldFraction
+  const stillRecovering = context.wasEvadingLastFrame && context.shieldFraction < reEngageShieldFractionToUse
   const wantEvade = swarmedThreshold || shieldLow || damageFlee || stillRecovering
 
   // each branch sets the desired HEADING + latch/state; the THRUST decision is made centrally below so

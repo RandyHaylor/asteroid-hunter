@@ -57,7 +57,7 @@
   max-height: 100%;
   overflow-y: auto;
   box-sizing: border-box;
-  padding: 36px 12px 12px; /* top padding clears the exit/caret buttons */
+  padding: 34px 8px 8px; /* D124: slimmer side/bottom margins to pack the rows tighter; top clears the buttons */
   /* shaded + translucent so the radar stays visible behind */
   background: rgba(8, 20, 14, 0.55);
   border: 1px solid rgba(120, 230, 160, 0.35);
@@ -75,16 +75,16 @@
   font-weight: 700;
   letter-spacing: 1px;
   font-size: 12px;
-  margin: 2px 0 8px;
+  margin: 1px 0 4px; /* D124: slimmer title margins */
   color: rgba(150, 255, 190, 0.95);
   background: rgba(2, 10, 6, 0.75);
-  padding: 4px 7px;
+  padding: 3px 7px;
   border-radius: 4px;
 }
 
 .aiSettingRow {
   display: block;
-  margin: 3px 0; /* D92: tighter rows to free vertical space for the AI status log */
+  margin: 1px 0; /* D124: slimmer rows (was 3px) — pack the settings tighter, esp. with the extra re-engage row */
 }
 /* D114: a coupled setting that's effectively inactive (evade-below == re-engage → no evasion window)
    greys out to signal it's doing nothing. Still interactive so the player can re-separate them. */
@@ -188,8 +188,8 @@
 .aiSettingsStatsGrid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 4px;
-  margin-top: 4px;
+  gap: 3px;
+  margin-top: 2px; /* D124: slimmer */
 }
 .portraitOrientation .aiSettingsStatsGrid {
   grid-template-columns: repeat(2, 1fr); /* D113: keep at least 2 columns in portrait */
@@ -198,7 +198,7 @@
   display: flex;
   justify-content: space-between;
   gap: 6px;
-  padding: 2px 6px;
+  padding: 1px 6px; /* D124: slimmer */
   border-radius: 4px;
   background: rgba(2, 10, 6, 0.72);
   font: 600 10px/1.2 system-ui, sans-serif;

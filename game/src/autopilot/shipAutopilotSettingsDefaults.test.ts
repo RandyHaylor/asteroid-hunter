@@ -12,4 +12,8 @@ describe('shipAutopilotSettings defaults', () => {
     expect(shipAutopilotSettings.preferredApproachAngleDegrees).toBeGreaterThanOrEqual(0)
     expect(shipAutopilotSettings.preferredApproachAngleDegrees).toBeLessThanOrEqual(90)
   })
+
+  it('D124: defaults the after-hull-damage re-engage shield level to full (additive, no behavior change)', () => {
+    expect(shipAutopilotSettings.reEngageShieldFractionAfterHullDamage).toBe(1)
+  })
 })

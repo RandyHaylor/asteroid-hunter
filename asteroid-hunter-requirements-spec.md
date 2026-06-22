@@ -307,7 +307,7 @@ gameSimulation/newtonianShipPhysics.ts  — now D88 variable-speed thrust (was D
 
 ---
 
-## Design updates — D104–D123 (continues the block above; this is authoritative over earlier text)
+## Design updates — D104–D124 (continues the block above; this is authoritative over earlier text)
 
 ### Current base speeds (supersedes the D85 numbers above)
 - Player max/cruise **180** m/s; enemy patrol **105**, orbit/cover **135** (D107 + D116, each +30; D116 also note: an
@@ -411,3 +411,16 @@ radar/asteroidOrbitIcons.ts             — exported computeAsteroidDistanceColo
 - The approach-angle MECHANIC is unchanged (kept per request): the autopilot still arcs to a stand-off point rotated by
   the approach angle at the engagement range, so the angle still grazes enemies at the player's weapon/radar range.
   Other conservative defaults (flee-on-any-damage, evade at 0.9 shield) were left as-is — not requested here.
+
+### AI setting: re-engage shield level after hull damage + tighter panel (D124)
+- New autopilot setting `reEngageShieldFractionAfterHullDamage` (separate slider "Re-engage (hull dmg)"). Once the ship
+  has taken HULL damage (hull < 100% — permanent, the hull never regenerates), the evade→re-engage hysteresis uses THIS
+  shield fraction instead of `reEngageShieldFraction` (which now applies only while just the shield has been dented). Lets
+  the player be more cautious after real damage. Threaded `hullFraction` into `AutopilotContext` (main.ts supplies
+  `getHullPointsFraction()`); `shipAutopilot.ts` picks the threshold by `context.hullFraction < 1`.
+- Default = 1 (full shield), so behavior is unchanged until tuned (additive). The slider is kept ≥ evade-below by the
+  same D114 invariant as the normal re-engage slider.
+- Panel packed tighter (slimmer margins): row margin 3px→1px, title margin/padding trimmed, panel padding 36/12/12 →
+  34/8/8, stats-grid gap/margins trimmed — to fit the extra row.
+- Covered by `autopilot/shipAutopilot.test.ts` (after hull damage, holds the higher after-hull level before returning)
+  and `autopilot/shipAutopilotSettingsDefaults.test.ts` (default 1).

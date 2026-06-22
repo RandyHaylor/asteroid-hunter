@@ -130,13 +130,28 @@ export function createShipAutopilotSettingsPanel(
     (v) => (shipAutopilotSettings.reEngageShieldFraction = v),
     (v) => `${Math.round(v * 100)}%`,
     () => enforceShieldEvasionInvariantAndGrey())
+  // D124: a SEPARATE re-engage shield level used once the ship has taken HULL damage (permanent). Also
+  // kept >= evade-below by the same invariant.
+  const reEngageAfterHullDamageHandle = addSliderRow(panel, 'Re-engage (hull dmg)', 0, 1, 0.05,
+    () => shipAutopilotSettings.reEngageShieldFractionAfterHullDamage,
+    (v) => (shipAutopilotSettings.reEngageShieldFractionAfterHullDamage = v),
+    (v) => `${Math.round(v * 100)}%`,
+    () => enforceShieldEvasionInvariantAndGrey())
   function enforceShieldEvasionInvariantAndGrey(): void {
     // clamp re-engage up to at least evade-below (covers dragging re-engage down OR evade-below up)
     if (shipAutopilotSettings.reEngageShieldFraction < shipAutopilotSettings.shieldFractionBeforeEvasion) {
       shipAutopilotSettings.reEngageShieldFraction = shipAutopilotSettings.shieldFractionBeforeEvasion
     }
+    // D124: the after-hull-damage re-engage level is also kept >= evade-below (recover to at least the
+    // shield that made you flee)
+    if (
+      shipAutopilotSettings.reEngageShieldFractionAfterHullDamage < shipAutopilotSettings.shieldFractionBeforeEvasion
+    ) {
+      shipAutopilotSettings.reEngageShieldFractionAfterHullDamage = shipAutopilotSettings.shieldFractionBeforeEvasion
+    }
     evadeBelowShieldHandle.refreshDisplay()
     reEngageShieldHandle.refreshDisplay()
+    reEngageAfterHullDamageHandle.refreshDisplay()
     const isEvasionDisabled =
       shipAutopilotSettings.reEngageShieldFraction === shipAutopilotSettings.shieldFractionBeforeEvasion
     evadeBelowShieldHandle.rowElement.classList.toggle('aiSettingRowDisabled', isEvasionDisabled)

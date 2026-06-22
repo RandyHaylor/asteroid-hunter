@@ -1566,6 +1566,7 @@ function updatePlayerMovement(deltaSeconds: number): void {
       enemyShips: gameWorld.enemyShips,
       asteroids: gameWorld.asteroids,
       shieldFraction: playerShipCondition.getShieldPointsFraction(),
+      hullFraction: playerShipCondition.getHullPointsFraction(), // D124: gate re-engage after hull damage
       recentlyDamaged:
         simulationClockSeconds - lastPlayerDamageAtSeconds < AUTOPILOT_RECENT_DAMAGE_WINDOW_SECONDS,
       engagementRangeMeters: playerEngagementRange.combinedRadarWeaponRangeMeters,
