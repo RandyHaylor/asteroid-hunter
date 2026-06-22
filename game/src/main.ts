@@ -1332,6 +1332,7 @@ function updateEnemyShipsAndFire(deltaSeconds: number): void {
       combatTimers.fireIntent,
       playerOrbitedAsteroid,
       gameWorld.enemyShips, // D115: anti-cluster (no shared orbit) + separation pressure
+      playerShipState.velocityMetersPerSecond, // D120: lead the player's motion (capped tracking rate)
     )
 
     scratchEnemyProjectileOrigin

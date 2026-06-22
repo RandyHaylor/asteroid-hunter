@@ -4,6 +4,8 @@ import type { AsteroidBody, EnemyShip, EnemyShipBehaviorTier } from '../gameSimu
 import { weaponEngagementRanges } from '../gameSimulation/gameWorldTypes'
 import { isLineOfSightBlockedByAsteroids } from '../gameSimulation/lineOfSightProbe'
 import { computeOrbitStep } from '../grappleOrbit/computeOrbitStep'
+import { computeLeadAimDirection } from '../weapons/targetLeadPrediction'
+import { enemyBaseLaserStats } from '../weapons/weaponStats'
 import { createEnemyShipMesh } from './enemyShipMesh'
 import { ENEMY_SHIP_MAX_HULL_POINTS, ENEMY_SHIP_MAX_SHIELD_POINTS } from './enemyShipDamage'
 
@@ -31,6 +33,16 @@ const ARRIVAL_BRAKING_GAIN_PER_SECOND = 1
 const MAX_TURN_RATE_RADIANS_PER_SECOND = 1.2
 /** below this speed the ship holds its heading instead of chasing velocity noise */
 const MIN_SPEED_FOR_TRAVEL_FACING_METERS_PER_SECOND = 0.5
+
+// D120: enemies LEAD their shots (aim at the predicted intercept for the laser bolt speed) instead of the
+// player's current position, but their auto-aim can only SLEW at this capped angular rate. So a player who
+// orbits an asteroid or flies past fast outruns the tracking and the shots trail behind — leading makes
+// lazy straight-line targets hittable WITHOUT making active jukers undodgeable. Tunable: raise = deadlier
+// / stickier aim, lower = easier to shake. (Ship FACING turns at MAX_TURN_RATE_RADIANS_PER_SECOND = 1.2,
+// faster than this, so the nose keeps up with the capped aim — the AIM is the deliberate bottleneck.)
+const ENEMY_AIM_TRACKING_MAX_RATE_RADIANS_PER_SECOND = 0.7
+/** shared default when a caller has no player-velocity to give (e.g. tests) — never mutated */
+const ZERO_PLAYER_VELOCITY = new Vector3()
 
 // ---- dumbPatrol tuning (D8) ----
 // D112: patrol drones HUNT — they scatter waypoints within this radius of the PLAYER (not the origin),
@@ -103,6 +115,10 @@ export function grappleStrengthForArchetype(behaviorTier: EnemyShipBehaviorTier)
 }
 
 type EnemyBehaviorInternalState = {
+  // D120: capped auto-aim — the aim direction we actually fire along, slewed toward the lead solution at
+  // a bounded rate (initialized straight to the lead on the first frame so there's no startup swing).
+  trackedAimDirectionUnit: Vector3
+  hasInitializedTrackedAim: boolean
   patrolWaypointMeters: Vector3
   hasPatrolWaypoint: boolean
   coverAsteroid: AsteroidBody | null
@@ -134,6 +150,8 @@ function getOrCreateInternalState(enemyShip: EnemyShip): EnemyBehaviorInternalSt
   let internalState = enemyShipInternalStates.get(enemyShip)
   if (!internalState) {
     internalState = {
+      trackedAimDirectionUnit: new Vector3(0, 0, -1),
+      hasInitializedTrackedAim: false,
       patrolWaypointMeters: new Vector3(),
       hasPatrolWaypoint: false,
       coverAsteroid: null,
@@ -212,6 +230,10 @@ const WORLD_ORIGIN = new Vector3(0, 0, 0)
 const scratchVectorToPlayer = new Vector3()
 const scratchVectorToAsteroidTarget = new Vector3() // D67: aim toward the orbited asteroid under attack
 const scratchNoseFacingDirection = new Vector3()
+// D120: lead-aim + capped-tracking scratch
+const scratchDesiredAimDirection = new Vector3()
+const scratchAimSlewAxis = new Vector3()
+const scratchAimSlewQuaternion = new Quaternion()
 // D68: grapple-weave scratch (latch geometry + orbit-step outputs)
 const scratchGrappleRadiusVector = new Vector3()
 const scratchGrappleAxis = new Vector3()
@@ -239,6 +261,9 @@ export function updateEnemyShipBehavior(
   // D115: every enemy (incl. self — filtered out), so an enemy can avoid grappling an asteroid another
   // is already orbiting, and harder enemies can spread away from each other while closing.
   otherEnemyShips: readonly EnemyShip[] = [],
+  // D120: the player's current velocity, so enemies can LEAD their shots (aim at the intercept). Defaults
+  // to zero (no lead → direct aim) when a caller has none, keeping older call sites / tests valid.
+  playerVelocityMetersPerSecond: Vector3 = ZERO_PLAYER_VELOCITY,
 ): void {
   // STEP 1: reset intent; destroyed enemies do nothing (the caller marks isDestroyed)
   outFireIntent.wantsToFireLaser = false
@@ -247,14 +272,34 @@ export function updateEnemyShipBehavior(
 
   const internalState = getOrCreateInternalState(enemyShip)
 
-  // STEP 2: aim straight at the player (integration layer adds projectile speed; no lead in v1)
+  // STEP 2: aim at the player. D120: LEAD the shot — aim where the player WILL be for the laser bolt speed
+  // (missiles fire along the same direction, then home), then SLEW the tracked aim toward that lead at a
+  // capped rate so a fast-crossing / orbiting player outruns the auto-aim. distanceToPlayer is still used
+  // by the tier fire-range gates below.
   scratchVectorToPlayer.copy(playerPositionMeters).sub(enemyShip.positionMeters)
   const distanceToPlayerMeters = scratchVectorToPlayer.length()
   if (distanceToPlayerMeters > 1e-6) {
-    outFireIntent.aimDirectionWorld.copy(scratchVectorToPlayer).divideScalar(distanceToPlayerMeters)
+    computeLeadAimDirection(
+      enemyShip.positionMeters,
+      playerPositionMeters,
+      playerVelocityMetersPerSecond,
+      enemyBaseLaserStats.boltSpeedMetersPerSecond,
+      scratchDesiredAimDirection,
+    )
   } else {
-    outFireIntent.aimDirectionWorld.copy(ENEMY_LOCAL_FORWARD_AXIS).applyQuaternion(enemyShip.orientation)
+    scratchDesiredAimDirection.copy(ENEMY_LOCAL_FORWARD_AXIS).applyQuaternion(enemyShip.orientation)
   }
+  if (!internalState.hasInitializedTrackedAim) {
+    internalState.trackedAimDirectionUnit.copy(scratchDesiredAimDirection)
+    internalState.hasInitializedTrackedAim = true
+  } else {
+    slewUnitDirectionTowardTarget(
+      internalState.trackedAimDirectionUnit,
+      scratchDesiredAimDirection,
+      ENEMY_AIM_TRACKING_MAX_RATE_RADIANS_PER_SECOND * deltaSeconds,
+    )
+  }
+  outFireIntent.aimDirectionWorld.copy(internalState.trackedAimDirectionUnit)
   const isPlayerInClearSight = !isLineOfSightBlockedByAsteroids(
     enemyShip.positionMeters,
     playerPositionMeters,
@@ -558,6 +603,34 @@ function steerEnemyTowardGoalPoint(
 
   enemyShip.velocityMetersPerSecond.addScaledVector(scratchSteeringAcceleration, deltaSeconds)
   enemyShip.positionMeters.addScaledVector(enemyShip.velocityMetersPerSecond, deltaSeconds)
+}
+
+/**
+ * D120: rotate a unit aim direction toward a target unit direction by at most maxStepRadians, in place.
+ * This is the capped auto-aim tracking: when the player's apparent angular speed exceeds the cap, the aim
+ * trails behind and shots miss (the player evades by orbiting / flying past fast).
+ */
+function slewUnitDirectionTowardTarget(
+  currentUnitDirection: Vector3,
+  targetUnitDirection: Vector3,
+  maxStepRadians: number,
+): void {
+  const angleBetweenRadians = currentUnitDirection.angleTo(targetUnitDirection)
+  if (angleBetweenRadians <= maxStepRadians || angleBetweenRadians < 1e-6) {
+    currentUnitDirection.copy(targetUnitDirection)
+    return
+  }
+  scratchAimSlewAxis.crossVectors(currentUnitDirection, targetUnitDirection)
+  if (scratchAimSlewAxis.lengthSq() < 1e-12) {
+    // (near-)opposite directions: pick any perpendicular axis so we still rotate toward the target
+    scratchAimSlewAxis.crossVectors(currentUnitDirection, WORLD_UP_AXIS)
+    if (scratchAimSlewAxis.lengthSq() < 1e-12) {
+      scratchAimSlewAxis.crossVectors(currentUnitDirection, WORLD_RIGHT_AXIS)
+    }
+  }
+  scratchAimSlewAxis.normalize()
+  scratchAimSlewQuaternion.setFromAxisAngle(scratchAimSlewAxis, maxStepRadians)
+  currentUnitDirection.applyQuaternion(scratchAimSlewQuaternion).normalize()
 }
 
 function turnEnemyTowardFacingDirection(

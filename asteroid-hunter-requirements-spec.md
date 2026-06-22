@@ -307,7 +307,7 @@ gameSimulation/newtonianShipPhysics.ts  — now D88 variable-speed thrust (was D
 
 ---
 
-## Design updates — D104–D119 (continues the block above; this is authoritative over earlier text)
+## Design updates — D104–D120 (continues the block above; this is authoritative over earlier text)
 
 ### Current base speeds (supersedes the D85 numbers above)
 - Player max/cruise **180** m/s; enemy patrol **105**, orbit/cover **135** (D107 + D116, each +30; D116 also note: an
@@ -362,3 +362,18 @@ radar/asteroidOrbitIcons.ts             — exported computeAsteroidDistanceColo
   the longer shots connect. Missiles already covered the 250–900 m envelope, so only the laser range was deficient.
 - Result: orbitStrafe now lasers from its standoff; all three tiers (patrol / orbitStrafe / coverHunter) attack within
   the wider range. Covered by `enemyAlienShipBehavior.test.ts` (laser fires at the 400 m standoff, not beyond 456 m).
+
+### Enemy aim — lead shots + capped tracking (D120)
+- **Problem:** enemies aimed at the player's CURRENT position (no lead), so a moving player was almost always missed —
+  even at the new D119 range. (Previously the code literally said "no lead in v1".)
+- **Lead:** enemies now aim at the predicted INTERCEPT via `computeLeadAimDirection` (the same solver the player's
+  lock uses), solved for the enemy **laser bolt speed** (`enemyBaseLaserStats.boltSpeedMetersPerSecond`); missiles fire
+  along the same direction and then home. The player's velocity is threaded into `updateEnemyShipBehavior`.
+- **Capped tracking (the evade valve):** the aim doesn't snap to the lead — each enemy keeps a `trackedAimDirectionUnit`
+  that SLEWS toward the lead solution at most `ENEMY_AIM_TRACKING_MAX_RATE_RADIANS_PER_SECOND` (**0.7 rad/s**, tunable).
+  A player who orbits an asteroid or flies past fast has an apparent angular rate above the cap, so the aim trails and
+  the shots miss — leading makes lazy straight-line targets hittable WITHOUT making active jukers undodgeable. The aim
+  initializes straight to the lead on an enemy's first frame (no startup swing). Ship FACING still turns at 1.2 rad/s
+  (faster than the aim cap), so the AIM is the deliberate bottleneck, not the hull.
+- Covered by `enemyAlienShipBehavior.test.ts` (aims ahead of a crossing player; a 90° target jump moves the aim by only
+  the per-frame rate cap). `0.7` is a playtest starting point, not a tuned-final value.

@@ -127,6 +127,44 @@ describe('orbitStrafe tier', () => {
   })
 })
 
+describe('D120: lead-aim with capped tracking rate', () => {
+  it('leads a crossing player — aims AHEAD of the player position, not straight at it', () => {
+    const gameScene = new Scene()
+    const enemy = createEnemyShip('dumbPatrol', new Vector3(0, 0, 0), gameScene)
+    // player dead ahead (−Z) but crossing fast in +X: the intercept point is ahead in +X
+    const playerPosition = new Vector3(0, 0, -400)
+    const playerVelocity = new Vector3(120, 0, 0)
+    const fireIntent = createEnemyFireIntent()
+
+    // first update initializes the tracked aim straight to the lead solution (no startup slew)
+    updateEnemyShipBehavior(enemy, [], playerPosition, FIXED_TIMESTEP_SECONDS, fireIntent, null, [], playerVelocity)
+
+    // straight-at-player aim would have x ≈ 0; a led aim points toward where the player is heading (+X)
+    expect(fireIntent.aimDirectionWorld.x).toBeGreaterThan(0.1)
+  })
+
+  it('caps how fast the aim can swing — a sudden 90° target jump moves the aim only by the rate cap', () => {
+    const gameScene = new Scene()
+    const enemy = createEnemyShip('dumbPatrol', new Vector3(0, 0, 0), gameScene)
+    const fireIntent = createEnemyFireIntent()
+    const stationary = new Vector3(0, 0, 0)
+
+    // frame 1: player straight ahead (−Z), stationary → tracked aim initializes to (0,0,−1)
+    updateEnemyShipBehavior(enemy, [], new Vector3(0, 0, -400), FIXED_TIMESTEP_SECONDS, fireIntent, null, [], stationary)
+    const aimAfterInit = fireIntent.aimDirectionWorld.clone()
+    expect(aimAfterInit.distanceTo(new Vector3(0, 0, -1))).toBeLessThan(1e-6)
+
+    // frame 2: player jumps 90° to the side (+X) → desired aim is (1,0,0), a 90° swing away
+    updateEnemyShipBehavior(enemy, [], new Vector3(400, 0, 0), FIXED_TIMESTEP_SECONDS, fireIntent, null, [], stationary)
+
+    const aimAngleMovedRadians = fireIntent.aimDirectionWorld.angleTo(aimAfterInit)
+    const expectedCapPerFrameRadians = 0.7 * FIXED_TIMESTEP_SECONDS // ENEMY_AIM_TRACKING_MAX_RATE × dt
+    // moved by exactly the per-frame cap — nowhere near the 90° (≈1.57 rad) the target demanded
+    expect(aimAngleMovedRadians).toBeCloseTo(expectedCapPerFrameRadians, 3)
+    expect(aimAngleMovedRadians).toBeLessThan(0.02)
+  })
+})
+
 describe('coverHunter tier', () => {
   it('computes a hide point with the asteroid between itself and the player', () => {
     const coverAsteroid = makeTestAsteroid(new Vector3(200, 0, 0), 40)
