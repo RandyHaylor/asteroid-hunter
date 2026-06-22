@@ -33,8 +33,9 @@ const MAX_TURN_RATE_RADIANS_PER_SECOND = 1.2
 const MIN_SPEED_FOR_TRAVEL_FACING_METERS_PER_SECOND = 0.5
 
 // ---- dumbPatrol tuning (D8) ----
-// D46: patrol waypoints reach much farther, so enemies fly away for longer between turns
-const PATROL_WANDER_SPHERE_RADIUS_METERS = 1300
+// D112: patrol drones HUNT — they scatter waypoints within this radius of the PLAYER (not the origin),
+// so they prowl/close in on the player's vicinity rather than wandering the whole field forever.
+const PATROL_HUNT_WANDER_RADIUS_METERS = 600
 const PATROL_WAYPOINT_ARRIVAL_RADIUS_METERS = 30
 const PATROL_CRUISE_SPEED_METERS_PER_SECOND = 75 // D107: +30 from 45
 /** only fires when the player is roughly ahead: within ~25° of the nose */
@@ -63,7 +64,7 @@ const COVER_PEEK_RIM_CLEARANCE_METERS = 20
 const COVER_REPICK_SHRINK_FRACTION = 0.6
 // D67: a cover hunter periodically advances — re-picking cover that is closer to the player, but only
 // among rocks within one "step" of its current spot, so it ladders inward across the field over time.
-const COVER_ADVANCE_RECONSIDER_SECONDS = 6
+const COVER_ADVANCE_RECONSIDER_SECONDS = 4 // D112: ladder in toward the player sooner (was 6)
 const COVER_ADVANCE_MAX_STEP_METERS = 700
 
 // ---- D67: attack-the-orbited-asteroid behavior ----
@@ -262,7 +263,7 @@ export function updateEnemyShipBehavior(
   switch (enemyShip.behaviorTier) {
     case 'dumbPatrol':
       cruiseSpeedMetersPerSecond = updateDumbPatrolTier(
-        enemyShip, internalState, distanceToPlayerMeters, isPlayerInClearSight, outFireIntent, scratchGoalPoint,
+        enemyShip, internalState, playerPositionMeters, distanceToPlayerMeters, isPlayerInClearSight, outFireIntent, scratchGoalPoint,
       )
       break
     case 'orbitStrafe':
@@ -521,19 +522,23 @@ function turnEnemyTowardFacingDirection(
 function updateDumbPatrolTier(
   enemyShip: EnemyShip,
   internalState: EnemyBehaviorInternalState,
+  playerPositionMeters: Vector3,
   distanceToPlayerMeters: number,
   isPlayerInClearSight: boolean,
   outFireIntent: EnemyFireIntent,
   outGoalPointMeters: Vector3,
 ): number {
-  // STEP A: wander — pick a fresh random waypoint when arriving at the current one
+  // STEP A: HUNT — pick a fresh waypoint when arriving at the current one. D112: waypoints are scattered
+  // AROUND THE PLAYER (not the origin), so patrol drones close in and prowl the player's vicinity instead
+  // of wandering the field forever.
   if (
     !internalState.hasPatrolWaypoint ||
     enemyShip.positionMeters.distanceTo(internalState.patrolWaypointMeters) < PATROL_WAYPOINT_ARRIVAL_RADIUS_METERS
   ) {
     internalState.patrolWaypointMeters
       .randomDirection()
-      .multiplyScalar(Math.cbrt(Math.random()) * PATROL_WANDER_SPHERE_RADIUS_METERS)
+      .multiplyScalar(Math.cbrt(Math.random()) * PATROL_HUNT_WANDER_RADIUS_METERS)
+      .add(playerPositionMeters)
     internalState.hasPatrolWaypoint = true
   }
   outGoalPointMeters.copy(internalState.patrolWaypointMeters)
@@ -686,7 +691,7 @@ function updateCoverHunterTier(
   // no large asteroid left to hide behind → fall back to patrol wandering
   if (!internalState.coverAsteroid) {
     return updateDumbPatrolTier(
-      enemyShip, internalState, distanceToPlayerMeters, isPlayerInClearSight, outFireIntent, outGoalPointMeters,
+      enemyShip, internalState, playerPositionMeters, distanceToPlayerMeters, isPlayerInClearSight, outFireIntent, outGoalPointMeters,
     )
   }
 
