@@ -190,7 +190,8 @@ export function createShipAutopilotSettingsPanel(
   panel.appendChild(statsTitle)
   const statsGrid = document.createElement('div')
   statsGrid.className = 'aiSettingsStatsGrid'
-  const statValueSpans: { valueSpan: HTMLElement; readValue: () => string }[] = []
+  // D113: remember each stat's BASELINE value so we can colour the value green once it's been upgraded
+  const statValueSpans: { valueSpan: HTMLElement; readValue: () => string; baselineValue: string }[] = []
   for (const descriptor of liveStatDescriptors) {
     const cell = document.createElement('div')
     cell.className = 'aiSettingsStatCell'
@@ -202,11 +203,16 @@ export function createShipAutopilotSettingsPanel(
     cell.appendChild(labelSpan)
     cell.appendChild(valueSpan)
     statsGrid.appendChild(cell)
-    statValueSpans.push({ valueSpan, readValue: descriptor.readValue })
+    statValueSpans.push({ valueSpan, readValue: descriptor.readValue, baselineValue: descriptor.readValue() })
   }
   panel.appendChild(statsGrid)
   function refreshLiveStats(): void {
-    for (const { valueSpan, readValue } of statValueSpans) valueSpan.textContent = readValue()
+    for (const { valueSpan, readValue, baselineValue } of statValueSpans) {
+      const currentValue = readValue()
+      valueSpan.textContent = currentValue
+      // D113: green VALUE (not the label) once it differs from its baseline — i.e. it's been upgraded
+      valueSpan.classList.toggle('aiSettingsStatValueUpgraded', currentValue !== baselineValue)
+    }
   }
   refreshLiveStats()
 

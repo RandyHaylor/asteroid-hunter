@@ -183,7 +183,7 @@
   margin-top: 4px;
 }
 .portraitOrientation .aiSettingsStatsGrid {
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, 1fr); /* D113: keep at least 2 columns in portrait */
 }
 .aiSettingsStatCell {
   display: flex;
@@ -199,6 +199,11 @@
   letter-spacing: 0.02em;
 }
 .aiSettingsStatValue {
-  color: rgba(150, 255, 190, 0.98);
+  color: rgba(210, 230, 245, 0.98); /* D113: neutral until upgraded */
   font-weight: 800;
+}
+/* D113: an upgraded stat's VALUE turns bright green (label stays neutral) */
+.aiSettingsStatValueUpgraded {
+  color: #4dff80;
+  text-shadow: 0 0 5px rgba(80, 255, 140, 0.55);
 }
