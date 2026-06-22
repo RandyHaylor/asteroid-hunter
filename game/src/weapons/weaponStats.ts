@@ -1,4 +1,5 @@
 import { weaponEngagementRanges } from '../gameSimulation/gameWorldTypes'
+import type { EnemyShipBehaviorTier } from '../gameSimulation/gameWorldTypes'
 import { playerEngagementRange } from '../shipStats'
 
 // R17/R18: weapon behavior is fully data-driven so upgrades (fire rate, explosion
@@ -59,5 +60,21 @@ export const enemyBaseMissileStats: MissileWeaponStats = {
   missileSpeedMetersPerSecond: 140,
   explosionRadiusMeters: 18,
   explosionDamage: 25,
-  homingTurnRateRadiansPerSecond: 0.35,
+  homingTurnRateRadiansPerSecond: 0.35, // D121: overridden per-archetype at spawn (see below) — base/fallback only
+}
+
+// D121: enemy missiles should home only WEAKLY, and weaker for lower-tier enemies, so the player can shake
+// them. Each missile-firing archetype gets its own homing turn rate (rad/s), all well below the player base
+// of 0.35. dumbPatrol (Drone) fires lasers only — never missiles — so its value is unused; returned as the
+// weakest for safety. These are gameplay-feel starting points, tunable. The per-enemy missile stat block is
+// built at spawn (main.ts) from enemyBaseMissileStats with this homing rate substituted.
+export function enemyMissileHomingTurnRateForArchetype(behaviorTier: EnemyShipBehaviorTier): number {
+  switch (behaviorTier) {
+    case 'dumbPatrol':
+      return 0 // never fires missiles; weakest as a safe default
+    case 'orbitStrafe':
+      return 0.08 // Raider — lowest missile-firing tier: barely curves, easy to outrun
+    case 'coverHunter':
+      return 0.18 // Stalker — strongest tier, still weak (< player 0.35)
+  }
 }

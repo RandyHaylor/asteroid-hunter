@@ -307,7 +307,7 @@ gameSimulation/newtonianShipPhysics.ts  — now D88 variable-speed thrust (was D
 
 ---
 
-## Design updates — D104–D120 (continues the block above; this is authoritative over earlier text)
+## Design updates — D104–D121 (continues the block above; this is authoritative over earlier text)
 
 ### Current base speeds (supersedes the D85 numbers above)
 - Player max/cruise **180** m/s; enemy patrol **105**, orbit/cover **135** (D107 + D116, each +30; D116 also note: an
@@ -377,3 +377,12 @@ radar/asteroidOrbitIcons.ts             — exported computeAsteroidDistanceColo
   (faster than the aim cap), so the AIM is the deliberate bottleneck, not the hull.
 - Covered by `enemyAlienShipBehavior.test.ts` (aims ahead of a crossing player; a 90° target jump moves the aim by only
   the per-frame rate cap). `0.7` is a playtest starting point, not a tuned-final value.
+
+### Enemy missile homing — weak, scaled by tier (D121)
+- Enemy missiles now home only WEAKLY, and weaker for lower-tier enemies, so the player can shake them.
+  `enemyMissileHomingTurnRateForArchetype(tier)` (weaponStats.ts) returns the homing turn rate per archetype, all well
+  below the player base of 0.35 rad/s: **orbitStrafe (Raider) 0.08**, **coverHunter (Stalker) 0.18**. dumbPatrol fires
+  lasers only (no missiles) → 0.
+- Wiring: each enemy's missile stat block is built at spawn (main.ts) as `enemyBaseMissileStats` with this homing rate
+  substituted, stored on its `EnemyCombatTimers`, and used when it fires. Values are gameplay-feel starting points,
+  tunable. Covered by `weapons/enemyMissileHomingByTier.test.ts`.

@@ -20,8 +20,10 @@ import {
 import {
   enemyBaseLaserStats,
   enemyBaseMissileStats,
+  enemyMissileHomingTurnRateForArchetype,
   playerBaseLaserStats,
   playerBaseMissileStats,
+  type MissileWeaponStats,
 } from './weapons/weaponStats'
 import { selectAutoAimTargetInNoseCone } from './weapons/noseConeAutoAim'
 import { isShipAlignedForLaserFire } from './weapons/laserAlignmentGate'
@@ -1070,6 +1072,8 @@ type EnemyCombatTimers = {
   nextLaserFireTimeSeconds: number
   nextMissileFireTimeSeconds: number
   fireIntent: EnemyFireIntent
+  // D121: per-enemy missile stats — enemyBaseMissileStats with a tier-scaled (weak) homing rate baked in
+  missileStats: MissileWeaponStats
 }
 const enemyCombatTimersByShip = new WeakMap<EnemyShip, EnemyCombatTimers>()
 
@@ -1081,6 +1085,11 @@ function spawnEnemiesForWave(waveNumber: number): void {
       nextLaserFireTimeSeconds: 0,
       nextMissileFireTimeSeconds: 0,
       fireIntent: createEnemyFireIntent(),
+      // D121: bake this archetype's weak homing rate into its own missile stats block
+      missileStats: {
+        ...enemyBaseMissileStats,
+        homingTurnRateRadiansPerSecond: enemyMissileHomingTurnRateForArchetype(behaviorTier),
+      },
     })
     gameWorld.enemyShips.push(spawnedEnemy)
   }
@@ -1360,11 +1369,11 @@ function updateEnemyShipsAndFire(deltaSeconds: number): void {
       missileVolleySystem.tryFireMissile(
         scratchEnemyProjectileOrigin,
         combatTimers.fireIntent.aimDirectionWorld,
-        enemyBaseMissileStats,
+        combatTimers.missileStats, // D121: per-archetype weak homing
         false,
         simulationClockSeconds,
       )
-      combatTimers.nextMissileFireTimeSeconds = simulationClockSeconds + enemyBaseMissileStats.fireCooldownSeconds
+      combatTimers.nextMissileFireTimeSeconds = simulationClockSeconds + combatTimers.missileStats.fireCooldownSeconds
     }
   }
 }
