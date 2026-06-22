@@ -488,6 +488,24 @@ function computeAutopilotPulsedThrustActive(rawAutopilotWantsThrust: boolean, de
   return false
 }
 
+// D111: redirect-grapple lifecycle (fixes the "orbits an asteroid forever" bug). The orbit plane is
+// frozen at latch, so it can only rotate the travel WITHIN that plane — a desired heading out of that
+// plane is unreachable, and the autopilot would re-request the redirect forever. So MAIN owns the
+// release: let go when travel ALIGNS with the desired heading (success), when it has passed the BEST
+// alignment the orbit can offer (peak — the rock can't do better this lap), or after a 270° failsafe.
+// A short cooldown after release prevents immediately re-grappling the same unhelpful plane.
+let isRedirectGrappleOrbitActive = false
+let redirectGrappleAccumulatedAngleRadians = 0
+let redirectGrappleBestAlignmentDot = -Infinity
+let redirectGrappleCooldownSecondsRemaining = 0
+const scratchRedirectPreviousTravelDirection = new THREE.Vector3()
+const scratchRedirectCurrentTravelDirection = new THREE.Vector3()
+const REDIRECT_GRAPPLE_ALIGNED_RELEASE_COSINE = Math.cos((30 * Math.PI) / 180)
+const REDIRECT_GRAPPLE_FAILSAFE_ACCUMULATED_RADIANS = (270 * Math.PI) / 180
+const REDIRECT_GRAPPLE_MIN_ANGLE_BEFORE_PEAK_RELEASE_RADIANS = (90 * Math.PI) / 180
+const REDIRECT_GRAPPLE_PEAK_ALIGNMENT_DROP_EPSILON = 0.03
+const REDIRECT_GRAPPLE_RELEASE_COOLDOWN_SECONDS = 2
+
 // D75/D77: the AI settings overlay sits over the radar (radar visible behind), with a caret toggle +
 // an EXIT AI PILOT button. Exiting is blocked during a forced-AI wave (wave 3).
 const autopilotSettingsPanel = createShipAutopilotSettingsPanel(radarRegion, () => {
@@ -1485,15 +1503,30 @@ function updatePlayerMovement(deltaSeconds: number): void {
       autopilotHeadingYawInput,
       deltaSeconds,
     )
-    // D93: both evasion-juke and redirect-slingshot latch the nearest reachable asteroid (the orbit then
-    // carries the ship); the autopilot stops requesting the latch (→ 'release') once it's done with it.
-    if (
-      autopilotIntent.latchCommand === 'latchNearestForEvasion' ||
-      autopilotIntent.latchCommand === 'latchForRedirect'
-    ) {
+    // D111: redirect-grapple release cooldown ticks down so we don't immediately re-grapple the same plane
+    if (redirectGrappleCooldownSecondsRemaining > 0) redirectGrappleCooldownSecondsRemaining -= deltaSeconds
+    // D93/D111: evasion-juke and redirect-slingshot both latch the nearest reachable asteroid; the
+    // redirect latch additionally starts MAIN-owned lifecycle tracking (released below by alignment/peak/
+    // failsafe), since the autopilot can't tell when an out-of-plane heading is unreachable.
+    if (autopilotIntent.latchCommand === 'latchForRedirect') {
+      if (!grappleOrbitController.isLatched() && redirectGrappleCooldownSecondsRemaining <= 0) {
+        latchNearestAsteroidForAutopilotEvasion()
+        if (grappleOrbitController.isLatched()) {
+          isRedirectGrappleOrbitActive = true
+          redirectGrappleAccumulatedAngleRadians = 0
+          redirectGrappleBestAlignmentDot = -Infinity
+          const speedAtLatch = playerShipState.velocityMetersPerSecond.length()
+          if (speedAtLatch > 1e-6) {
+            scratchRedirectPreviousTravelDirection.copy(playerShipState.velocityMetersPerSecond).divideScalar(speedAtLatch)
+          }
+        }
+      }
+    } else if (autopilotIntent.latchCommand === 'latchNearestForEvasion') {
       if (!grappleOrbitController.isLatched()) latchNearestAsteroidForAutopilotEvasion()
+      isRedirectGrappleOrbitActive = false // an evasion orbit is intentional — not redirect-managed
     } else if (autopilotIntent.latchCommand === 'release' && grappleOrbitController.isLatched()) {
       grappleOrbitController.releaseLatch()
+      isRedirectGrappleOrbitActive = false
     }
     // D84: while orbiting, the AI doesn't press thrust (a player wouldn't either) — so the universal
     // "thrust disengages orbit" rule below doesn't fire and the orbit holds. Releasing is done via the
@@ -1539,6 +1572,27 @@ function updatePlayerMovement(deltaSeconds: number): void {
       playerShipBaseFlightStats.cruiseSpeedMetersPerSecond,
       deltaSeconds,
     )
+    // D111: decide when to LET GO of a redirect-slingshot (the orbit step just updated our travel dir).
+    if (isRedirectGrappleOrbitActive) {
+      const orbitSpeed = playerShipState.velocityMetersPerSecond.length()
+      if (orbitSpeed > 1e-6) {
+        scratchRedirectCurrentTravelDirection.copy(playerShipState.velocityMetersPerSecond).divideScalar(orbitSpeed)
+        redirectGrappleAccumulatedAngleRadians += scratchRedirectPreviousTravelDirection.angleTo(scratchRedirectCurrentTravelDirection)
+        scratchRedirectPreviousTravelDirection.copy(scratchRedirectCurrentTravelDirection)
+        const alignmentDot = scratchRedirectCurrentTravelDirection.dot(autopilotIntent.desiredHeadingDirectionWorld)
+        const isAlignedToDesiredHeading = alignmentDot >= REDIRECT_GRAPPLE_ALIGNED_RELEASE_COSINE
+        const hasPassedBestAchievableAlignment =
+          redirectGrappleAccumulatedAngleRadians > REDIRECT_GRAPPLE_MIN_ANGLE_BEFORE_PEAK_RELEASE_RADIANS &&
+          alignmentDot < redirectGrappleBestAlignmentDot - REDIRECT_GRAPPLE_PEAK_ALIGNMENT_DROP_EPSILON
+        const hasHitFailsafe = redirectGrappleAccumulatedAngleRadians > REDIRECT_GRAPPLE_FAILSAFE_ACCUMULATED_RADIANS
+        if (alignmentDot > redirectGrappleBestAlignmentDot) redirectGrappleBestAlignmentDot = alignmentDot
+        if (isAlignedToDesiredHeading || hasPassedBestAchievableAlignment || hasHitFailsafe) {
+          grappleOrbitController.releaseLatch()
+          isRedirectGrappleOrbitActive = false
+          redirectGrappleCooldownSecondsRemaining = REDIRECT_GRAPPLE_RELEASE_COOLDOWN_SECONDS
+        }
+      }
+    }
   } else {
     // D54: constant-momentum flight — rotation (facing) was already applied above; here we hold the
     // cruise speed and, while THRUST is held, curve the velocity vector toward the facing.
