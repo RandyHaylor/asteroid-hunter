@@ -236,6 +236,9 @@ export function updateEnemyShipBehavior(
   // D67: the asteroid the player is currently orbiting (null if not orbiting), so enemies can switch
   // to destroying it after repeatedly failing to hit the orbiting player.
   playerOrbitedAsteroid: AsteroidBody | null = null,
+  // D115: every enemy (incl. self — filtered out), so an enemy can avoid grappling an asteroid another
+  // is already orbiting, and harder enemies can spread away from each other while closing.
+  otherEnemyShips: readonly EnemyShip[] = [],
 ): void {
   // STEP 1: reset intent; destroyed enemies do nothing (the caller marks isDestroyed)
   outFireIntent.wantsToFireLaser = false
@@ -286,8 +289,15 @@ export function updateEnemyShipBehavior(
   // STEP 3.6 (D68): ADDITIVE grapple — if able, arc (slingshot) off a nearby asteroid woven into the
   // tier behavior. While grappling, the arc controls position/velocity, so the normal steer is skipped.
   const isGrapplingThisFrame = updateEnemyGrappleWeave(
-    enemyShip, internalState, asteroids, deltaSeconds, cruiseSpeedMetersPerSecond,
+    enemyShip, internalState, asteroids, deltaSeconds, cruiseSpeedMetersPerSecond, otherEnemyShips,
   )
+
+  // STEP 3.7 (D115): harder enemies (grappleStrength > 0) feel a bounded SEPARATION nudge away from
+  // nearby allies as they close in, so they spread instead of clustering. The offset is capped well
+  // below the distance to the player goal, so it never stalls pursuit (failsafe).
+  if (!isGrapplingThisFrame && enemyShip.grappleStrength > 0) {
+    applyEnemySeparationToGoalPoint(enemyShip, otherEnemyShips, scratchGoalPoint)
+  }
 
   // STEP 4: steer by target velocity toward the goal, thrust-limited like the player physics (R3/D12)
   if (!isGrapplingThisFrame) {
@@ -386,12 +396,55 @@ function updateAsteroidAttackOverride(
  * keeping the tangential velocity. Returns true on a frame where the arc moved the ship (so the caller
  * skips the normal steer step). Tier aim/fire and facing are unaffected — grapple is purely additive.
  */
+// D115: anti-cluster + separation tuning
+const ENEMY_SEPARATION_NEIGHBOR_RADIUS_METERS = 250 // allies within this exert a spread-apart pressure
+const ENEMY_SEPARATION_MAX_GOAL_OFFSET_METERS = 200 // failsafe cap — far below the goal distance, so pursuit holds
+const scratchEnemySeparation = new Vector3()
+const scratchEnemyAwayDirection = new Vector3()
+
+/** D115: true if a DIFFERENT live enemy is currently orbiting (grappling) this asteroid */
+export function isAsteroidGrappledByAnotherEnemy(
+  asteroid: AsteroidBody,
+  selfEnemyShip: EnemyShip,
+  otherEnemyShips: readonly EnemyShip[],
+): boolean {
+  for (const otherEnemyShip of otherEnemyShips) {
+    if (otherEnemyShip === selfEnemyShip || otherEnemyShip.isDestroyed) continue
+    if (otherEnemyShip.grappledAsteroid === asteroid) return true
+  }
+  return false
+}
+
+/** D115: nudge the goal point AWAY from nearby allies (boids-style separation), capped so it spreads
+ *  the pack without overriding the pursuit goal (which is typically far further than the cap). */
+function applyEnemySeparationToGoalPoint(
+  enemyShip: EnemyShip,
+  otherEnemyShips: readonly EnemyShip[],
+  outGoalPointMeters: Vector3,
+): void {
+  scratchEnemySeparation.set(0, 0, 0)
+  for (const otherEnemyShip of otherEnemyShips) {
+    if (otherEnemyShip === enemyShip || otherEnemyShip.isDestroyed) continue
+    scratchEnemyAwayDirection.copy(enemyShip.positionMeters).sub(otherEnemyShip.positionMeters)
+    const neighborDistanceMeters = scratchEnemyAwayDirection.length()
+    if (neighborDistanceMeters < 1e-3 || neighborDistanceMeters > ENEMY_SEPARATION_NEIGHBOR_RADIUS_METERS) continue
+    scratchEnemyAwayDirection.divideScalar(neighborDistanceMeters) // unit away from the neighbor
+    const closenessWeight = (ENEMY_SEPARATION_NEIGHBOR_RADIUS_METERS - neighborDistanceMeters) / ENEMY_SEPARATION_NEIGHBOR_RADIUS_METERS
+    scratchEnemySeparation.addScaledVector(scratchEnemyAwayDirection, closenessWeight)
+  }
+  if (scratchEnemySeparation.lengthSq() < 1e-9) return
+  // bounded offset (scaled by how "hard" this enemy is) — never larger than the failsafe cap
+  scratchEnemySeparation.setLength(ENEMY_SEPARATION_MAX_GOAL_OFFSET_METERS * Math.min(1, enemyShip.grappleStrength))
+  outGoalPointMeters.add(scratchEnemySeparation)
+}
+
 function updateEnemyGrappleWeave(
   enemyShip: EnemyShip,
   internalState: EnemyBehaviorInternalState,
   asteroids: readonly AsteroidBody[],
   deltaSeconds: number,
   cruiseSpeedMetersPerSecond: number,
+  otherEnemyShips: readonly EnemyShip[],
 ): boolean {
   enemyShip.grappledAsteroid = null // D70: cleared unless we end this frame actively arcing (set below)
   if (internalState.grappleCooldownSecondsRemaining > 0) {
@@ -435,6 +488,7 @@ function updateEnemyGrappleWeave(
   let nearestDistanceMeters = Infinity
   for (const asteroid of asteroids) {
     if (asteroid.isDestroyed || asteroid.sizeClass !== 'large') continue
+    if (isAsteroidGrappledByAnotherEnemy(asteroid, enemyShip, otherEnemyShips)) continue // D115: no shared orbit
     const distanceMeters = asteroid.positionMeters.distanceTo(enemyShip.positionMeters)
     if (distanceMeters < nearestDistanceMeters) {
       nearestDistanceMeters = distanceMeters

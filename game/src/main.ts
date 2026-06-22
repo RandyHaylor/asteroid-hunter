@@ -1264,6 +1264,7 @@ function updateEnemyShipsAndFire(deltaSeconds: number): void {
       deltaSeconds,
       combatTimers.fireIntent,
       playerOrbitedAsteroid,
+      gameWorld.enemyShips, // D115: anti-cluster (no shared orbit) + separation pressure
     )
 
     scratchEnemyProjectileOrigin

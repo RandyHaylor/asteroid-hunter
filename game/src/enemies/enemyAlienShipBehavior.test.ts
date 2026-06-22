@@ -4,6 +4,7 @@ import {
   computeCoverHidePointBehindAsteroid,
   createEnemyFireIntent,
   createEnemyShip,
+  isAsteroidGrappledByAnotherEnemy,
   updateEnemyShipBehavior,
 } from './enemyAlienShipBehavior'
 import type { AsteroidBody, AsteroidSizeClass } from '../gameSimulation/gameWorldTypes'
@@ -172,5 +173,22 @@ describe('createEnemyShip', () => {
     expect(firstEnemy.renderObject.position.distanceTo(new Vector3(1, 2, 3))).toBe(0)
     // spawn vector is copied, not aliased
     expect(firstEnemy.positionMeters).not.toBe(firstEnemy.renderObject.position)
+  })
+})
+
+describe('isAsteroidGrappledByAnotherEnemy (D115 anti-cluster)', () => {
+  it('is true for an asteroid a DIFFERENT enemy is grappling, false for self / unclaimed', () => {
+    const gameScene = new Scene()
+    const enemyA = createEnemyShip('coverHunter', new Vector3(0, 0, 0), gameScene)
+    const enemyB = createEnemyShip('coverHunter', new Vector3(100, 0, 0), gameScene)
+    const claimedAsteroid = makeTestAsteroid(new Vector3(50, 0, 0), 40)
+    const freeAsteroid = makeTestAsteroid(new Vector3(-50, 0, 0), 40)
+    enemyA.grappledAsteroid = claimedAsteroid
+    const allEnemies = [enemyA, enemyB]
+    // enemyB sees the claimed asteroid as taken by another enemy...
+    expect(isAsteroidGrappledByAnotherEnemy(claimedAsteroid, enemyB, allEnemies)).toBe(true)
+    // ...but enemyA (the one grappling it) does NOT count itself, and a free rock is open to anyone
+    expect(isAsteroidGrappledByAnotherEnemy(claimedAsteroid, enemyA, allEnemies)).toBe(false)
+    expect(isAsteroidGrappledByAnotherEnemy(freeAsteroid, enemyB, allEnemies)).toBe(false)
   })
 })
