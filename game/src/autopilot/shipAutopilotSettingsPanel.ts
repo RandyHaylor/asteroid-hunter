@@ -20,6 +20,13 @@ export type ShipAutopilotSettingsPanel = {
   refreshLiveStats(): void
 }
 
+// D114: a slider row now returns a HANDLE so callers can drive dynamic behavior (e.g. a live max that
+// tracks the player's range, or cross-clamping two coupled sliders). onAfterInput fires after each drag.
+type SliderRowHandle = {
+  rowElement: HTMLElement
+  sliderElement: HTMLInputElement
+  refreshDisplay: () => void
+}
 function addSliderRow(
   parent: HTMLElement,
   labelText: string,
@@ -29,7 +36,8 @@ function addSliderRow(
   readValue: () => number,
   writeValue: (value: number) => void,
   formatValue: (value: number) => string,
-): void {
+  onAfterInput?: () => void,
+): SliderRowHandle {
   // D92: label, slider, and value all on ONE line (label | slider | value) to save vertical space.
   const row = document.createElement('label')
   row.className = 'aiSettingRow aiSettingSliderRow'
@@ -43,19 +51,22 @@ function addSliderRow(
   slider.max = String(maxValue)
   slider.step = String(stepValue)
   slider.value = String(readValue())
-  const refreshLabel = (): void => {
+  const refreshDisplay = (): void => {
     labelSpan.textContent = labelText
+    slider.value = String(readValue()) // keep the thumb in sync if the value was changed elsewhere
     valueSpan.textContent = formatValue(readValue())
   }
   slider.addEventListener('input', () => {
     writeValue(Number(slider.value))
-    refreshLabel()
+    refreshDisplay()
+    onAfterInput?.()
   })
-  refreshLabel()
+  refreshDisplay()
   row.appendChild(labelSpan)
   row.appendChild(slider)
   row.appendChild(valueSpan)
   parent.appendChild(row)
+  return { rowElement: row, sliderElement: slider, refreshDisplay }
 }
 
 export function createShipAutopilotSettingsPanel(
@@ -92,7 +103,9 @@ export function createShipAutopilotSettingsPanel(
     () => shipAutopilotSettings.preferredApproachAngleDegrees,
     (v) => (shipAutopilotSettings.preferredApproachAngleDegrees = v),
     (v) => `${Math.round(v)}°`)
-  addSliderRow(panel, 'Engage range', 100, 1000, 20,
+  // D114: the engage-range max tracks the player's CURRENT radar+weapon range (updated live in refresh below)
+  const engageRangeHandle = addSliderRow(
+    panel, 'Engage range', 100, Math.round(playerEngagementRange.combinedRadarWeaponRangeMeters), 20,
     () => shipAutopilotSettings.preferredEngagementRangeMeters,
     (v) => (shipAutopilotSettings.preferredEngagementRangeMeters = v),
     (v) => `${Math.round(v)} m`)
@@ -104,14 +117,32 @@ export function createShipAutopilotSettingsPanel(
     () => shipAutopilotSettings.maxEnemiesInRangeBeforeFlee,
     (v) => (shipAutopilotSettings.maxEnemiesInRangeBeforeFlee = v),
     (v) => `${Math.round(v)}`)
-  addSliderRow(panel, 'Evade below shield', 0, 1, 0.05,
+  // D114: the evade-below + re-engage-at sliders are coupled. Re-engage must stay >= evade-below (you
+  // recover to a HIGHER shield than the one that made you flee). If the player drags them to the SAME
+  // value, evasion is effectively OFF — both rows grey out to signal that.
+  const evadeBelowShieldHandle = addSliderRow(panel, 'Evade below shield', 0, 1, 0.05,
     () => shipAutopilotSettings.shieldFractionBeforeEvasion,
     (v) => (shipAutopilotSettings.shieldFractionBeforeEvasion = v),
-    (v) => `${Math.round(v * 100)}%`)
-  addSliderRow(panel, 'Re-engage at shield', 0, 1, 0.05,
+    (v) => `${Math.round(v * 100)}%`,
+    () => enforceShieldEvasionInvariantAndGrey())
+  const reEngageShieldHandle = addSliderRow(panel, 'Re-engage at shield', 0, 1, 0.05,
     () => shipAutopilotSettings.reEngageShieldFraction,
     (v) => (shipAutopilotSettings.reEngageShieldFraction = v),
-    (v) => `${Math.round(v * 100)}%`)
+    (v) => `${Math.round(v * 100)}%`,
+    () => enforceShieldEvasionInvariantAndGrey())
+  function enforceShieldEvasionInvariantAndGrey(): void {
+    // clamp re-engage up to at least evade-below (covers dragging re-engage down OR evade-below up)
+    if (shipAutopilotSettings.reEngageShieldFraction < shipAutopilotSettings.shieldFractionBeforeEvasion) {
+      shipAutopilotSettings.reEngageShieldFraction = shipAutopilotSettings.shieldFractionBeforeEvasion
+    }
+    evadeBelowShieldHandle.refreshDisplay()
+    reEngageShieldHandle.refreshDisplay()
+    const isEvasionDisabled =
+      shipAutopilotSettings.reEngageShieldFraction === shipAutopilotSettings.shieldFractionBeforeEvasion
+    evadeBelowShieldHandle.rowElement.classList.toggle('aiSettingRowDisabled', isEvasionDisabled)
+    reEngageShieldHandle.rowElement.classList.toggle('aiSettingRowDisabled', isEvasionDisabled)
+  }
+  enforceShieldEvasionInvariantAndGrey() // set the initial clamp + grey state
 
   // target-priority select — D92: label + dropdown on ONE line (was stacked)
   const priorityRow = document.createElement('label')
@@ -207,6 +238,8 @@ export function createShipAutopilotSettingsPanel(
   }
   panel.appendChild(statsGrid)
   function refreshLiveStats(): void {
+    // D114: keep the engage-range slider's max aligned to the player's current radar+weapon range
+    engageRangeHandle.sliderElement.max = String(Math.round(playerEngagementRange.combinedRadarWeaponRangeMeters))
     for (const { valueSpan, readValue, baselineValue } of statValueSpans) {
       const currentValue = readValue()
       valueSpan.textContent = currentValue

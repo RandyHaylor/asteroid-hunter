@@ -86,6 +86,15 @@
   display: block;
   margin: 3px 0; /* D92: tighter rows to free vertical space for the AI status log */
 }
+/* D114: a coupled setting that's effectively inactive (evade-below == re-engage → no evasion window)
+   greys out to signal it's doing nothing. Still interactive so the player can re-separate them. */
+.aiSettingRowDisabled {
+  opacity: 0.45;
+}
+.aiSettingRowDisabled input[type='range'] {
+  accent-color: #8a96a0;
+}
+
 /* D92: inline row — label on the left, control (e.g. the priority dropdown) on the right, one line */
 .aiSettingInlineRow {
   display: flex;
