@@ -160,6 +160,24 @@ describe('computeAutopilotIntent', () => {
     expect(hullDamagedIntent.isEvading).toBe(true)
   })
 
+  it('D125: an after-hull re-engage of 0 disables the hull-damage flee-to-recover (keeps fighting)', () => {
+    const enemy = makeEnemy(new Vector3(0, 0, -300))
+    // after-hull = 0 → no shield level to seek; evade-below 0 so a low shield alone doesn't force evasion
+    const settings = baseSettings({
+      shieldFractionBeforeEvasion: 0,
+      reEngageShieldFraction: 0,
+      reEngageShieldFractionAfterHullDamage: 0,
+    })
+    const intent = createAutopilotIntent()
+    computeAutopilotIntent(
+      // hull damaged + was evading + only 30% shield: with after-hull 0 it should NOT keep fleeing
+      baseContext({ enemyShips: [enemy], settings, shieldFraction: 0.3, hullFraction: 0.8, wasEvadingLastFrame: true }),
+      intent,
+    )
+    expect(intent.isEvading).toBe(false)
+    expect(intent.engagedEnemyShipId).toBe(enemy.enemyShipId)
+  })
+
   it('evades on any damage when fleeAfterAnyDamage is set', () => {
     const enemy = makeEnemy(new Vector3(0, 0, -300))
     const intent = createAutopilotIntent()

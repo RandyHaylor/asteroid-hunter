@@ -136,6 +136,8 @@ export function computeAutopilotIntent(context: AutopilotContext, outIntent: Aut
   const damageFlee = settings.fleeAfterAnyDamage && context.recentlyDamaged
   // hysteresis: once evading, keep evading until the shield recovers to the re-engage fraction. D124: if
   // the ship has taken HULL damage (permanent), use the (typically stricter) after-hull re-engage level.
+  // D125: an after-hull level of 0 means "no shield to seek" → shieldFraction < 0 is never true, so the
+  // after-hull flee/recover is effectively DISABLED (the panel greys that slider at 0 to match).
   const hasTakenHullDamage = context.hullFraction < 1
   const reEngageShieldFractionToUse = hasTakenHullDamage
     ? settings.reEngageShieldFractionAfterHullDamage

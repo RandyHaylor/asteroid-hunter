@@ -307,7 +307,7 @@ gameSimulation/newtonianShipPhysics.ts  — now D88 variable-speed thrust (was D
 
 ---
 
-## Design updates — D104–D124 (continues the block above; this is authoritative over earlier text)
+## Design updates — D104–D125 (continues the block above; this is authoritative over earlier text)
 
 ### Current base speeds (supersedes the D85 numbers above)
 - Player max/cruise **180** m/s; enemy patrol **105**, orbit/cover **135** (D107 + D116, each +30; D116 also note: an
@@ -424,3 +424,11 @@ radar/asteroidOrbitIcons.ts             — exported computeAsteroidDistanceColo
   34/8/8, stats-grid gap/margins trimmed — to fit the extra row.
 - Covered by `autopilot/shipAutopilot.test.ts` (after hull damage, holds the higher after-hull level before returning)
   and `autopilot/shipAutopilotSettingsDefaults.test.ts` (default 1).
+
+### After-hull re-engage 0 = disabled (D125)
+- The after-hull re-engage slider is NOT clamped to evade-below (unlike the normal re-engage pair) — it ranges freely
+  0–1. At **0** there's no shield level to seek after hull damage, so the after-hull flee/recover is DISABLED (the
+  autopilot's `shieldFraction < 0` is never true → it keeps fighting through hull damage), and the slider row greys out
+  to signal it's off. Behavior: after hull damage the AI flees until shields recharge to this level (full, or the lower
+  level the player sets), or — at 0 — doesn't flee-to-recover at all. Covered by `autopilot/shipAutopilot.test.ts`
+  (after-hull 0 keeps fighting).

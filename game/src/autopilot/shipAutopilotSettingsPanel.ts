@@ -142,13 +142,6 @@ export function createShipAutopilotSettingsPanel(
     if (shipAutopilotSettings.reEngageShieldFraction < shipAutopilotSettings.shieldFractionBeforeEvasion) {
       shipAutopilotSettings.reEngageShieldFraction = shipAutopilotSettings.shieldFractionBeforeEvasion
     }
-    // D124: the after-hull-damage re-engage level is also kept >= evade-below (recover to at least the
-    // shield that made you flee)
-    if (
-      shipAutopilotSettings.reEngageShieldFractionAfterHullDamage < shipAutopilotSettings.shieldFractionBeforeEvasion
-    ) {
-      shipAutopilotSettings.reEngageShieldFractionAfterHullDamage = shipAutopilotSettings.shieldFractionBeforeEvasion
-    }
     evadeBelowShieldHandle.refreshDisplay()
     reEngageShieldHandle.refreshDisplay()
     reEngageAfterHullDamageHandle.refreshDisplay()
@@ -156,6 +149,13 @@ export function createShipAutopilotSettingsPanel(
       shipAutopilotSettings.reEngageShieldFraction === shipAutopilotSettings.shieldFractionBeforeEvasion
     evadeBelowShieldHandle.rowElement.classList.toggle('aiSettingRowDisabled', isEvasionDisabled)
     reEngageShieldHandle.rowElement.classList.toggle('aiSettingRowDisabled', isEvasionDisabled)
+    // D125: the after-hull re-engage slider is NOT clamped to evade-below — it ranges freely down to 0,
+    // where 0 = "no shield level to seek after hull damage" = the after-hull flee/recover behavior is
+    // DISABLED, so the row greys out to signal that.
+    reEngageAfterHullDamageHandle.rowElement.classList.toggle(
+      'aiSettingRowDisabled',
+      shipAutopilotSettings.reEngageShieldFractionAfterHullDamage === 0,
+    )
   }
   enforceShieldEvasionInvariantAndGrey() // set the initial clamp + grey state
 
