@@ -126,12 +126,19 @@ export function createAsteroidOrbitIcons(
         const distanceColorHsl = `hsl(${60 * (1 - closenessFraction)}, 100%, 55%)`
         element.style.setProperty('--asteroid-distance-color', distanceColorHsl)
 
+        // D113: the LATCHED asteroid stays colored + highlighted while grappled — skip the eligibility
+        // grey/blink logic (the orbit carries it across the perpendicular plane, which would otherwise
+        // make its icon flicker between states).
+        const isLatchedAsteroid = asteroid.asteroidId === latchedAsteroidId
         const eligibility = classifyAsteroidGrappleEligibility(
           playerShipState.positionMeters,
           asteroid.positionMeters,
           playerShipState.velocityMetersPerSecond,
         )
-        if (surfaceDistanceMeters < MIN_ORBIT_SURFACE_DISTANCE_METERS) {
+        if (isLatchedAsteroid) {
+          element.style.setProperty('--asteroid-icon-color', distanceColorHsl)
+          setIconState(element, 'asteroidOrbitIconGrappleable')
+        } else if (surfaceDistanceMeters < MIN_ORBIT_SURFACE_DISTANCE_METERS) {
           setIconState(element, 'asteroidOrbitIconTooClose') // too tight to orbit
         } else if (eligibility === 'grappleable') {
           element.style.setProperty('--asteroid-icon-color', distanceColorHsl)
@@ -148,7 +155,7 @@ export function createAsteroidOrbitIcons(
           // passed behind the 45° window (or no travel) — grey, not grappleable
           setIconState(element, 'asteroidOrbitIconUnreachable')
         }
-        element.classList.toggle('asteroidOrbitIconLatched', asteroid.asteroidId === latchedAsteroidId)
+        element.classList.toggle('asteroidOrbitIconLatched', isLatchedAsteroid)
       }
 
       // remove icons for asteroids that went out of range or were destroyed
