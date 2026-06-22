@@ -36,10 +36,9 @@ export type AutopilotContext = {
   enemyShips: readonly EnemyShip[]
   asteroids: readonly AsteroidBody[]
   shieldFraction: number
-  /** D124: 0..1 hull fraction — once below 1 (hull damage taken, never regenerates) the autopilot
-   *  re-engages at reEngageShieldFractionAfterHullDamage instead of the normal reEngageShieldFraction */
-  hullFraction: number
-  recentlyDamaged: boolean
+  /** D126: true if the ship has recently taken HULL damage (a hit that bled past the shield) — drives
+   *  fleeAfterHullDamage. Shield-only hits do NOT set this. */
+  recentlyTookHullDamage: boolean
   /** combined radar+weapon range — the "in range" gate for counting threats + engaging */
   engagementRangeMeters: number
   /** D93: the ship's max (cruise cap) speed — used to gate redirect-grapple to "near full speed" */
@@ -133,17 +132,13 @@ export function computeAutopilotIntent(context: AutopilotContext, outIntent: Aut
   // ---- decide: EVADE or ENGAGE ----
   const swarmedThreshold = enemiesInRangeCount > settings.maxEnemiesInRangeBeforeFlee
   const shieldLow = context.shieldFraction <= settings.shieldFractionBeforeEvasion
-  const damageFlee = settings.fleeAfterAnyDamage && context.recentlyDamaged
-  // hysteresis: once evading, keep evading until the shield recovers to the re-engage fraction. D124: if
-  // the ship has taken HULL damage (permanent), use the (typically stricter) after-hull re-engage level.
-  // D125: an after-hull level of 0 means "no shield to seek" → shieldFraction < 0 is never true, so the
-  // after-hull flee/recover is effectively DISABLED (the panel greys that slider at 0 to match).
-  const hasTakenHullDamage = context.hullFraction < 1
-  const reEngageShieldFractionToUse = hasTakenHullDamage
-    ? settings.reEngageShieldFractionAfterHullDamage
-    : settings.reEngageShieldFraction
-  const stillRecovering = context.wasEvadingLastFrame && context.shieldFraction < reEngageShieldFractionToUse
-  const wantEvade = swarmedThreshold || shieldLow || damageFlee || stillRecovering
+  // D126: flee on HULL damage only (not shield-only hits — that's shieldFractionBeforeEvasion's job)
+  const hullDamageFlee = settings.fleeAfterHullDamage && context.recentlyTookHullDamage
+  // hysteresis: once evading, keep evading until the shield recovers to the re-engage fraction (this is
+  // also the recovery target for a hull-damage flee). If reEngageShieldFraction is 0, shieldFraction < 0
+  // is never true, so the recovery never sustains — the panel greys the flee-after-hull checkbox to match.
+  const stillRecovering = context.wasEvadingLastFrame && context.shieldFraction < settings.reEngageShieldFraction
+  const wantEvade = swarmedThreshold || shieldLow || hullDamageFlee || stillRecovering
 
   // each branch sets the desired HEADING + latch/state; the THRUST decision is made centrally below so
   // every course change is thrust-driven (the only legal way to change travel besides orbiting).

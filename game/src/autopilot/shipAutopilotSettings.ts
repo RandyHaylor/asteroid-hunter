@@ -19,15 +19,13 @@ export type ShipAutopilotSettings = {
   maxEnemiesInRangeBeforeFlee: number
   /** drop below this shield fraction → evade (orbit the nearest asteroid if one is in reach) */
   shieldFractionBeforeEvasion: number
-  /** any damage at all → break off and evade (the conservative default) */
-  fleeAfterAnyDamage: boolean
-  /** while evading, only resume attacking once the shield has recovered to at least this fraction
-   *  (used while ONLY the shield has been dented — no hull damage yet) */
+  /** D126: HULL damage (a hit that bleeds past the shield into the hull) → break off and evade, then
+   *  recover to reEngageShieldFraction before re-engaging. Shield-only hits don't trigger this (that's
+   *  what shieldFractionBeforeEvasion is for) — so it isn't redundant with the shield settings. */
+  fleeAfterHullDamage: boolean
+  /** while evading, only resume attacking once the shield has recovered to at least this fraction.
+   *  D126: also the recovery target for fleeAfterHullDamage (no separate after-hull level). */
   reEngageShieldFraction: number
-  /** D124: once the ship has taken HULL damage (permanent — the hull never regenerates), require the
-   *  shield to recover to at least THIS fraction before re-engaging, separate from reEngageShieldFraction.
-   *  Lets the player be MORE cautious once real (hull) damage has been taken. */
-  reEngageShieldFractionAfterHullDamage: number
   /** D92: when true, the between-wave upgrade is auto-picked (random) after a brief flash instead of
    *  waiting for the player to tap. Default OFF. */
   autoChoosesUpgrades: boolean
@@ -42,8 +40,7 @@ export const shipAutopilotSettings: ShipAutopilotSettings = {
   isolationWeight: 0.8, // strongly prefer singling out 1–2
   maxEnemiesInRangeBeforeFlee: 2, // flee if more than two are in range
   shieldFractionBeforeEvasion: 0.9, // evade at the first dent in the shield
-  fleeAfterAnyDamage: true, // break off on any damage
+  fleeAfterHullDamage: true, // D126: break off when a hit reaches the HULL (not on shield-only hits)
   reEngageShieldFraction: 1, // only re-engage at full shield
-  reEngageShieldFractionAfterHullDamage: 1, // D124: equally cautious by default (full shield); tune independently
   autoChoosesUpgrades: false, // D92: default OFF — player picks upgrades unless they enable auto-pick
 }

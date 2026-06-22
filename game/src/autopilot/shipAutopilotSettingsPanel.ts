@@ -130,13 +130,6 @@ export function createShipAutopilotSettingsPanel(
     (v) => (shipAutopilotSettings.reEngageShieldFraction = v),
     (v) => `${Math.round(v * 100)}%`,
     () => enforceShieldEvasionInvariantAndGrey())
-  // D124: a SEPARATE re-engage shield level used once the ship has taken HULL damage (permanent). Also
-  // kept >= evade-below by the same invariant.
-  const reEngageAfterHullDamageHandle = addSliderRow(panel, 'Re-engage (hull dmg)', 0, 1, 0.05,
-    () => shipAutopilotSettings.reEngageShieldFractionAfterHullDamage,
-    (v) => (shipAutopilotSettings.reEngageShieldFractionAfterHullDamage = v),
-    (v) => `${Math.round(v * 100)}%`,
-    () => enforceShieldEvasionInvariantAndGrey())
   function enforceShieldEvasionInvariantAndGrey(): void {
     // clamp re-engage up to at least evade-below (covers dragging re-engage down OR evade-below up)
     if (shipAutopilotSettings.reEngageShieldFraction < shipAutopilotSettings.shieldFractionBeforeEvasion) {
@@ -144,19 +137,21 @@ export function createShipAutopilotSettingsPanel(
     }
     evadeBelowShieldHandle.refreshDisplay()
     reEngageShieldHandle.refreshDisplay()
-    reEngageAfterHullDamageHandle.refreshDisplay()
     const isEvasionDisabled =
       shipAutopilotSettings.reEngageShieldFraction === shipAutopilotSettings.shieldFractionBeforeEvasion
     evadeBelowShieldHandle.rowElement.classList.toggle('aiSettingRowDisabled', isEvasionDisabled)
     reEngageShieldHandle.rowElement.classList.toggle('aiSettingRowDisabled', isEvasionDisabled)
-    // D125: the after-hull re-engage slider is NOT clamped to evade-below — it ranges freely down to 0,
-    // where 0 = "no shield level to seek after hull damage" = the after-hull flee/recover behavior is
-    // DISABLED, so the row greys out to signal that.
-    reEngageAfterHullDamageHandle.rowElement.classList.toggle(
-      'aiSettingRowDisabled',
-      shipAutopilotSettings.reEngageShieldFractionAfterHullDamage === 0,
-    )
+    // D126: flee-after-hull-damage recovers to reEngageShieldFraction; if that's 0 there's no shield level
+    // to seek, so the flee-after-hull-damage checkbox greys out to signal it's effectively off.
+    if (fleeAfterHullDamageCheckboxRow) {
+      fleeAfterHullDamageCheckboxRow.classList.toggle(
+        'aiSettingRowDisabled',
+        shipAutopilotSettings.reEngageShieldFraction === 0,
+      )
+    }
   }
+  // D126: assigned when the flee-after-hull-damage checkbox is built below; enforce() greys it at re-engage 0
+  let fleeAfterHullDamageCheckboxRow: HTMLElement | null = null
   enforceShieldEvasionInvariantAndGrey() // set the initial clamp + grey state
 
   // target-priority select — D92: label + dropdown on ONE line (was stacked)
@@ -186,20 +181,23 @@ export function createShipAutopilotSettingsPanel(
   checkboxPairRow.className = 'aiSettingRow aiSettingCheckboxPairRow'
   panel.appendChild(checkboxPairRow)
 
-  // flee-after-any-damage checkbox
+  // D126: flee-after-HULL-damage checkbox (was "any damage") — flees only when a hit reaches the hull,
+  // recovering to the Re-engage-at-shield level. Greys out when Re-engage is 0 (no shield level to seek).
   const fleeRow = document.createElement('label')
   fleeRow.className = 'aiSettingCheckboxRow'
   const fleeCheckbox = document.createElement('input')
   fleeCheckbox.type = 'checkbox'
-  fleeCheckbox.checked = shipAutopilotSettings.fleeAfterAnyDamage
+  fleeCheckbox.checked = shipAutopilotSettings.fleeAfterHullDamage
   fleeCheckbox.addEventListener('change', () => {
-    shipAutopilotSettings.fleeAfterAnyDamage = fleeCheckbox.checked
+    shipAutopilotSettings.fleeAfterHullDamage = fleeCheckbox.checked
   })
   const fleeLabel = document.createElement('span')
-  fleeLabel.textContent = 'Flee after any damage'
+  fleeLabel.textContent = 'Flee after hull damage'
   fleeRow.appendChild(fleeCheckbox)
   fleeRow.appendChild(fleeLabel)
   checkboxPairRow.appendChild(fleeRow)
+  fleeAfterHullDamageCheckboxRow = fleeRow // D126: enforce() greys this when Re-engage = 0
+  enforceShieldEvasionInvariantAndGrey() // now that the checkbox exists, set its initial grey state
 
   // D92: auto-choose-upgrades checkbox (default OFF) — when on, the between-wave upgrade is auto-picked
   const autoUpgradeRow = document.createElement('label')

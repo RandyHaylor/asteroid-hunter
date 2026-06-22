@@ -476,8 +476,8 @@ let autopilotModeActive = false
 let autopilotIsForcedThisWave = false // D74: wave-3 forced-AI level locks manual flight out (set in wave logic)
 const autopilotIntent = createAutopilotIntent()
 let autopilotWasEvadingLastFrame = false
-let lastPlayerDamageAtSeconds = Number.NEGATIVE_INFINITY
-const AUTOPILOT_RECENT_DAMAGE_WINDOW_SECONDS = 1.5
+let lastPlayerHullDamageAtSeconds = Number.NEGATIVE_INFINITY // D126: only HULL-reaching hits set this
+const AUTOPILOT_RECENT_HULL_DAMAGE_WINDOW_SECONDS = 1.5
 // D82: the effective thrust this frame (manual OR autopilot, and not while orbiting) — drives the thruster visuals
 let currentEffectiveThrustActive = false
 // D92: AI thrust comes in single-frame on/off intent which read as ugly "feathering"/flashing. Enforce
@@ -1248,8 +1248,13 @@ const weaponHitCallbacks = {
     applyWeaponDamageToAsteroid(hitAsteroid, damageAmount, impactPointMeters, gameScene)
   },
   onPlayerHit(damageAmount: number): void {
+    const hullFractionBeforeHit = playerShipCondition.getHullPointsFraction()
     playerShipCondition.applyIncomingWeaponDamage(damageAmount, simulationClockSeconds)
-    lastPlayerDamageAtSeconds = simulationClockSeconds // D74: autopilot's "flee after any damage" signal
+    // D126: the autopilot's flee signal fires ONLY when the hit reached the HULL (bled past the shield),
+    // not on shield-only hits — so "flee after hull damage" isn't redundant with the shield settings.
+    if (playerShipCondition.getHullPointsFraction() < hullFractionBeforeHit) {
+      lastPlayerHullDamageAtSeconds = simulationClockSeconds
+    }
     gameAudioSystem.playPlayerHitSound() // D23
     // D99: aggregate into a laser "barrage" — reported as one summary once the strike run lapses
     shipStatusEventLog.recordEnemyLaserStrike(damageAmount, simulationClockSeconds, enemyBaseLaserStats.fireCooldownSeconds)
@@ -1566,9 +1571,8 @@ function updatePlayerMovement(deltaSeconds: number): void {
       enemyShips: gameWorld.enemyShips,
       asteroids: gameWorld.asteroids,
       shieldFraction: playerShipCondition.getShieldPointsFraction(),
-      hullFraction: playerShipCondition.getHullPointsFraction(), // D124: gate re-engage after hull damage
-      recentlyDamaged:
-        simulationClockSeconds - lastPlayerDamageAtSeconds < AUTOPILOT_RECENT_DAMAGE_WINDOW_SECONDS,
+      recentlyTookHullDamage:
+        simulationClockSeconds - lastPlayerHullDamageAtSeconds < AUTOPILOT_RECENT_HULL_DAMAGE_WINDOW_SECONDS,
       engagementRangeMeters: playerEngagementRange.combinedRadarWeaponRangeMeters,
       maxSpeedMetersPerSecond: playerShipBaseFlightStats.cruiseSpeedMetersPerSecond, // D93: gate redirect-grapple to near full speed
       wasEvadingLastFrame: autopilotWasEvadingLastFrame,

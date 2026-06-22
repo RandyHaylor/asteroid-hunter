@@ -307,7 +307,7 @@ gameSimulation/newtonianShipPhysics.ts  — now D88 variable-speed thrust (was D
 
 ---
 
-## Design updates — D104–D125 (continues the block above; this is authoritative over earlier text)
+## Design updates — D104–D126 (continues the block above; this is authoritative over earlier text)
 
 ### Current base speeds (supersedes the D85 numbers above)
 - Player max/cruise **180** m/s; enemy patrol **105**, orbit/cover **135** (D107 + D116, each +30; D116 also note: an
@@ -412,23 +412,18 @@ radar/asteroidOrbitIcons.ts             — exported computeAsteroidDistanceColo
   the approach angle at the engagement range, so the angle still grazes enemies at the player's weapon/radar range.
   Other conservative defaults (flee-on-any-damage, evade at 0.9 shield) were left as-is — not requested here.
 
-### AI setting: re-engage shield level after hull damage + tighter panel (D124)
-- New autopilot setting `reEngageShieldFractionAfterHullDamage` (separate slider "Re-engage (hull dmg)"). Once the ship
-  has taken HULL damage (hull < 100% — permanent, the hull never regenerates), the evade→re-engage hysteresis uses THIS
-  shield fraction instead of `reEngageShieldFraction` (which now applies only while just the shield has been dented). Lets
-  the player be more cautious after real damage. Threaded `hullFraction` into `AutopilotContext` (main.ts supplies
-  `getHullPointsFraction()`); `shipAutopilot.ts` picks the threshold by `context.hullFraction < 1`.
-- Default = 1 (full shield), so behavior is unchanged until tuned (additive). The slider is kept ≥ evade-below by the
-  same D114 invariant as the normal re-engage slider.
-- Panel packed tighter (slimmer margins): row margin 3px→1px, title margin/padding trimmed, panel padding 36/12/12 →
-  34/8/8, stats-grid gap/margins trimmed — to fit the extra row.
-- Covered by `autopilot/shipAutopilot.test.ts` (after hull damage, holds the higher after-hull level before returning)
-  and `autopilot/shipAutopilotSettingsDefaults.test.ts` (default 1).
-
-### After-hull re-engage 0 = disabled (D125)
-- The after-hull re-engage slider is NOT clamped to evade-below (unlike the normal re-engage pair) — it ranges freely
-  0–1. At **0** there's no shield level to seek after hull damage, so the after-hull flee/recover is DISABLED (the
-  autopilot's `shieldFraction < 0` is never true → it keeps fighting through hull damage), and the slider row greys out
-  to signal it's off. Behavior: after hull damage the AI flees until shields recharge to this level (full, or the lower
-  level the player sets), or — at 0 — doesn't flee-to-recover at all. Covered by `autopilot/shipAutopilot.test.ts`
-  (after-hull 0 keeps fighting).
+### AI flee keys off HULL damage; tighter panel (D124→D126)
+- **D124/D125 (superseded):** briefly added a separate `reEngageShieldFractionAfterHullDamage` setting + "Re-engage
+  (hull dmg)" slider (with 0 = disabled). **D126 removed that slider/setting entirely** — it was redundant with the
+  shield settings.
+- **D126 (current):** the old "Flee after any damage" checkbox is renamed **"Flee after hull damage"** (`fleeAfterHullDamage`)
+  and now triggers ONLY when a hit reaches the **hull** (bleeds past the shield) — shield-only hits no longer trigger it
+  (that's what `shieldFractionBeforeEvasion` is for), so it isn't redundant. Wiring: `onPlayerHit` (main.ts) compares hull
+  fraction before/after and sets the flee signal only when hull actually dropped; the autopilot reads
+  `context.recentlyTookHullDamage`. After a hull-damage flee, recovery keys off the existing **"Re-engage at shield"**
+  slider (`reEngageShieldFraction`) via the normal recovery hysteresis — no separate after-hull level.
+- When **Re-engage at shield = 0** there's no shield level to seek, so the "Flee after hull damage" checkbox **greys out**
+  (signals it's effectively off). The dead `hullFraction` context field added in D124 was removed.
+- Panel packed tighter (slimmer margins, kept from D124): row margin 3px→1px, title margin/padding trimmed, panel
+  padding 36/12/12 → 34/8/8, stats-grid gap/margins trimmed.
+- Covered by `autopilot/shipAutopilot.test.ts` (flees on hull damage; does NOT flee on shield-only hits).
