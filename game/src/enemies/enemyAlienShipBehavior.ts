@@ -37,13 +37,13 @@ const MIN_SPEED_FOR_TRAVEL_FACING_METERS_PER_SECOND = 0.5
 // so they prowl/close in on the player's vicinity rather than wandering the whole field forever.
 const PATROL_HUNT_WANDER_RADIUS_METERS = 600
 const PATROL_WAYPOINT_ARRIVAL_RADIUS_METERS = 30
-const PATROL_CRUISE_SPEED_METERS_PER_SECOND = 75 // D107: +30 from 45
+const PATROL_CRUISE_SPEED_METERS_PER_SECOND = 105 // D116: +30 from 75
 /** only fires when the player is roughly ahead: within ~25° of the nose */
 const PATROL_FIRING_CONE_COSINE = Math.cos((25 * Math.PI) / 180)
 
 // ---- orbitStrafe tuning (D8) ----
 const ORBIT_STANDOFF_RADIUS_METERS = 380 // D46: orbit/strafe farther out (longer passes away)
-const ORBIT_CRUISE_SPEED_METERS_PER_SECOND = 105 // D107: +30 from 75
+const ORBIT_CRUISE_SPEED_METERS_PER_SECOND = 135 // D116: +30 from 105
 /** tangential lead distance that keeps the goal point sliding around the orbit circle */
 const ORBIT_TANGENTIAL_LEAD_METERS = 120
 
@@ -53,7 +53,7 @@ const MISSILE_MAXIMUM_RANGE_METERS = 900
 
 // ---- coverHunter tuning (D8, D11) ----
 const COVER_HIDE_STANDOFF_METERS = 12
-const COVER_CRUISE_SPEED_METERS_PER_SECOND = 105 // D107: +30 from 75
+const COVER_CRUISE_SPEED_METERS_PER_SECOND = 135 // D116: +30 from 105
 // D67: peek more often so a cover hunter keeps ATTACKING intermittently instead of hiding-and-waiting
 const COVER_PEEK_INTERVAL_MIN_SECONDS = 2.5
 const COVER_PEEK_INTERVAL_MAX_SECONDS = 4.5
