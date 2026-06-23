@@ -1,6 +1,6 @@
 # Asteroid Hunter
 
-A 3D touch-first space combat prototype: momentum-based flight (you always carry forward momentum — hold thrust to curve your heading), destructible asteroids, a spherical 3D radar with last-seen contact tracking, staged enemy waves, and a procedural 8-bit techno soundtrack + synth SFX (no audio files — all generated at runtime via Web Audio). Built with Three.js + TypeScript + Vite. *(Asteroid slingshot/grapple is being added in phases — player slingshot is in; escalating enemy grapple tiers are next.)*
+A 3D touch-first space combat prototype: momentum-based flight (you always carry forward momentum — hold thrust to curve your heading), destructible asteroids, a spherical 3D radar with last-seen contact tracking, staged enemy waves, an open-licensed techno soundtrack (three Pixabay tracks, credited below), and synthesized 8-bit SFX generated at runtime via Web Audio (no SFX audio files). Built with Three.js + TypeScript + Vite. *(Asteroid slingshot/grapple is being added in phases — player slingshot is in; escalating enemy grapple tiers are next.)*
 
 ## ▶ Play it now
 
